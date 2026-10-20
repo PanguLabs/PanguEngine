@@ -70,3 +70,6 @@ Testing/
 
 # Local agent skill directory mapping (Windows Junction / POSIX symlink)
 /.claude/skills
+
+# Local experimental probes (not part of the tracked source)
+/.probe/

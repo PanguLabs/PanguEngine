@@ -5,16 +5,16 @@
 
 ## 目标与范围
 
-PanguEngine 是基于 C++23 的自研跨平台游戏引擎。设计目标平台为 Windows、Linux、macOS、Android、iOS，全部平台统一采用 Clang 工具链。Windows 是主要开发环境。
+PanguEngine 是基于 C++23 的自研跨平台游戏引擎。设计目标平台为 Windows、Linux、macOS、Android、iOS，全部平台使用 Clang 系列工具链，Windows/Linux/macOS/iOS 采用 LLVM Clang 23.x，Android 使用 NDK 自带 Clang；语言标准均为 C++23。Windows 是主要开发环境。
 
-本文件记录**长期有效的顶层约束**，不是组件已交付或全平台测试通过的声明。规范以实际子系统文档为准，重大决策的理由见 [decisions](decisions/README.md)。
+本文件记录**长期有效的顶层约束**，不是组件已交付或全平台测试通过的声明。规范以对应的 Core / Runtime 设计文档为准，重大决策的理由见 [decisions](decisions/README.md)。
 
 ## 逻辑分层
 
 ```text
 Game / Editor Applications
           |
-Engine Subsystems (ECS, Rendering, Assets, Input, ...)
+Runtime Modules / Services (ECS, Rendering, Assets, Input, ...)
           |
 Core Architecture (EngineHost, Plugin/Module, Meta, Memory, ...)
           |
@@ -23,7 +23,7 @@ Foundation (C++23, Clang, CMake, Platform, ABI)
 
 - **Foundation** 解决“如何编译、构建和在目标平台保持兼容”。
 - **Core** 解决“引擎如何启动、扩展、管理类型、资源和生命周期”。
-- **Subsystems** 提供游戏开发能力，以 Core 的契约为依赖。
+- **Runtime Modules / Services** 按功能领域组织游戏开发能力；不采用统一 Subsystem 基类或 SubsystemManager。静态服务直接通过 Context 强类型访问；动态服务通过 Scoped Registry 访问。
 - **Applications** 是使用引擎能力的应用形态；Editor 和 Game 不构成两个互不兼容的引擎核心。
 
 以上是**文档和职责分层**，并不表示 CMake 目标、动态库或源码目录必须一一对应，也不意味着禁止经过论证的跨层接口。
@@ -33,13 +33,14 @@ Foundation (C++23, Clang, CMake, Platform, ABI)
 | 主题 | 决策 | 权威文档 |
 | --- | --- | --- |
 | 语言 | C++23；禁用 C++ Exception | [C++ 规范](foundation/cpp-guidelines.md) |
-| 编译器/标准库 | 全平台 Clang；Windows 使用 MSVC STL，Linux/macOS/Android/iOS 使用 `libc++`；不使用 `libstdc++`；不 Fork llvm-project | [工具链](foundation/toolchain.md) |
+| 编译器/标准库 | Windows/Linux/macOS/iOS LLVM Clang 23.x，Android NDK 内置 Clang；Windows 使用 MSVC STL，其他平台使用 `libc++`；不使用 `libstdc++`；不 Fork llvm-project | [工具链](foundation/toolchain.md) |
 | 构建 | 采用 CMake，不继续自研完整底层构建系统 | [构建系统](foundation/build-system.md) |
 | ABI | 同一受控构建的兼容 C++ Module 可交换 STL 类型；必须遵循所有权契约 | [ABI](foundation/abi.md) |
 | 命名空间 | C++ 使用 pg 开头的命名空间；扩展属性使用 pga | [C++ 规范](foundation/cpp-guidelines.md) |
-| ECS | 选择 flecs | [Subsystems](subsystems/README.md) |
-| Rendering | 基础图形库选择 The Forge | [Subsystems](subsystems/README.md) |
+| ECS | 选择 flecs | [Runtime](runtime/README.md) |
+| Rendering | 基础图形库选择 The Forge | [Runtime](runtime/README.md) |
 | Host | 对外概念采用 EngineHost，而不是容易与 Editor Runtime 混淆的 RuntimeHost | [Engine Host](core/engine-host.md) |
+| Service | 不使用 Subsystem 架构；采用强类型 Service + Context + Scoped Registry | [Service](core/service-architecture.md) |
 | 反射声明 | 使用 pga Clang 属性，不以 PG_CLASS 等宏标记 | [反射/元数据](core/reflection-meta.md) |
 | 内存 | 明确来源、所有权、生命周期与安全释放 | [内存管理](core/memory-management.md) |
 
@@ -61,7 +62,7 @@ Foundation (C++23, Clang, CMake, Platform, ABI)
 
 ## 未冻结的顶层事项
 
-ECS 与 Object/Meta 的组合、Scheduler、Job、Asset、Editor UI、事件体系、序列化格式、VFS、Networking、可执行程序布局、各子系统的具体 API 和目录组织，尚需独立规范或更新后的设计记录。旧讨论中的示例 API 不在此被追认为已实现。
+ECS 与 Object/Meta 的组合、Scheduler、Job、Asset、Editor UI、事件体系、序列化格式、VFS、Networking、可执行程序布局、具体运行时服务 API 和目录组织，尚需独立规范或更新后的设计记录。No Subsystem / Scoped Service 的设计原则见 [Service](core/service-architecture.md)，当前 PoC 签名不视为已冻结 API。
 
 ## 设计状态与实现状态
 

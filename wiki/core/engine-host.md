@@ -28,10 +28,10 @@ Game / Editor / Tool Application
              |
    Plugin / Module Coordination
              |
-Engine Services and Subsystems
+Engine Services and Runtime Modules
 ```
 
-这是依赖与职责示意，**不是已经冻结的类图**。EngineHost 不应被假定具有无限的职责；具体哪些服务由宿主直接持有、由 Module Registry 维护或由应用装配，需要在 API 设计阶段讨论。
+这是依赖与职责示意，**不是已经冻结的类图**。EngineHost 不应被假定具有无限的职责；核心静态服务通过宿主/Context 直接强类型访问；动态扩展能力通过 Scoped ServiceRegistry 注册和借用。具体对象成员、工厂签名和依赖布局仍需要在 API 设计阶段讨论，见 [Service 架构](service-architecture.md)。
 
 ## 与 Plugin / Module 的关系
 
@@ -42,6 +42,6 @@ Engine Services and Subsystems
 
 ## 尚未冻结
 
-`EngineHost` C++ 类签名、HostConfig、Bootstrap 流程、初始化图、Service Registry/DI 机制、Host 与 Application 的所有权方向、多个 EngineHost 实例、Editor 与 Game 的宿主差异、错误传播和停机接口、Hot Reload 的完整状态机。
+`EngineHost` C++ 类签名、HostConfig、Bootstrap 流程、初始化图、ServiceRegistry 的具体 C++ API 与 Host 集成、Host 与 Application 的所有权方向、多个 EngineHost 实例、Editor 与 Game 的宿主差异、错误传播和停机接口、Hot Reload 的完整状态机。
 
 **实现准则**：如果设计需要新增上述约束，应先在规范或 ADR 中说明，而不能将本文件解读为已批准某个具体 API。

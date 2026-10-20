@@ -9,7 +9,7 @@
 
 ## 已确定的原则
 
-1. PanguEngine 全平台以 Clang 作为编译器；**Windows 使用 Clang + MSVC STL，Linux、macOS、Android、iOS 使用 Clang + `libc++`**。所有目标平台均不使用 `libstdc++`；但编译器品牌相同不足以证明 ABI 兼容。
+1. 进程内的编译器、C++ 标准库选型遵守 [统一工具链规范](toolchain.md)；但相同编译器品牌、主版本或标准库名称仍不足以证明 ABI 兼容，必须验证真实构建配置。
 2. 允许同一受控构建且配置兼容的模块通过 C++ 接口交换标准库类型（如 `std::string`、`std::vector`、`std::shared_ptr`、`std::function`）；不人为一刀切禁止。
 3. 跨 Module 的 ABI 契约必须覆盖编译器/标准库及关键构建选项、对象布局和调用约定的兼容性。
 4. 需要兼容性检查，防止不兼容模块进入同一进程；历史方案名为 `AbiProfile` / `AbiFingerprint`，**具体字段及哈希算法尚未正式冻结**。
@@ -18,17 +18,9 @@
 7. 动态 Module 卸载之前，必须确认依赖其代码、deleter、Allocator、资源或回调的对象不再存活。
 8. 必要时可采用明确的 C ABI 边界（函数指针 + 不透明上下文）；这不是对所有 C++ Module 的强制改造。
 
-## 已冻结的编译器与标准库组合
+## 编译器与标准库前提
 
-| 平台 | 编译器 | C++ 标准库 |
-| --- | --- | --- |
-| Windows | Clang | MSVC STL |
-| Linux | Clang | `libc++` |
-| macOS | Clang | `libc++` |
-| Android | Clang | `libc++` |
-| iOS | Clang | `libc++` |
-
-以上是**项目选型约束**，不代表五个平台可以互换二进制产物。标准库的具体版本、ABI 选项及运行时链接方式仍必须由平台工具链验证。
+五个平台的编译器和 C++ 标准库组合由 [Toolchain](toolchain.md) 唯一定义，不在 ABI 规范复制版本矩阵。**即使满足该组合，不同平台仍不得互换二进制产物**；标准库具体版本、ABI 选项和 Runtime 链接方式必须纳入实际构建的兼容性验证。
 
 ## 所有权优先的跨 Module 约束
 

@@ -7,7 +7,8 @@
 ## 已确定的决策
 
 - **使用 CMake 作为构建系统基础**，不继续自行维护一套完整的自研底层构建引擎。
-- 所有目标平台构建均以 Clang 为编译器前提；**Windows 绑定 MSVC STL，Linux、macOS、Android、iOS 绑定 `libc++`，禁止 `libstdc++`**。构建系统需按目标 Toolchain / SDK 验证实际标准库与此约束一致。
+- **最低 CMake 版本为 4.0**；新建的 `CMakeLists.txt` 统一写 `cmake_minimum_required(VERSION 4.0)`，不再使用 3.x 最低版本约束。
+- 所有 C++ Target 的编译器、语言标准与标准库必须遵守 [统一工具链规范](toolchain.md)；CMake 在配置阶段按目标平台验证实际工具链，不得把其他平台的版本断言套用到 Android。SDK、NDK 及具体编译参数由平台工具链文档维护。
 - 构建模型需要能表达 Engine、Plugin、Module、ThirdParty 与工具程序之间的依赖，但它们**不必与 CMake Target 或单个动态库一一对应**。
 - ThirdParty 可以由 CMake 目标及引擎层 Module 依赖进行集成，不强制为每个第三方依赖开发独立 Package Adapter。
 - 代码生成、元数据和 ABI 兼容性检查必须能接入构建流程；接入机制尚未最终定稿。

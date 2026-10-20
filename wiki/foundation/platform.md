@@ -1,37 +1,38 @@
 # Pangu 平台支持基线
 
-> 状态：Partially Frozen（目标平台与开发环境冻结；HAL、运行时能力和 CI 矩阵尚未冻结）
+> 状态：Partially Frozen（目标平台与访问环境已确定；Runtime/HAL 与完整 CI 尚未冻结）
 > 更新：2026-10-20
 
-## 目标平台
+## 目标平台与验证状态
 
-| 平台 | 编译器 / C++ 标准库 | 开发/访问环境 | 实施状态 |
-| --- | --- | --- | --- |
-| Windows | Clang + MSVC STL | 主要开发环境 | 以实际源码/测试为准 |
-| Linux | Clang + `libc++` | Windows 上 WSL Ubuntu | 以实际源码/测试为准 |
-| macOS | Clang + `libc++` | `ssh -o BatchMode=yes moozen-macos` | 以实际源码/测试为准 |
-| Android | Clang + `libc++` | Android SDK/NDK 方案待确认 | 以实际源码/测试为准 |
-| iOS | Clang + `libc++` | Apple SDK / 构建环境待确认 | 以实际源码/测试为准 |
+| 目标平台 | 开发 / 访问环境 | 当前验证状态 |
+| --- | --- | --- |
+| Windows | 主开发环境（homelab） | 已有针对性的 C++23 构建与 Runtime 探针测试；非完整 Engine 验收 |
+| Linux | Windows 上 WSL Ubuntu | 已有针对性的 C++23 构建与 Runtime 探针测试；非完整 Engine 验收 |
+| macOS | `ssh -o BatchMode=yes moozen-macos` | C++23 原生编译、链接、运行探针通过 |
+| Android | Windows 上 Android SDK/NDK 工具链 | 四种 ABI 的 C++23 动态库 Configure / Compile / Link 通过；尚未在设备运行或完成 App 打包 |
+| iOS | macOS 主机交叉编译 iPhoneOS Device | iOS ARM64 动态库编译与链接通过；签名、打包及真机/模拟器验证未完成 |
 
-全部目标平台的 C++ 构建使用 Clang，语言标准为 C++23。**Windows 使用 MSVC STL，Linux、macOS、Android、iOS 使用 `libc++`；全平台不使用 `libstdc++`**。**“目标支持”不等于“已通过编译和运行验证”。**
+**目标支持不等于完整引擎实现或设备运行验证。** 上表只列出验证层级，不作为平台工具链版本、路径和参数的权威来源。
+
+- 统一的编译器、C++ 标准库和版本选择：见 [Toolchain](toolchain.md)。
+- Android SDK/NDK、CMake、ABI 与验证细节：见 [Android 工具链](android-toolchain.md)。
+- macOS / iOS MacPorts、SDK、目标平台链接与部署细节：见 [Apple 工具链](apple-toolchain.md)。
 
 ## 工程原则
 
-1. 平台无关契约应与 OS、SDK、文件系统、线程、虚拟内存和窗口系统的具体实现分离。
-2. 编译期平台选择适用于确知的目标差异；真正需要动态能力检测时允许运行时判断。
-3. 公共接口需明确其错误模式、线程与资源生命周期，不用平台私有错误码泄漏替代通用契约。
-4. 同一源代码项目在不同目标平台会具有不同 ABI Profile；**ABI 兼容性是单目标进程约束，不是跨系统二进制互操作声明**。
-5. 跨平台测试应覆盖平台专属路径，不以 Windows 的测试结果直接代表 Linux/macOS/移动端。
+1. 平台无关的 API 契约与 OS/SDK、文件系统、线程、虚拟内存、窗口系统实现分离。
+2. 确定的目标平台差异优先编译期选择，真正需要动态能力检测时允许运行时判断。
+3. 对外接口明确错误模式、线程约束与资源生命周期，不将平台私有码替代通用契约。
+4. 同一源代码在不同目标平台具有不同 ABI Profile；**ABI 兼容性是同一目标进程内的契约**，不是跨系统二进制互操作承诺。
+5. 验证需覆盖各平台专属路径，不能以 Windows 探针通过代表移动端或其他桌面端已通过。
 
-## 平台抽象的设计边界（待冻结）
+## 尚未冻结的跨平台边界
 
-Platform HAL 的具体 Module 结构、Window/Input/File/Socket/Thread/VirtualMemory/Crash API、动态库装载方式、SDK 版本、最低系统版本、Android/iOS 沙盒限制、交叉编译策略均需另行审议。
+Platform HAL 的 Module 布局、Window/Input/File/Socket/Thread/VirtualMemory/Crash API、动态库装载、最低操作系统版本、沙盒限制、跨平台 CI、交叉编译与设备验收规则。
 
 ## 访问规范
 
-- 本地仓库：`D:\Git\PanguEngine`，通过已授权的 Desktop Commander 访问。
-- WSL Linux 命令应在 WSL Ubuntu 下执行。
-- macOS 命令通过 `ssh moozen-macos` 执行；自动化可加 `-o BatchMode=yes`。
-- 不得将这三个环境的文件路径、Shell 命令或平台库行为视为可直接互换。
+本地仓库由已授权的 Desktop Commander 访问；Linux 使用 WSL Ubuntu；macOS 使用 `ssh moozen-macos`（自动化可加 `-o BatchMode=yes`）。不同平台的路径、Shell、SDK 不能互换。实际 SDK 路径请查阅上述平台工具链文档。
 
-相关文档：[工具链](toolchain.md)、[ABI](abi.md)、[内存管理](../core/memory-management.md)。
+相关契约：[ABI](abi.md)、[Memory](../core/memory-management.md)。

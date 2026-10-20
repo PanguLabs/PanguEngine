@@ -11,7 +11,7 @@
 ## 项目及仓库
 
 - PanguEngine 是基于 **C++23** 的自研跨平台游戏引擎。
-- 目标支持 **Windows、Linux、macOS、Android、iOS**，全部目标平台统一使用 **Clang** 工具链编译；各平台的实际支持与验证状态以仓库实现和测试结果为准。
+- 目标支持 **Windows、Linux、macOS、Android、iOS**，统一采用 **C++23 + Clang**；各平台的编译器和标准库选择以 [`wiki/foundation/toolchain.md`](wiki/foundation/toolchain.md) 为准，已验证程度以 [`wiki/foundation/platform.md`](wiki/foundation/platform.md) 为准。
 - **Windows 是主要开发环境**；Linux 使用 Windows 上 **WSL 中的 Ubuntu**；macOS 使用 `ssh moozen-macos` 访问，自动化 SSH 命令可使用 `-o BatchMode=yes`。
 - 项目本地源码位于 homelab 的 **`D:\Git\PanguEngine`**。
 - GitHub 远程仓库：**`PanguLabs/PanguEngine`**（`https://github.com/PanguLabs/PanguEngine`）。
@@ -31,15 +31,17 @@
 - 从 **Codex** 进入时，使用当前 Agent 提供的本地文件和终端工具。
 - 从 **ChatGPT Web** 进入时，**不要调用 Codex**；优先使用 ChatGPT Web 中已安装的插件，通过 **Desktop Commander** 访问和操作本地仓库。
 - 优先在本地仓库 `D:\Git\PanguEngine` 检查与修改代码。需要核对远程版本时，使用 GitHub 仓库。
-- 执行 Linux 命令时使用 WSL Ubuntu；执行 macOS 命令时使用 `ssh -o BatchMode=yes moozen-macos`。不要把 Windows 命令直接假定为其他平台可用。
+- 执行 Linux 命令时使用 WSL Ubuntu；执行 macOS 命令时使用 `ssh -o BatchMode=yes moozen-macos`。macOS/iOS 的编译器与 SDK 细节见 [`wiki/foundation/apple-toolchain.md`](wiki/foundation/apple-toolchain.md)；Android 以只读参考项目 `D:\AllProject\AndroidStudio\CppDemo` 的构建流程为参照，具体配置见 [`wiki/foundation/android-toolchain.md`](wiki/foundation/android-toolchain.md)。不要将 Windows 路径、Shell 或平台库行为直接视为可跨平台复用。
 - 共享 Agent Skills 的唯一规范目录为 `.agents/skills/`。
 - 新工作区可从仓库根目录执行 `python Scripts/setup-agent-links.py`，为 Claude Code 生成本地 Skills 映射：Windows 使用 Junction，Linux/macOS 使用 Symlink。
 - `.claude/skills` 是本地生成的目录映射，不应提交到 Git；Codex 可以直接使用 `.agents/skills/`。
+- 新建或修改的 `CMakeLists.txt` 使用 `cmake_minimum_required(VERSION 4.0)`，并按目标平台校验编译器；具体规则以 [`wiki/foundation/toolchain.md`](wiki/foundation/toolchain.md) 和 [`wiki/foundation/build-system.md`](wiki/foundation/build-system.md) 为准。
 - 修改完成后尽可能执行针对性的构建、测试或静态检查，并明确说明未验证的部分。
+- 临时验证探针（Probe/PoC）统一放在仓库根目录 `.probe/`，不要放入正式 `Tests/`；正式、长期维护的回归测试仍使用 `Tests/`。
 - 未经明确要求，不提交或推送 Git 变更。
 
 ## 设计文档
 
-- 架构规范统一位于 `wiki/`；从 [`wiki/README.md`](wiki/README.md) 进入，按 Foundation / Core / Subsystems 分类。
+- 架构规范统一位于 `wiki/`；从 [`wiki/README.md`](wiki/README.md) 进入，按 Foundation / Core / Runtime 分类。Runtime 按功能领域组织，不使用统一 Subsystem 架构，见 [Service 规范](wiki/core/service-architecture.md)。
 - 具体子系统文档是该子系统设计的权威来源；`wiki/decisions/` 保存重大决策的理由与替代关系。
 - 严格区分 Frozen、Partially Frozen 与 Draft，不能将历史讨论草案当作已实现或全部冻结的接口。
