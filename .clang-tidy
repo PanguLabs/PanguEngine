@@ -1,0 +1,99 @@
+# PanguEngine — clang-tidy 配置
+#
+# 用法：
+#   尚无编译数据库时：clang-tidy <file> -- -std=c++23
+#   有 compile_commands.json 时：clang-tidy -p build/ <file>
+#   批量检查与修复：run-clang-tidy -p build/ -fix
+#
+# cert-err58-cpp 检查静态初始化中可能抛出异常的情况。
+# 禁用特定项目风格及部分主观或噪声较大的检查；不启用重复的 hicpp 检查。
+# cppcoreguidelines-pro-bounds-*、cppcoreguidelines-pro-type-vararg、
+# cppcoreguidelines-macro-usage 和 misc-include-cleaner 保持开启。
+# Checks 使用 folded block scalar，内部不能插入注释。
+---
+# 后出现的模式覆盖先出现的模式，各组禁用项必须放在启用项之后。
+Checks: >
+  -*,
+
+  bugprone-*,
+  -bugprone-easily-swappable-parameters,
+
+  clang-analyzer-*,
+
+  concurrency-*,
+
+  misc-*,
+  -misc-non-private-member-variables-in-classes,
+
+  modernize-*,
+  -modernize-use-trailing-return-type,
+
+  performance-*,
+
+  portability-*,
+  -portability-avoid-pragma-once,
+
+  readability-*,
+  -readability-identifier-length,
+  -readability-function-cognitive-complexity,
+  -readability-magic-numbers,
+
+  cppcoreguidelines-*,
+  -cppcoreguidelines-avoid-magic-numbers,
+
+  cert-err58-cpp,
+
+  -llvm-*,
+  -google-*,
+  -fuchsia-*,
+  -altera-*,
+
+# 当前作为提示；接入 CI 时再决定哪些检查升级为 error。
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*'
+# 排除 ThirdParty 目录中的头文件诊断，兼容 Windows 与 POSIX 路径分隔符。
+ExcludeHeaderFilterRegex: '.*ThirdParty.*'
+FormatStyle: file
+
+CheckOptions:
+  readability-identifier-naming.NamespaceCase:                    lower_case
+  readability-identifier-naming.ClassCase:                        CamelCase
+  readability-identifier-naming.EnumCase:                         CamelCase
+  readability-identifier-naming.EnumConstantCase:                 CamelCase
+  readability-identifier-naming.EnumConstantPrefix:               k
+  readability-identifier-naming.StructCase:                       CamelCase
+  readability-identifier-naming.UnionCase:                        CamelCase
+  readability-identifier-naming.TypedefCase:                      CamelCase 
+  readability-identifier-naming.TemplateParameterCase:            CamelCase  # 兜底模板参数
+  readability-identifier-naming.TemplateTemplateParameterCase:    CamelCase  # 模板模板参数，如 template<template<class> class Container>
+  readability-identifier-naming.TypeTemplateParameterCase:        CamelCase  # 类型模板参数，如 template<typename T>
+  readability-identifier-naming.ValueTemplateParameterCase:       CamelCase  # 非类型模板参数，如 template <int N>
+  readability-identifier-naming.FunctionCase:                     CamelCase
+  readability-identifier-naming.MemberCase:                       CamelCase
+  readability-identifier-naming.MemberPrefix:                     ''
+  readability-identifier-naming.MemberSuffix:                     ''
+  readability-identifier-naming.PublicMemberCase:                 CamelCase
+  readability-identifier-naming.PublicMemberPrefix:               ''
+  readability-identifier-naming.PublicMemberSuffix:               ''
+  readability-identifier-naming.PrivateMemberCase:                CamelCase
+  readability-identifier-naming.PrivateMemberPrefix:              ''
+  readability-identifier-naming.PrivateMemberSuffix:              ''
+  readability-identifier-naming.ParameterCase:                    camelBack
+  readability-identifier-naming.VariableCase:                     camelBack
+  readability-identifier-naming.GlobalVariableCase:               CamelCase
+  readability-identifier-naming.GlobalVariablePrefix:             g
+  # 常量统一使用 kCamelCase。
+  readability-identifier-naming.ConstexprVariableCase:            CamelCase
+  readability-identifier-naming.ConstexprVariablePrefix:          k
+  readability-identifier-naming.GlobalConstantCase:               CamelCase
+  readability-identifier-naming.GlobalConstantPrefix:             k
+  readability-identifier-naming.ClassConstantCase:                CamelCase
+  readability-identifier-naming.ClassConstantPrefix:              k
+  readability-identifier-naming.StaticConstantCase:               CamelCase
+  readability-identifier-naming.StaticConstantPrefix:             k
+  readability-identifier-naming.IgnoreMainLikeFunctions:          1
+  readability-redundant-member-init.IgnoreBaseInCopyConstructors: 1
+  # 别名检查与本体保持一致，避免 fix-it 冲突。
+  modernize-use-default-member-init.UseAssignment:                1
+  cppcoreguidelines-use-default-member-init.UseAssignment:        1
+  readability-qualified-auto.AddConstToQualified:                 true

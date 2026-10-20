@@ -1,0 +1,27 @@
+# PanguEngine — clang-format 配置
+# 基线：LLVM style；标准：C++23；缩进：4 空格，禁止 Tab。
+# 用法：
+#   clang-format -i <file>
+#   clang-format --dry-run --Werror <file>
+#   git-clang-format --extensions cpp,cc,h,hpp,ixx
+---
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: c++23
+
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+# 本项目对 LLVM 默认风格的调整。
+ColumnLimit: 120                                # LLVM: 80                                                
+AccessModifierOffset: -4                        # public:/private: 的缩进；LLVM: -2，-4 可与 class 对齐   
+PointerAlignment: Left                          # Right → "int *p"；Left → "int* p"；LLVM: Right          
+BreakBeforeBraces: Allman                       # LLVM: Attach                                            
+BreakTemplateDeclarations: Yes                  # MultiLine：仅超列宽才拆 template 头；Yes：一律拆成两行 
+BreakConstructorInitializers: BeforeComma       # 默认 BeforeColon（尾随逗号）；此处前导逗号  
+PackConstructorInitializers: Never              # 默认 BinPack；Never 连放得下的短表也每行一个
+
+NamespaceIndentation: None                      # LLVM: None（默认）                                               
+BreakAfterAttributes: Leave                     # 默认 Leave；Always 会把紧凑的一行 [[nodiscard]] accessor 拆成五行
+ConstructorInitializerIndentWidth: 4            # 默认 4；与 BreakConstructorInitializers 配套                     
