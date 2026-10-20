@@ -1,7 +1,7 @@
 # Pangu EngineHost 设计基线
 
-> 状态：Partially Frozen（命名和职责分层方向冻结；启动与生命周期 API 未冻结）
-> 更新：2026-10-19
+> 状态：Partially Frozen（宿主职责、与三种 Service 模式的边界冻结；启动与生命周期 API 未冻结）
+> 更新：2026-10-20
 > 决策：[ADR-0002](../decisions/0002-name-engine-host.md)
 
 ## 背景
@@ -31,14 +31,16 @@ Game / Editor / Tool Application
 Engine Services and Runtime Modules
 ```
 
-这是依赖与职责示意，**不是已经冻结的类图**。EngineHost 不应被假定具有无限的职责；核心静态服务通过宿主/Context 直接强类型访问；动态扩展能力通过 Scoped ServiceRegistry 注册和借用。具体对象成员、工厂签名和依赖布局仍需要在 API 设计阶段讨论，见 [Service 架构](service-architecture.md)。
+这是依赖与职责示意，**不是已经冻结的类图**。EngineHost 不应被假定具有无限的职责；核心静态服务通过宿主/Context 直接强类型访问；动态扩展能力通过 Scoped ServiceRegistry 注册和借用。具体对象成员、工厂签名和依赖布局仍需要在 API 设计阶段讨论，见 [Service 架构](service.md)。
 
 ## 与 Plugin / Module 的关系
 
 - EngineHost 按运行场景协调 Module 能力、依赖及安全收尾。
 - Plugin 是发现、启用、分发和扩展的单元；Module 是代码组织、依赖和执行生命周期的单元，见 [Plugin/Module](plugin-module.md)。
-- Module 是否动态可装载属于部署和代码组织选择，不等同于是否受生命周期管理。
-- 卸载必须满足 [内存所有权规范](memory-management.md) 的 Module 卸载前置条件。
+- 每个 Module 对应一个实际 CMake STATIC/SHARED Library Target、一个主要库产物；Module 是否采用 SHARED 不等于它的 Service 必须运行时动态绑定，详见 [Plugin/Module](plugin-module.md)。
+- EngineHost / EngineContext / WorldContext 对 Concrete Service 强类型持有；Contract Service 的动态 Provider 由 Scoped Registry 管理；Registry Service 是业务 Module 自己提供的多 Contributor Registry，不引入 ExtensionManager。
+- Module 的加载、注册与 Service 的 Ready 是不同阶段；Host 负责或协调依赖闭包，不把它们统统交给一个万能 ServiceManager。
+- 动态库句柄和 CodePin 由现有 Module 机制维护，不另建 BinaryImage 管理层；卸载必须满足 [内存所有权规范](memory-management.md) 的 Module 卸载前置条件。
 
 ## 尚未冻结
 

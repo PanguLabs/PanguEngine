@@ -1,7 +1,7 @@
 # PanguEngine 设计文档索引
 
 > 状态：维护中（Index）
-> 更新：2026-10-19
+> 更新：2026-10-20
 > 约定：文档文件名使用英文 kebab-case，正文中文优先，专业术语可使用英文。
 
 ## 如何阅读
@@ -28,7 +28,7 @@
 | 文档 | 决策范围 | 状态 |
 | --- | --- | --- |
 | [C++ 规范](foundation/cpp-guidelines.md) | C++23、禁用异常、编译期优先、现行风格配置 | Partially Frozen |
-| [构建系统](foundation/build-system.md) | 使用 CMake 代替自研构建核心 | Partially Frozen |
+| [构建系统](foundation/build-system.md) | CMake 4.0+、一个 Module 一个 STATIC/SHARED 库 Target | Partially Frozen |
 | [工具链](foundation/toolchain.md) | 全平台共性契约与编译器选择矩阵 | Partially Frozen |
 | [Android 工具链](foundation/android-toolchain.md) | NDK/SDK、官方 Clang、CMake/Gradle 配置与验证 | Partially Frozen |
 | [Apple 工具链](foundation/apple-toolchain.md) | MacPorts、macOS/iOS SDK、构建及验证 | Partially Frozen |
@@ -40,10 +40,10 @@
 | 文档 | 决策范围 | 状态 |
 | --- | --- | --- |
 | [Engine Host](core/engine-host.md) | 采用 EngineHost 命名与宿主职责方向 | Partially Frozen |
-| [Plugin 与 Module](core/plugin-module.md) | 分层职责、依赖和安全卸载原则 | Partially Frozen |
+| [Plugin 与 Module](core/plugin-module.md) | Plugin/Module 职责、单 Module 单库、CodePin 与安全卸载 | Partially Frozen |
 | [内存管理](core/memory-management.md) | Pangu Memory Ownership Contract v1 | Frozen（规范 v1） |
 | [反射和元数据](core/reflection-meta.md) | pga 属性、禁止反射标记宏、不 Fork LLVM | Partially Frozen |
-| [Service / Context](core/service-architecture.md) | No Subsystem、三类 Scope、生命周期与依赖借用 | Frozen（设计语义）；API PoC |
+| [Service / Context](core/service.md) | No Subsystem、Host/Context/World 与 Concrete / Contract / Registry Service 三模式 | Frozen（设计语义）；API PoC |
 
 ## Runtime
 
@@ -56,6 +56,8 @@
 - [ADR-0002：采用 EngineHost](decisions/0002-name-engine-host.md)
 - [ADR-0003：采用 Service + Context，不使用 Subsystem](decisions/0003-no-subsystem-service-context.md)
 - [ADR-0004：按平台配置 Clang、统一 C++23](decisions/0004-platform-clang-toolchains.md)
+- [ADR-0005：一个 Module 一个静态库或动态库](decisions/0005-one-module-one-library.md)
+- [ADR-0006：三种 Service 模式](decisions/0006-three-service-modes.md)
 
 ## 文档维护规则
 

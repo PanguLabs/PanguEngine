@@ -1,40 +1,55 @@
 # Pangu 构建系统
 
-> 状态：Partially Frozen（采用 CMake 的决策已确定，具体构建契约待设计）
+> 状态：Partially Frozen（采用 CMake 4.0+、单 Module 单库构建规则已冻结；具体构建 API/产物协议待设计）
 > 更新：2026-10-20
-> 相关决策：[ADR-0001](../decisions/0001-adopt-cmake.md)
+> 决策：[ADR-0001：采用 CMake](../decisions/0001-adopt-cmake.md)、[ADR-0005：一个 Module 一个库](../decisions/0005-one-module-one-library.md)
 
 ## 已确定的决策
 
-- **使用 CMake 作为构建系统基础**，不继续自行维护一套完整的自研底层构建引擎。
-- **最低 CMake 版本为 4.0**；新建的 `CMakeLists.txt` 统一写 `cmake_minimum_required(VERSION 4.0)`，不再使用 3.x 最低版本约束。
-- 所有 C++ Target 的编译器、语言标准与标准库必须遵守 [统一工具链规范](toolchain.md)；CMake 在配置阶段按目标平台验证实际工具链，不得把其他平台的版本断言套用到 Android。SDK、NDK 及具体编译参数由平台工具链文档维护。
-- 构建模型需要能表达 Engine、Plugin、Module、ThirdParty 与工具程序之间的依赖，但它们**不必与 CMake Target 或单个动态库一一对应**。
-- ThirdParty 可以由 CMake 目标及引擎层 Module 依赖进行集成，不强制为每个第三方依赖开发独立 Package Adapter。
-- 代码生成、元数据和 ABI 兼容性检查必须能接入构建流程；接入机制尚未最终定稿。
+- **使用 CMake 作为构建系统基础**，不自行维护完整自研构建内核。
+- **最低 CMake 版本为 4.0**；新建的 `CMakeLists.txt` 统一使用 `cmake_minimum_required(VERSION 4.0)`。
+- C++ 编译器、标准库与平台 SDK/NDK 遵守 [Toolchain](toolchain.md)。Android 使用 NDK Clang，不能套用其它平台 LLVM Clang 23.x 的版本检查。
+- **一个 Pangu Module MUST 对应唯一的实际 CMake Library Target**（`STATIC` 或 `SHARED`），编译后只产生一个主要静态库或动态库；Module 可以包含多个 `.cpp` Translation Unit。
+- 不允许把一个 Module 拆成多个 Module Library Target，也不允许多个逻辑 Module 合并定义为同一个 Module Library Target。Meta 生成注册代码应加入同一 Module Target。
+- **Plugin 是功能分发/启用单位，不要求有自己的库目标**，可以包含多个 Module 或只包含 Assets。
+- ThirdParty 可以是独立的 CMake 目标，并被 Pangu Module 依赖；不强制使用 Package Adapter，也不要求每个 ThirdParty 目标都成为 Pangu Module。
+- CMake 是构建关系的权威来源；Plugin 的安装、发现和版本信息仍可能需要独立 Manifest，不因此形成第二份构建配置。
 
-## 与旧设计的关系
+## “一个 Module 一个库”的范围
 
-早期讨论过独立实现完整构建能力的 `PanguBuild`，以及以 `Module.toml` 描述每个模块。采用 CMake 后：
+| 事项 | 冻结约束 |
+| --- | --- |
+| Module 构建 | 一个实际 CMake `STATIC` 或 `SHARED` Library Target |
+| CMake `ALIAS` | 只是 Target 别名，不是第二个构建目标 |
+| 源文件 | 多个 Translation Unit 允许；不强制 Unity Build |
+| 生成代码 | 作为该 Module 目标的源文件，不创建第二个 Module 库 |
+| 主要产物 | 一个 `.a` / 静态 `.lib`，或一个 `.dll` / `.so` / `.dylib` |
+| 辅助产物 | Windows 的 import `.lib`、PDB 等不算第二个 Module |
+| STATIC 运行期 | 最终链接到 EXE 或动态库；归档本身不能被单独卸载 |
+| SHARED 运行期 | Module 加载器直接管理库句柄和 CodePin，不另建 BinaryImage 架构层 |
+| Host/Tool/ThirdParty | 可有自己的普通 CMake Target，但不因此违反 Pangu Module 规则 |
 
-1. **完整自研构建核心的路线已被替代**。
-2. `PanguBuild` 名称是否保留，以及是否仅承担 CMake 上层编排，**仍待决定**。
-3. **不把 `Module.toml` 规定为每个 Module 的必需文件**；由 `CMakeLists.txt` 承载多少信息、是否另设模块元数据有待明确。
-4. Plugin 分发和发现所需的 Manifest 与 CMake 构建描述是不同关注点，不可从使用 CMake 推导出不再需要 Plugin Manifest。
-5. 旧 PanguBuild API、固定目录、格式示例均不能作为当前构建系统的已冻结接口。
+对于 STATIC Module 被链接进可卸载动态库的情形，代码驻留保护 **MUST 覆盖实际承载代码的动态库**；单库构建关系不等同于独立运行时可卸载性。
+
+## 与旧方案的关系
+
+1. 完整自研 `PanguBuild` 构建核心已被 CMake 替代；`PanguBuild` 是否保留为上层工具仍待决定。
+2. `Module.toml` 不再是每个 Module 必需文件；`CMakeLists.txt` 是编译和链接配置的权威来源。分发清单 `Plugin.toml` 是否沿用及其字段仍未冻结。
+3. 旧方案允许 Module 和多个 CMake Target / 物理镜像之间灵活映射；**ADR-0005 已收紧为一个 Module 对应一个库 Target 和一个主要产物**。
+4. 不建立独立 BinaryImageManager / BinaryImageDescriptor；物理库文件和 CodePin 是现有 Module 管理机制的内部实现细节。
 
 ## 必须解决的设计问题（尚未冻结）
 
-| 主题 | 需决策的问题 |
+| 主题 | 待决问题 |
 | --- | --- |
-| CMake 组织 | 根工程、子工程、Preset、Toolchain 文件和 Module 注册函数 |
-| Target 映射 | Module / Plugin / 动态镜像与一个或多个 CMake Target 的关系 |
-| 构建产物 | 编译输出、运行时清单、动态库、符号文件的布局 |
-| Meta 生成 | Clang 属性提取、生成文件、增量依赖和多配置构建 |
-| ABI 约束 | Profile 的字段、Canonical Serialization、Fingerprint 算法与装载校验 |
-| ThirdParty | 版本、Source/Binary 依赖、源码或预编译依赖的复用与导出 |
-| 交叉编译 | Windows、WSL Linux、macOS、Android、iOS 的工具链与 SDK 选择 |
+| CMake 组织 | 根工程、子工程、Preset、Toolchain、`pg_add_module()` 等包装 API |
+| 库类型 | STATIC / SHARED 的默认选择和跨平台构建策略 |
+| 产物布局 | 库、Manifest、符号文件、动态库导出、安装和分发目录 |
+| Meta 生成 | Clang 属性提取、代码生成、增量依赖、多配置构建 |
+| ABI | Profile 字段、Canonical Serialization、Fingerprint 算法和装载校验 |
+| ThirdParty | Source/Binary 版本、目标导出与平台链接 |
+| 交叉编译 | Windows / WSL Linux / macOS / Android / iOS Toolchain 与 SDK |
 
 ## 验证要求
 
-后续实施至少需要编译数据库、增量构建一致性、代码生成依赖、ABI 配置一致性及平台矩阵验证。目前仓库内是否存在对应可运行构建目标，应以源码而不是本文件判断。
+后续至少验证 Module 与 Target 的一对一关系、产物数量、编译数据库、增量构建一致性、Meta 生成依赖、ABI 兼容配置、CodePin 以及平台矩阵。已有 PoC 不等于正式 Runtime / 多平台验收。

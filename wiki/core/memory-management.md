@@ -11,7 +11,7 @@
 3. 默认分配器为 `SystemAllocator`；专用分配器依据生命周期、访问模式和测量结果选择。
 4. 生命周期受控、能够统一回收的帧内临时内存应该使用 `LinearAllocator`；回收条件见下文。
 5. 高频创建、销毁的固定大小对象可以使用 `Pool` / `Slab`，但必须评估线程模型、内存占用和实际性能。
-6. 子系统（Subsystem）可以拥有独立的 `Arena`。
+6. `EngineHost`、`EngineContext`、`WorldContext` 等明确的生命周期作用域，或由其持有的 `Service`，可以拥有独立的 `Arena`；必须明确 Owner、Allocator Provenance、Borrow 失效条件及安全重置与销毁顺序。不为此引入 `Subsystem` 架构。
 7. 跨 `Module` 的所有权（Ownership）必须由明确的 ABI 契约（ABI Contract）约束。
 8. 资源生命周期（Resource lifetime）与内存生命周期（Memory lifetime）是两个不同的概念。
 9. GPU 资源采用 **Handle + 延迟销毁（Deferred Destruction）**，而不是通过裸指针直接管理所有权。

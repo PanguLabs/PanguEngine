@@ -2,7 +2,7 @@
 
 > Status: Accepted
 > 日期：2026-10-20
-> 规范：[Service Architecture v1](../core/service-architecture.md)
+> 规范：[Service Architecture v1](../core/service.md)
 
 ## Context
 
@@ -24,6 +24,10 @@
 - 简化了引擎的生命周期概念，但必须明确动态 Service 获取和 ModuleCodePin 边界。
 - 动态服务不等同于所有 CMake 模块；Module 与 Service 不是一对一。
 
+## 后续补充
+
+[ADR-0006](0006-three-service-modes.md) 已决定使用 Concrete / Contract / Registry Service 三模式，其中 Registry Service 承担多 Provider 扩展集合，不引入额外 ExtensionDescriptor / ExtensionManager；不改变本 ADR 的 No Subsystem 与 Scope 决策。
+
 ## Open Questions
 
-ServiceDescriptor 最终布局、依赖动态切换、可多 Provider 扩展点、EngineHost Bootstrap、错误传播和大型生命周期图的性能。
+ServiceDescriptor 最终布局、依赖动态切换、Registry Service 的注册/匹配协议、EngineHost Bootstrap、错误传播和大型生命周期图的性能。

@@ -23,10 +23,10 @@ Foundation (C++23, Clang, CMake, Platform, ABI)
 
 - **Foundation** 解决“如何编译、构建和在目标平台保持兼容”。
 - **Core** 解决“引擎如何启动、扩展、管理类型、资源和生命周期”。
-- **Runtime Modules / Services** 按功能领域组织游戏开发能力；不采用统一 Subsystem 基类或 SubsystemManager。静态服务直接通过 Context 强类型访问；动态服务通过 Scoped Registry 访问。
+- **Runtime Modules / Services** 按功能领域组织游戏开发能力；不采用统一 Subsystem 基类或 SubsystemManager。采用 Concrete / Contract / Registry Service 三种能力模式：静态服务直接强类型访问，动态 Contract 通过 Scoped Registry，业务多 Provider 通过 Module 自有 Registry。
 - **Applications** 是使用引擎能力的应用形态；Editor 和 Game 不构成两个互不兼容的引擎核心。
 
-以上是**文档和职责分层**，并不表示 CMake 目标、动态库或源码目录必须一一对应，也不意味着禁止经过论证的跨层接口。
+以上是**文档和职责分层**；各目录/职责层不与库一一对应。但**单个 Pangu Module 已冻结为一个 CMake STATIC/SHARED Library Target 和一个主要库产物**，详见 [Plugin / Module](core/plugin-module.md)。
 
 ## 已确定的技术选择
 
@@ -34,13 +34,13 @@ Foundation (C++23, Clang, CMake, Platform, ABI)
 | --- | --- | --- |
 | 语言 | C++23；禁用 C++ Exception | [C++ 规范](foundation/cpp-guidelines.md) |
 | 编译器/标准库 | Windows/Linux/macOS/iOS LLVM Clang 23.x，Android NDK 内置 Clang；Windows 使用 MSVC STL，其他平台使用 `libc++`；不使用 `libstdc++`；不 Fork llvm-project | [工具链](foundation/toolchain.md) |
-| 构建 | 采用 CMake，不继续自研完整底层构建系统 | [构建系统](foundation/build-system.md) |
+| 构建 | 采用 CMake 4.0+，一个 Module 对应一个 STATIC/SHARED 库 Target 和一个主要产物 | [构建系统](foundation/build-system.md) |
 | ABI | 同一受控构建的兼容 C++ Module 可交换 STL 类型；必须遵循所有权契约 | [ABI](foundation/abi.md) |
 | 命名空间 | C++ 使用 pg 开头的命名空间；扩展属性使用 pga | [C++ 规范](foundation/cpp-guidelines.md) |
 | ECS | 选择 flecs | [Runtime](runtime/README.md) |
 | Rendering | 基础图形库选择 The Forge | [Runtime](runtime/README.md) |
 | Host | 对外概念采用 EngineHost，而不是容易与 Editor Runtime 混淆的 RuntimeHost | [Engine Host](core/engine-host.md) |
-| Service | 不使用 Subsystem 架构；采用强类型 Service + Context + Scoped Registry | [Service](core/service-architecture.md) |
+| Service | 不使用 Subsystem 架构；采用 Host/Context/World Scope 与 Concrete / Contract / Registry Service 三种模式 | [Service](core/service.md) |
 | 反射声明 | 使用 pga Clang 属性，不以 PG_CLASS 等宏标记 | [反射/元数据](core/reflection-meta.md) |
 | 内存 | 明确来源、所有权、生命周期与安全释放 | [内存管理](core/memory-management.md) |
 
@@ -56,13 +56,13 @@ Foundation (C++23, Clang, CMake, Platform, ABI)
 
 ## 对外边界
 
-- Module 与动态库镜像不是同一概念；单个镜像是否包含多个 Module 及其精确定义见 [Plugin / Module](core/plugin-module.md) 的待决事项。
+- 一个 Module 对应一个实际 STATIC/SHARED Library Target，只产生一个主要库产物；动态库句柄与 CodePin 由 Module 机制管理，不再引入独立 BinaryImage 架构层。STATIC Module 的代码随最终承载它的 EXE/动态库驻留，见 [Plugin / Module](core/plugin-module.md)。
 - 对于跨 C++ Module 的传值，ABI 兼容、分配器来源、对象及析构代码所在 Module 的有效期均为约束，详见 [ABI](foundation/abi.md) 和 [内存管理](core/memory-management.md)。
 - 动态模块卸载前必须停止新的调用并处理任务、回调、资源及 GPU 完成状态；不能直接卸载存活对象仍依赖的代码。
 
 ## 未冻结的顶层事项
 
-ECS 与 Object/Meta 的组合、Scheduler、Job、Asset、Editor UI、事件体系、序列化格式、VFS、Networking、可执行程序布局、具体运行时服务 API 和目录组织，尚需独立规范或更新后的设计记录。No Subsystem / Scoped Service 的设计原则见 [Service](core/service-architecture.md)，当前 PoC 签名不视为已冻结 API。
+ECS 与 Object/Meta 的组合、Scheduler、Job、Asset、Editor UI、事件体系、序列化格式、VFS、Networking、可执行程序布局、具体运行时服务 API 和目录组织，尚需独立规范或更新后的设计记录。No Subsystem / Scoped Service 的设计原则见 [Service](core/service.md)，当前 PoC 签名不视为已冻结 API。
 
 ## 设计状态与实现状态
 

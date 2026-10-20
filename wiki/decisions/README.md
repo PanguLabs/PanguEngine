@@ -1,7 +1,7 @@
 # Architecture Decision Records (ADR)
 
 > 状态：规范性索引
-> 更新：2026-10-19
+> 更新：2026-10-20
 
 本目录记录影响架构长期演化的重要决策，包括备选方案、选择原因、后果及被替代关系。**ADR 不是子系统的第二份详细规范**；日常实施以相应 Foundation/Core/Runtime 文档为准。
 
@@ -11,8 +11,10 @@
 | --- | --- | --- | --- |
 | [0001](0001-adopt-cmake.md) | 采用 CMake | Accepted | [Build System](../foundation/build-system.md) |
 | [0002](0002-name-engine-host.md) | 采用 EngineHost 名称 | Accepted | [EngineHost](../core/engine-host.md) |
-| [0003](0003-no-subsystem-service-context.md) | 不使用 Subsystem，采用 Service + Context | Accepted | [Service Architecture](../core/service-architecture.md) |
+| [0003](0003-no-subsystem-service-context.md) | 不使用 Subsystem，采用 Service + Context | Accepted | [Service Architecture](../core/service.md) |
 | [0004](0004-platform-clang-toolchains.md) | 按平台选择 Clang（Android NDK 自带）+ 统一 C++23 | Accepted | [Toolchain](../foundation/toolchain.md) |
+| [0005](0005-one-module-one-library.md) | 一个 Module 对应一个静态库或动态库 | Accepted | [Plugin / Module](../core/plugin-module.md)、[Build System](../foundation/build-system.md) |
+| [0006](0006-three-service-modes.md) | Concrete / Contract / Registry Service 三模式 | Accepted | [Service](../core/service.md) |
 
 ## 推荐格式
 

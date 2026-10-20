@@ -28,4 +28,6 @@ PanguEngine 以 C++23 和全平台 Clang 为基础，仍需要正确表达 Modul
 
 CMake Presets、编译选项政策、Module 到 Target/镜像的映射、Plugin 打包、运行时 Manifest、元数据生成依赖和五平台工具链。
 
+后续 [ADR-0005](0005-one-module-one-library.md) 已冻结一个 Module 对应一个 STATIC/SHARED CMake Library Target 和一个主要库产物；本 ADR 对构建底座的既有决策不变。
+
 详细实施约束以 [build-system.md](../foundation/build-system.md) 为准。

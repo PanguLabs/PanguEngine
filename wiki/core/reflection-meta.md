@@ -29,6 +29,12 @@
 
 官方 Clang 对未知属性、插件注册属性与 AST 呈现方式存在具体限制。示意语法不是已经验证过的可编译 Attribute Schema。落地前需明确“如何识别、验证和生成”，不能依靠不存在的编译器扩展行为。
 
+## 与 Plugin / Module / Service 的关系
+
+依据 [Plugin / Module](plugin-module.md) 与 [Service](service.md)，每个 Module 对应一个实际 STATIC/SHARED Library Target；Concrete / Contract / Registry Service 是该 Module 提供能力的三种模式。PanguMeta **可以**为必要的模块注册代码生成适配，但不强制让每个 Concrete Service 都产生运行时描述符，也不新增独立的 `ExtensionDescriptor` / `ExtensionManager`。
+
+Registry Service 的多 Provider 贡献项通过已有业务 Registry 和 Module 注册/撤销机制管理；`pga::service` 或类似属性的完整语法尚未冻结，不能把历史示例作为必需声明。
+
 ## Taxonomy 待冻结范围
 
 - Object / Type / Property / Function 的 Reflection 分类、Type ID 与生成策略。

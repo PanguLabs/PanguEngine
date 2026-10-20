@@ -42,6 +42,6 @@
 
 ## 设计文档
 
-- 架构规范统一位于 `wiki/`；从 [`wiki/README.md`](wiki/README.md) 进入，按 Foundation / Core / Runtime 分类。Runtime 按功能领域组织，不使用统一 Subsystem 架构，见 [Service 规范](wiki/core/service-architecture.md)。
+- 架构规范统一位于 `wiki/`；从 [`wiki/README.md`](wiki/README.md) 进入，按 Foundation / Core / Runtime 分类。Runtime 按功能领域组织，不使用统一 Subsystem 架构，见 [Service 规范](wiki/core/service.md)。
 - 具体子系统文档是该子系统设计的权威来源；`wiki/decisions/` 保存重大决策的理由与替代关系。
 - 严格区分 Frozen、Partially Frozen 与 Draft，不能将历史讨论草案当作已实现或全部冻结的接口。

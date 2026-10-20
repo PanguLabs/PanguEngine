@@ -38,7 +38,7 @@
 | Clang 语义提取 | 读取 C++ 类型、成员、属性和源位置 |
 | Meta 处理 | 校验和规范元数据，生成注册、序列化等辅助代码 |
 | 构建集成 | 将工具产物纳入 CMake Target、增量依赖 |
-| ABI 采集 | 为 Module 和 BinaryImage 记录真实编译配置 |
+| ABI 采集 | 为 Module 及其 STATIC/SHARED 库产物记录真实编译配置；不建立独立 BinaryImage 架构层 |
 | 诊断反馈 | 在源代码位置报告属性、类型和配置错误 |
 
 目前不预先冻结 PanguClang 是 Clang Plugin、LibTooling 还是独立程序，也不把 `[[pga::...]]` 视为未经验证即可被上游 Clang 原生识别的属性。Meta 工具可以使用 LLVM23，但应验证其产物与 Android NDK 自带 Clang 之间的属性/语言兼容性。
