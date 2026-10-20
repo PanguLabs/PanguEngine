@@ -37,3 +37,9 @@
 - `.claude/skills` 是本地生成的目录映射，不应提交到 Git；Codex 可以直接使用 `.agents/skills/`。
 - 修改完成后尽可能执行针对性的构建、测试或静态检查，并明确说明未验证的部分。
 - 未经明确要求，不提交或推送 Git 变更。
+
+## 设计文档
+
+- 架构规范统一位于 `wiki/`；从 [`wiki/README.md`](wiki/README.md) 进入，按 Foundation / Core / Subsystems 分类。
+- 具体子系统文档是该子系统设计的权威来源；`wiki/decisions/` 保存重大决策的理由与替代关系。
+- 严格区分 Frozen、Partially Frozen 与 Draft，不能将历史讨论草案当作已实现或全部冻结的接口。
