@@ -33,6 +33,6 @@ Platform HAL 的 Module 布局、Window/Input/File/Socket/Thread/VirtualMemory/C
 
 ## 访问规范
 
-本地仓库由已授权的 Desktop Commander 访问；Linux 使用 WSL Ubuntu；macOS 使用 `ssh moozen-macos`（自动化可加 `-o BatchMode=yes`）。不同平台的路径、Shell、SDK 不能互换。实际 SDK 路径请查阅上述平台工具链文档。
+从 Codex 进入时，使用当前 Agent 的本地文件和终端工具；从 ChatGPT Web 进入时，优先通过已授权的 Desktop Commander 访问本地仓库，不调用 Codex。Linux 使用 WSL Ubuntu；macOS 使用 `ssh moozen-macos`（自动化可加 `-o BatchMode=yes`）。访问方式以根目录 [AGENTS.md](../../AGENTS.md) 为准；不同平台的路径、Shell、SDK 不能互换。实际 SDK 路径请查阅上述平台工具链文档。
 
 相关契约：[ABI](abi.md)、[Memory](../core/memory-management.md)。

@@ -7,7 +7,7 @@
 ## 已确定的决策
 
 - **使用 CMake 作为构建系统基础**，不自行维护完整自研构建内核。
-- **最低 CMake 版本为 4.0**；新建的 `CMakeLists.txt` 统一使用 `cmake_minimum_required(VERSION 4.0)`。
+- **最低 CMake 版本为 4.0**；新建或修改的 `CMakeLists.txt` 统一使用 `cmake_minimum_required(VERSION 4.0)`。
 - C++ 编译器、标准库与平台 SDK/NDK 遵守 [Toolchain](toolchain.md)。Android 使用 NDK Clang，不能套用其它平台 LLVM Clang 23.x 的版本检查。
 - **一个 Pangu Module MUST 对应唯一的实际 CMake Library Target**（`STATIC` 或 `SHARED`），编译后只产生一个主要静态库或动态库；Module 可以包含多个 `.cpp` Translation Unit。
 - 不允许把一个 Module 拆成多个 Module Library Target，也不允许多个逻辑 Module 合并定义为同一个 Module Library Target。Meta 生成注册代码应加入同一 Module Target。

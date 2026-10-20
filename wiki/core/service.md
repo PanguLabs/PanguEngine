@@ -1,9 +1,9 @@
 # Pangu Service / Context 架构 v1
 
-> 设计状态：Frozen（Scope、生命周期及 Concrete / Contract / Registry 三种 Service 模式的语义契约）；API / 实现状态：PoC、未冻结
+> 设计状态：Frozen（Scope、生命周期及 Concrete / Contract / Registry 三种 Service 模式的语义契约）；C++ API 未冻结；实现仅有局部 PoC
 > 更新：2026-10-20
 > 决策：[ADR-0003](../decisions/0003-no-subsystem-service-context.md)、[ADR-0006](../decisions/0006-three-service-modes.md)
-> 参考实现：[ServiceLifecycle PoC](../../.probe/service-lifecycle/README.md)
+> 本地参考探针：`.probe/service-lifecycle`（Git 忽略，不随仓库分发；与正式设计的差异见下文）
 
 ## 目标
 
@@ -38,7 +38,7 @@ Service Contract Identity 独立于 Provider ModuleId；同一单 Provider Contr
 2. **不要求** Service 继承统一 `IService`，也不要求都有通用 `Start/Stop`；模块内部的 Manager 可暴露为 Concrete Service 或仅作为实现。
 3. **不引入通用 `ExtensionDescriptor`、`ExtensionManager` 或全局 Extension Registry**。Registry Service 使用现有 Module 注册流程和业务专用 Registry 接口。Registry 对象本身也可以是 Concrete Service；Contribution 不一定需要独立 Service Instance。
 4. Contract 默认是单 Provider 绑定；Registry Service 是多 Provider 集合，Provider 冲突/匹配规则必须由 Registry 明确规定，不能依赖模块加载顺序。
-5. 静态已知实现优先直接调用或使用 C++23 Concept；只有真实运行时选择才支付 Contract 间接分发、借用与查找成本。
+5. 静态已知实现优先直接调用或使用 C++23 Concept，不强制经过动态 Contract 的间接分发与 Registry 查找。所有访问仍须满足生命周期约束；静态访问可由 Scope 所有权和销毁顺序保证，不能因省略 Registry 而省略保护。
 6. Module 注册仅声明或安装可用能力，并不等于某个 Scope 的 Service Ready。多 Context/World 的 Contributions 必须按归属安装到对应 Scope，不能隐式写入进程全局单例。
 
 ### 三个作用域
@@ -63,11 +63,11 @@ Service Contract Identity 独立于 Provider ModuleId；同一单 Provider Contr
 
 - Provider 注册与 Service Instance 构建分离；不是加载 DLL 就自动 Ready。
 - 显式 Dependency 组成 DAG；校验同 Scope 环和跨 Scope 方向；依赖先创建，逆序销毁。
-- **存活依赖是 Borrow/Lease**，不能只在 Create 时查询一次 Ready。子服务存活期间，依赖的实例必须可用。
+- **存活依赖具有 Borrow/Lease 保护语义**，不能只在 Create 时查询一次 Ready。依赖方存活及执行 Destroy/清理期间，被依赖实例及所需代码必须保持有效；静态服务可由 Scope 所有权和依赖销毁顺序实现这一保证，不强制使用 PoC 的 Borrow 类型。
 - 创建中出现错误：以启动完成顺序反向回滚已创建实例，不发布失效服务。
 - Ready → Quiescing：拒绝新的业务访问；在途 ServiceRef、Task、Callback 和资源清理继续使用之前合法取得的 Lifetime Guard。
-- Draining：必须结束异步工作并释放外部 Borrow/Lease 及其 CodePin；**提供 Destroy/清理代码所必需的驻留保护须保留到回调完成之后**。Busy 不等于已成功停止。
-- 在实现代码仍加载时执行 Destroy；最后的 Callback/Destroy、Registry Contribution 使用及相关 CodePin 都结束后，才允许卸载实际承载代码的动态库。
+- Draining：结束异步工作，并等待使用者释放对当前服务的外部 Borrow/Lease 及对应 CodePin；**当前服务持有的依赖 Borrow/Lease，以及 Destroy/清理所需的实例和代码保护，须保留到清理完成之后**。Busy 不等于已成功停止。
+- 按依赖逆序逐个排空并销毁服务：在实现代码及被依赖实例仍有效时执行 Destroy，之后释放该服务持有的依赖保护，再处理被依赖服务；不得要求整个 DAG 的依赖 Borrow 在任何 Destroy 之前全部归零。最后的 Callback/Destroy、Registry Contribution 使用及相关 CodePin 都结束后，才允许卸载实际承载代码的动态库。
 - 不自动调度 Tick/Update。World Tick 由 WorldContext/flecs 管理，GPU 执行由 Renderer 管理，任务由 TaskScheduler 管理。
 - Module Dependency 与 Service Dependency 是**不同的图**；协调器最终必须验证二者的关闭顺序。
 
@@ -89,6 +89,8 @@ template<class T> class ServiceRef;
 ## 当前 PoC 与生产边界
 
 `.probe/service-lifecycle` 包含独立 CMake 验证探针：三个 Scope 规则、DAG、服务初始化回滚、活动借用阻止停止、真正 DLL/SO 的 Code Guard 释放。
+
+该本地原型将所有 Provider 放入 Registry，并用名为 `BinaryImage` 的辅助对象提供 Code Guard；这些是原型实现手段，不属于正式设计。生产设计仍遵循静态服务直接访问、Module 机制管理 CodePin、不建立独立 BinaryImage 架构层的约束。
 
 **未完成**：统一 EngineHost 启动状态机、ModuleManager 的真实 CodePin 接口、TaskGroup/Async Drain、Provider Hot Swap、异常/致命 OOM 策略整合、完整的并发 register/start/stop、正式的 Actor/World Ownership、Android/iOS 运行验证。本 PoC 的 Registration 与辅助状态字段不能当作最终 Public ABI。
 

@@ -1,6 +1,7 @@
 # Pangu Apple 平台工具链（macOS / iOS）
 
-> 状态：Partially Frozen（macOS 实机通过；iOS SDK 下两个编译器的 Compile+Link 通过，部署待验证）
+> 设计状态：Partially Frozen（macOS/iOS 默认 MacPorts Clang23，iOS AppleClang 仅作对照；正式 Toolchain 与部署流程未冻结）
+> 验证状态：macOS 原生探针编译、链接、运行通过；iOS 两个编译器的 Compile+Link 通过，部署待验证
 > 更新：2026-10-20
 > 决策：[ADR-0004](../decisions/0004-platform-clang-toolchains.md)
 
@@ -33,7 +34,7 @@ SDK 内有 `SDKSettings.json`、`usr/include`、`usr/lib/libc++.1.tbd`、`usr/li
 | 编译器 | C++23 + libc++ 编译 | iPhoneOS18.2 SDK 链接 | 角色 |
 | --- | --- | --- | --- |
 | AppleClang 16.0.0（`/usr/bin/clang++`） | 通过 | 通过 | 兼容性对照 |
-| MacPorts LLVM Clang 23.1.2 | 通过 | 通过 | **推荐默认** |
+| MacPorts LLVM Clang 23.1.2 | 通过 | 通过 | **默认工具链** |
 
 探针包含 `std::vector` 与 `std::expected`，禁用异常，以 iOS 18.0 为 Deployment Target，产出 iOS ARM64 Mach-O 动态库，链接 Foundation、系统 libc++、libSystem。两个产物的 `LC_BUILD_VERSION` 均为 **platform iOS、minOS 18.0、sdk 18.2**；`otool -L` 确认 MacPorts Clang23 产物没有依赖 `/opt/local` 下的运行时库。
 
@@ -58,4 +59,4 @@ CXX=/opt/local/bin/clang++-mp-23
 - 签名、Provisioning、完整 Xcode/App 包装工作流可能仍需可用的 Xcode；即使 SDK 能由 Clang 链接，也不等于可在设备上部署。
 - 需统一 Apple 平台的 Target Triple、Sysroot、Framework 搜索路径、ABI Fingerprint 和运行时支持情况，并测试正式 CMake Toolchain。
 
-结论：**macOS 使用 MacPorts Clang23；iOS 默认也推荐 MacPorts Clang23 + 用户目录 iPhoneOS18.2 SDK**，AppleClang 留作对照；这不是完整 iOS 发布链路通过的声明。
+**macOS/iOS 默认使用 MacPorts Clang23**，AppleClang 留作兼容性对照。用户目录中的 iPhoneOS18.2 SDK 是本次验证环境，SDK 版本及安装路径不因此成为永久构建要求；这不是完整 iOS 发布链路通过的声明。

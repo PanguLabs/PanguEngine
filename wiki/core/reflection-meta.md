@@ -1,12 +1,12 @@
 # Pangu Reflection / Meta 声明基线
 
 > 状态：Partially Frozen（属性命名方式、无宏原则和 Clang 政策已确定；Taxonomy 与生成协议待冻结）
-> 更新：2026-10-19
+> 更新：2026-10-20
 
 ## 已确定
 
 1. 引擎需要元数据/反射支持以服务对象、ECS、序列化、事件和资源等系统。
-2. **不使用 `PG_CLASS`、`PG_PROPERTY` 等反射声明宏**作为面向用户的主要声明机制。
+2. **不使用 `PG_CLASS`、`PG_PROPERTY` 等宏作为反射声明标记**；声明采用下述 `pga` 属性方向。
 3. 采用 **`pga` 命名空间的 Clang 扩展属性**方向，示意写法为 `[[pga::...]]`。
 4. 引擎 C++ 类型的命名空间使用 `pg` 开头；`pga` 指属性声明域，两个用途不混淆。
 5. 不 Fork `llvm-project`；元数据提取以官方 Clang 能提供的扩展/工具接口为基础。
@@ -43,7 +43,7 @@ Registry Service 的多 Provider 贡献项通过已有业务 Registry 和 Module
 - Serialization、版本演进与字段属性。
 - Asset / Resource / Plugin/Module 属性和 Runtime Registry 关联。
 - 属性参数语法、命名规则、错误诊断、兼容性演化。
-- Generated Code、Schema、CMake 增量构建、模块边界的卸载/注销顺序。
+- Generated Code、Schema、CMake 增量构建、Meta 注册项的具体注销协议及生成入口；它们必须遵循既有 Module 安全卸载和 CodePin 顺序，不重新开放这些已冻结的不变量。
 
 这些属于后续 **Pangu Attribute Taxonomy v1** 和工具链契约，当前不强行定义 `pga::event`、`pga::component` 等未经正式确认的具体属性签名。
 

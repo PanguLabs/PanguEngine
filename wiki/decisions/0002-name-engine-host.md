@@ -24,4 +24,8 @@
 
 具体 Host API、模块装配关系、Application 生命周期、多个 Host、Host 错误传播以及 Editor/Game 的执行形态。
 
+## 后续补充
+
+[ADR-0003](0003-no-subsystem-service-context.md) 与 [ADR-0006](0006-three-service-modes.md) 已确定静态服务强类型访问、动态 Contract 使用 Scoped Registry、业务多 Provider 使用 Registry Service，以及 Scope / 依赖生命周期语义。因此，上文“不冻结 Service Locator/DI 的最终选择”仅描述本 ADR 当时的范围，不表示这些后续决策仍然待选；具体 C++ API 和 Host 集成仍未冻结。
+
 详细约束以 [engine-host.md](../core/engine-host.md) 为准。

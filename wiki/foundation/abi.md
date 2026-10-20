@@ -25,7 +25,7 @@
 ## 所有权优先的跨 Module 约束
 
 - Owning Object 的析构策略必须随所有权契约一起定义。
-- 在另一 Module 分配的存储，不能未经契约授权就用本 Module 的 CRT/Allocator 释放。
+- 在另一 Module 分配的存储，必须按 [内存所有权契约](../core/memory-management.md) 回到原分配域或明确可互相释放的等价分配域；ABI 兼容不能替代分配来源验证。
 - 共享智能指针和函数对象可能持有由其他 Module 编译的 deleter/callback；**类型本身 ABI 兼容并不保证卸载安全**。
 - `std::pmr` 对象还需遵守其 backing allocator 和资源对象的生命周期限制。
 - `std::string_view`、`span`、引用和裸指针均不自动延长数据存活。

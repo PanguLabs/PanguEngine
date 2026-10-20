@@ -44,6 +44,6 @@ Engine Services and Runtime Modules
 
 ## 尚未冻结
 
-`EngineHost` C++ 类签名、HostConfig、Bootstrap 流程、初始化图、ServiceRegistry 的具体 C++ API 与 Host 集成、Host 与 Application 的所有权方向、多个 EngineHost 实例、Editor 与 Game 的宿主差异、错误传播和停机接口、Hot Reload 的完整状态机。
+`EngineHost` C++ 类签名、HostConfig、Bootstrap 流程、初始化图的具体节点与编排、ServiceRegistry 的具体 C++ API 与 Host 集成、Host 与 Application 的所有权方向、多个 EngineHost 实例、Editor 与 Game 的宿主差异、错误传播和停机接口、Hot Reload 的完整状态机。Service 依赖 DAG、Scope 方向及逆序销毁语义已由 [Service](service.md) 冻结，不属于此处待决事项。
 
 **实现准则**：如果设计需要新增上述约束，应先在规范或 ADR 中说明，而不能将本文件解读为已批准某个具体 API。
