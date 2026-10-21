@@ -1,7 +1,7 @@
 # Pangu 构建系统
 
 > 状态：Partially Frozen（采用 CMake 4.0+、单 Module 单库构建规则已冻结；具体构建 API/产物协议待设计）
-> 更新：2026-10-20
+> 更新：2026-10-21
 > 决策：[ADR-0001：采用 CMake](../decisions/0001-adopt-cmake.md)、[ADR-0005：一个 Module 一个库](../decisions/0005-one-module-one-library.md)
 
 ## 已确定的决策
@@ -37,6 +37,15 @@
 2. `Module.toml` 不再是每个 Module 必需文件；`CMakeLists.txt` 是编译和链接配置的权威来源。分发清单 `Plugin.toml` 是否沿用及其字段仍未冻结。
 3. 旧方案允许 Module 和多个 CMake Target / 物理镜像之间灵活映射；**ADR-0005 已收紧为一个 Module 对应一个库 Target 和一个主要产物**。
 4. 不建立独立 BinaryImageManager / BinaryImageDescriptor；物理库文件和 CodePin 是现有 Module 管理机制的内部实现细节。
+
+## Compile-Time / Build-Time First 的构建职责
+
+按 [C++ 规范与最佳实践](cpp-guidelines.md)，类型与静态分发应尽量在编译期解决；**Module 依赖、编译器/标准库配置、生成代码、Shader/Asset 预处理和 ABI 兼容性采集**等更适合在 Build-Time 完成。它们属于 CMake 与配套工具的协同职责，并不要求恢复已废弃的自研 PanguBuild 构建内核。
+
+- CMake 仍是构建依赖的权威来源；可由 PanguMeta 等工具按需要生成代码，生成源文件归入对应 Module 唯一库 Target。
+- 编译器与目标平台配置应从**实际编译**获得并验证；ABI Fingerprint 的字段与算法尚未冻结，不能声称已经实行全部 Build-Time ABI 拒绝策略。
+- 预生成并不取代 Runtime 对外部输入、动态模块状态、设备能力以及资源版本的必要验证。
+- 元数据生成、Shader/Asset Pipeline 和完整增量构建协议均为后续设计，不因通用最佳实践而自动视为已实现。
 
 ## 必须解决的设计问题（尚未冻结）
 

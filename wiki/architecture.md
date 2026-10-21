@@ -47,13 +47,16 @@ Foundation (C++23, Clang, CMake, Platform, ABI)
 
 ## 跨领域设计原则
 
-1. **编译期优先**：静态多态、类型检查和常量计算优先于可避免的运行时机制；插件发现、扩展和热路径外部配置仍可以是动态的。
-2. **Zero-overhead**：对高频路径有明确的抽象成本要求；不把“零开销”解释为所有操作都不分配或不同步。
-3. **数据导向**：设计内存布局、批处理和访问模式时优先评估实际数据流。
-4. **类型与所有权安全**：句柄、借用、异步任务和 Module 边界必须明确失效与销毁规则。
-5. **跨平台共性与差异分离**：公共契约统一，OS、ABI 和 SDK 的差异在平台专属实现中处理。
-6. **禁止异常**：可恢复路径显式返回错误；不可恢复路径有一致的终止策略。
-7. **选型不等于集成完成**：flecs 和 The Forge 的选用不自动冻结 ECS / Renderer 的整个设计。
+以下概括已确定的通用取向和建议实践；完整评审规则见 [C++ 规范与最佳实践](foundation/cpp-guidelines.md)，领域内被冻结的细节仍以相应专题文档为准。
+
+1. **Compile-Time First / Build-Time Validation**：类型、分发与稳定的元数据尽量提前确定；CMake 依赖与构建配置前置校验，真正动态的 Plugin Provider、外部输入、设备能力和 World 状态留给运行时。
+2. **Zero-Overhead Abstraction**：抽象自身不应无故增加 Runtime 成本；不等于遍历、分配、调度、Handle 校验或 GPU 同步无成本。性能结论须测量。
+3. **Type Safety / Value Semantics**：优先强类型 ID、值类型、Const、静态分发；在确有需要时使用动态分发，不为静态化而制造过度模板复杂度。
+4. **Data-Oriented / ECS + Event-Driven**：flecs 是既有选型；Component/数据布局围绕访问模式设计，Event/Command/Message 倾向类型安全；具体 Query、消息语义和调度 API 尚未冻结。
+5. **Explicit Ownership / Lifetime / Scheduling**：句柄、借用、异步回调与跨 Module 分配/析构须有明确存活保护；Task/Job 并行应显式声明依赖和收尾条件。
+6. **Determinism / No Hidden Work**：对需重放的模拟显式控制步长、输入和顺序；API 应声明 I/O、分配、阻塞和 GPU 同步，不承诺跨平台浮点逐位一致。
+7. **Exception-Free / Observable / Testable**：可恢复失败用值错误显式传播；可选日志与 Trace 不承担正确性；系统应可测试、可测量且符合五平台差异。
+8. **选型与设计不等于实现**：flecs、The Forge、Meta 生成、ECS Scheduler、事件体系的选择或建议不表示其接口已经冻结或通过完整集成验收。
 
 ## 对外边界
 

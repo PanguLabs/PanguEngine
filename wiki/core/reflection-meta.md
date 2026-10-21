@@ -1,7 +1,7 @@
 # Pangu Reflection / Meta 声明基线
 
 > 状态：Partially Frozen（属性命名方式、无宏原则和 Clang 政策已确定；Taxonomy 与生成协议待冻结）
-> 更新：2026-10-20
+> 更新：2026-10-21
 
 ## 已确定
 
@@ -24,6 +24,14 @@
 | 运行时 | 仅保留需要在运行时使用的元数据和注册信息 |
 
 这里的 `PanguClang` / `PanguMeta` 仅是讨论中工具职责的名称；**尚不承诺两者是进程、库或 Clang Plugin 的固定划分**。
+
+## Schema 与 Zero-Overhead 的设计方向（SHOULD；未冻结生成协议）
+
+- 同一份经过 Clang AST 语义验证的 Meta/Schema **应该**尽可能被 Reflection、Serialization、Save/Load、Networking、Editor Inspector、RPC 等消费端复用，减少相互冲突的多套字段描述；具体共享边界仍需分别设计。
+- 对编译期已知的类型和字段，**应该**优先生成强类型访问或序列化实现；仅当运行时确实需要枚举类型、动态属性或 Plugin Contribution 时，才携带相应 Registry/动态反射信息。
+- 元数据和生成代码不得通过隐式静态初始化破坏现有 [Module](plugin-module.md) 注册/撤销及 CodePin 顺序；自动生成的注册代码须随该 Module 唯一 CMake 库目标一同构建。
+- **Zero-Overhead** 表示尽量消除多余抽象成本，不等于所有反射都零开销，也不允许取消必需的运行时校验、所有权或类型版本检查。
+- 通用成本取舍参见 [C++ 规范与最佳实践](../foundation/cpp-guidelines.md)；Meta/Schema 的领域边界以本专题为准。本节不规定 `[[pga::...]]` 的具体拼写、标识分配算法、字段格式或生成函数签名。
 
 ## 兼容性提示
 

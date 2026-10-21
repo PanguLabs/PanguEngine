@@ -29,7 +29,7 @@
 
 | 文档 | 决策范围 | 状态 |
 | --- | --- | --- |
-| [C++ 规范](foundation/cpp-guidelines.md) | C++23、禁用异常、编译期优先、现行风格配置 | Partially Frozen |
+| [C++ 规范与最佳实践](foundation/cpp-guidelines.md) | C++23、Compile/Build-Time First、Zero-Overhead、类型/所有权安全、ECS/Event/调度建议与代码风格 | Partially Frozen |
 | [错误处理与基础诊断](foundation/error-diagnostics.md) | 值错误、失败报告、Assert/Check/Fatal、有界日志与应急路径 | Frozen（设计语义）；具体 API 未冻结 |
 | [构建系统](foundation/build-system.md) | CMake 4.0+、一个 Module 一个 STATIC/SHARED 库 Target | Partially Frozen |
 | [工具链](foundation/toolchain.md) | 全平台共性契约与编译器选择矩阵 | Partially Frozen |
