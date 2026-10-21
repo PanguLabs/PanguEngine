@@ -36,6 +36,7 @@
 | [Android 工具链](foundation/android-toolchain.md) | NDK/SDK、官方 Clang、CMake/Gradle 配置与验证 | Partially Frozen |
 | [Apple 工具链](foundation/apple-toolchain.md) | MacPorts、macOS/iOS SDK、构建及验证 | Partially Frozen |
 | [ABI](foundation/abi.md) | 同受控构建内的兼容性与所有权原则 | Partially Frozen |
+| [ABI Profile / Fingerprint v1](foundation/abi-profile-fingerprint.md) | 固定 Schema、RFC 8785 Canonical、SHA-256、严格相容与加载协议；含机器可读 Schema / 向量 | Frozen（设计协议）；工具/API 未实现 |
 | [平台](foundation/platform.md) | 五平台目标与开发环境 | Partially Frozen |
 
 ## Core
@@ -44,6 +45,7 @@
 | --- | --- | --- |
 | [Engine Host](core/engine-host.md) | 采用 EngineHost 命名与宿主职责方向 | Partially Frozen |
 | [Plugin 与 Module](core/plugin-module.md) | Plugin/Module 职责、单 Module 单库、CodePin 与安全卸载 | Partially Frozen |
+| [Module 注册与生命周期 v1](core/module-registration-lifetime.md) | STATIC/SHARED 统一注册、可回滚事务、生命周期与 CodePin | Frozen（设计语义）；具体 API 未冻结 |
 | [内存管理](core/memory-management.md) | Pangu Memory Ownership Contract v1 | Frozen（规范 v1） |
 | [反射和元数据](core/reflection-meta.md) | pga 属性、禁止反射标记宏、不 Fork LLVM | Partially Frozen |
 | [Service / Context](core/service.md) | No Subsystem、Host/Context/World 与 Concrete / Contract / Registry Service 三模式 | Frozen（设计语义）；API PoC |
@@ -62,6 +64,8 @@
 - [ADR-0005：一个 Module 一个静态库或动态库](decisions/0005-one-module-one-library.md)
 - [ADR-0006：三种 Service 模式](decisions/0006-three-service-modes.md)
 - [ADR-0007：错误值、失败报告与基础诊断分离](decisions/0007-error-diagnostics.md)
+- [ADR-0008：统一 Module 注册与生命周期](decisions/0008-module-registration-lifetime.md)
+- [ADR-0009：ABI Profile / Fingerprint v1](decisions/0009-abi-profile-fingerprint.md)
 
 ## 文档维护规则
 

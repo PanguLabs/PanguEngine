@@ -1,8 +1,8 @@
 # Pangu Plugin / Module 架构基线
 
-> 状态：Partially Frozen（职责分离、单 Module 单库、三种能力模式与安全卸载已冻结；Manifest/Descriptor/API 待冻结）
-> 更新：2026-10-20
-> 决策：[ADR-0005：单 Module 单库](../decisions/0005-one-module-one-library.md)、[ADR-0006：三种 Service 模式](../decisions/0006-three-service-modes.md)
+> 状态：Partially Frozen（职责分离、单 Module 单库、三种 Service、注册/生命周期语义已冻结；Manifest/Descriptor 具体布局和 API 待冻结）
+> 更新：2026-10-21
+> 决策：[ADR-0005：单 Module 单库](../decisions/0005-one-module-one-library.md)、[ADR-0006：三种 Service 模式](../decisions/0006-three-service-modes.md)、[ADR-0008：Module 注册与生命周期](../decisions/0008-module-registration-lifetime.md)
 > 参考：[EngineHost](engine-host.md)、[Service](service.md)、[ABI](../foundation/abi.md)、[内存所有权](memory-management.md)、[构建系统](../foundation/build-system.md)
 
 ## 目标
@@ -84,5 +84,7 @@ Plugin / Module 体系要兼顾静态构建与动态扩展、Game 与 Editor 运
 本文**不规定**具体 Plugin API、初始化函数签名、模块描述文件字段、Plugin 分发包后缀或动态库命名方式。上述已冻结的设计约束不表示相应功能已经实现或通过测试。
 
 ### 后续冻结顺序
+
+[Module Registration & Lifetime v1](module-registration-lifetime.md) 的**注册、依赖、状态、CodePin、回滚语义已 Frozen**；具体 ModuleDescriptor、入口 POD、ModuleManager Public API 与 ABI Profile/Fingerprint 的具体构建和装载接线仍待实现；Fingerprint 的 Schema/Canonical/算法已在 ADR-0009 冻结。
 
 优先完成现有 Module 注册契约 → 三种 Service 的绑定/撤销 → CMake 与 PanguMeta 接入 → Host 生命周期协调和 CodePin → Plugin 分发及 Hot Reload，再据此补充可验证 C++23 接口。

@@ -1,7 +1,8 @@
 # Pangu C++ ABI 基线
 
-> 状态：Partially Frozen（进程内兼容性策略与 Ownership 原则已确定；Fingerprint 格式、算法和平台 Profile 未冻结）
-> 更新：2026-10-20
+> 状态：Partially Frozen（ABI 配置 Schema、Fingerprint 与严格相容语义已冻结；Public API/运行库实测/二进制发现入口未冻结）
+> Fingerprint 决策：[ADR-0009](../decisions/0009-abi-profile-fingerprint.md)
+> 更新：2026-10-21
 
 ## 范围
 
@@ -12,7 +13,7 @@
 1. 进程内的编译器、C++ 标准库选型遵守 [统一工具链规范](toolchain.md)；但相同编译器品牌、主版本或标准库名称仍不足以证明 ABI 兼容，必须验证真实构建配置。
 2. 允许同一受控构建且配置兼容的模块通过 C++ 接口交换标准库类型（如 `std::string`、`std::vector`、`std::shared_ptr`、`std::function`）；不人为一刀切禁止。
 3. 跨 Module 的 ABI 契约必须覆盖编译器/标准库及关键构建选项、对象布局和调用约定的兼容性。
-4. 需要兼容性检查，防止不兼容模块进入同一进程；历史方案名为 `AbiProfile` / `AbiFingerprint`，**具体字段及哈希算法尚未正式冻结**。
+4. 采用 [AbiProfile / AbiFingerprint v1](abi-profile-fingerprint.md) 的固定 Schema、RFC 8785 + SHA-256 算法与严格等值检查，防止不兼容模块进入同一进程；字段、Canonical、指纹与兼容政策已冻结，Public API 和真实装载实现未冻结。
 5. 引擎不使用 C++ Exception；Module 边界也不得依赖异常跨越。
 6. **内存所有权独立于 ABI 一致性**：即便 C++ 类型布局兼容，也必须知道由谁分配、析构和释放。
 7. 动态 Module 卸载之前，必须确认依赖其代码、deleter、Allocator、资源或回调的对象不再存活。
@@ -33,9 +34,9 @@
 
 详见 [Pangu Memory Ownership Contract v1](../core/memory-management.md)。
 
-## ABI 兼容性维度（待规范化）
+## ABI 兼容性维度与权威 Schema
 
-以下仅列举实现校验时**需要考虑**的维度，不是已冻结的 Profile 字段表：
+AbiProfile v1 的**已冻结完整字段表、规范化规则、指纹算法和二进制装载校验顺序**以 [ABI Profile / Fingerprint v1](abi-profile-fingerprint.md) 及其 [JSON Schema](abi-profile-v1.schema.json) 为准；下表仅解释风险背景，不取代权威字段表：
 
 | 领域 | 示例风险 |
 | --- | --- |
@@ -51,6 +52,6 @@
 
 ## 未冻结的内容
 
-`AbiProfile` 的字段、默认值、规范化序列化、Fingerprint 哈希算法、兼容性判定规则、`.pgmodule` Manifest 具体格式、RTTI/visibility/Class Layout 的逐平台硬性配置、各平台标准库的具体版本/ABI 选项/运行库链接方式，以及静态与动态镜像之间的完整装载协议。**五个平台的标准库选型已冻结，不属于待决事项。**
+AbiProfile/AbiFingerprint 的具体 C++ 内存布局和公开 API、机器可读 `.pgmodule` Manifest 格式、精确动态发现入口 POD/符号、ABI 采集工具和每 TU 校验算法、可信预检元数据嵌入/签名方式、公开类型的 API Surface Digest、SDK/运行库真实验收、RTTI/visibility/Class Layout 的跨平台细化约束，以及 Plugin 分发与热重载。**五平台工具链/标准库选型以及 Profile v1 的 Schema、Canonical、SHA-256、严格相容政策和 STATIC/SHARED 校验阶段均已冻结**；不应再次列作未决。
 
 后续若记录这些决策，需要更新本文件并提交相应 ADR；不得直接从过往示例代码认定已经生效。

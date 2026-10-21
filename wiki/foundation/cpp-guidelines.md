@@ -167,7 +167,7 @@ UseTexture(*result);
 - 平台 API **SHOULD** 将 OS/SDK 专属实现隔离，不让大量 `#if` 或运行时平台分支散落在业务层；目标平台已确定时优先编译期选择，设备动态能力检测仍是 Runtime。
 - **MUST** 遵循 CMake 构建单 Module 单库、不新增 BinaryImage 层、Concrete/Contract/Registry Service 三模式及 Module CodePin 安全卸载规则，见 [构建系统](build-system.md)、[Plugin / Module](../core/plugin-module.md)、[Service](../core/service.md)。
 - Pangu 内可控、ABI 配置兼容的 C++ Module **允许传递 STL**；`std::string`、`vector`、`shared_ptr`、`function` 等仍需约定分配域与销毁代码有效期。**不应**将“ABI 一致”误解为可以随意跨 Module free 或提前卸载 Provider。
-- `AbiProfile` / `AbiFingerprint` 是兼容性校验方向，具体字段、算法、序列化与运行时 Manifest 尚未冻结，见 [ABI](abi.md)。
+- `AbiProfile` / `AbiFingerprint` 的 Schema、序列化、算法与严格兼容策略已由 [ABI Profile / Fingerprint v1](abi-profile-fingerprint.md) 冻结；C++ API、运行时 Manifest 及实际工具链接入仍未冻结，见 [ABI](abi.md)。
 
 ## 11. 工程质量与代码风格
 
@@ -210,4 +210,4 @@ UseTexture(*result);
 
 ## 13. 尚未冻结（不得由本文件推定）
 
-`Result/Error` 的具体 C++ 签名和布局、ABI Profile/Fingerprint 算法、RTTI 全局编译策略、C++ Modules 的采用范围、Module 的 Public/Internal/Private 目录细节、事件与 Delegate API、ECS Query/Read/Write 标注、Scheduler 依赖推导与线程调度 API、序列化格式、统一 Schema / `pga` Taxonomy、Platform HAL、Callback 借用包装类型等仍待各专题文档冻结。错误与基础诊断、内存所有权、Module 单库和 Service 三模式的**现有已冻结语义不因此重新开放**。
+`Result/Error` 的具体 C++ 签名和布局、ABI Profile/Fingerprint 的实际采集工具与运行时接线、RTTI 全局编译策略、C++ Modules 的采用范围、Module 的 Public/Internal/Private 目录细节、事件与 Delegate API、ECS Query/Read/Write 标注、Scheduler 依赖推导与线程调度 API、序列化格式、统一 Schema / `pga` Taxonomy、Platform HAL、Callback 借用包装类型等仍待各专题文档冻结。错误与基础诊断、内存所有权、Module 单库和 Service 三模式的**现有已冻结语义不因此重新开放**。

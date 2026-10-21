@@ -43,7 +43,7 @@
 按 [C++ 规范与最佳实践](cpp-guidelines.md)，类型与静态分发应尽量在编译期解决；**Module 依赖、编译器/标准库配置、生成代码、Shader/Asset 预处理和 ABI 兼容性采集**等更适合在 Build-Time 完成。它们属于 CMake 与配套工具的协同职责，并不要求恢复已废弃的自研 PanguBuild 构建内核。
 
 - CMake 仍是构建依赖的权威来源；可由 PanguMeta 等工具按需要生成代码，生成源文件归入对应 Module 唯一库 Target。
-- 编译器与目标平台配置应从**实际编译**获得并验证；ABI Fingerprint 的字段与算法尚未冻结，不能声称已经实行全部 Build-Time ABI 拒绝策略。
+- 编译器与目标平台配置应从**实际编译**获得并验证；ABI Fingerprint 的 Schema、RFC 8785 Canonical、SHA-256 和严格兼容政策已由 [ABI Profile v1](abi-profile-fingerprint.md) 冻结；但构建采集与实际拒绝实现仍未完成，不能声称已经实行全部 Build-Time ABI 拒绝策略。
 - 预生成并不取代 Runtime 对外部输入、动态模块状态、设备能力以及资源版本的必要验证。
 - 元数据生成、Shader/Asset Pipeline 和完整增量构建协议均为后续设计，不因通用最佳实践而自动视为已实现。
 
@@ -55,7 +55,7 @@
 | 库类型 | STATIC / SHARED 的默认选择和跨平台构建策略 |
 | 产物布局 | 库、Manifest、符号文件、动态库导出、安装和分发目录 |
 | Meta 生成 | Clang 属性提取、代码生成、增量依赖、多配置构建 |
-| ABI | Profile 字段、Canonical Serialization、Fingerprint 算法和装载校验 |
+| ABI | Profile Schema / Canonical / Fingerprint 算法与兼容判定已冻结；待实现的是每 TU 配置采集、生成器、装载前预检及二次校验的具体接口 |
 | ThirdParty | Source/Binary 版本、目标导出与平台链接 |
 | 交叉编译 | Windows / WSL Linux / macOS / Android / iOS Toolchain 与 SDK |
 

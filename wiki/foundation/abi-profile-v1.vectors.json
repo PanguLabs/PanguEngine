@@ -1,0 +1,116 @@
+{
+  "domain_prefix_ascii_plus_nul": "PANGU_ABI_PROFILE_V1\u0000",
+  "baseline": {
+    "name": "synthetic_windows_profile",
+    "description": "Synthetic only; no claim about installed compiler, Windows SDK or STL.",
+    "profile": {
+      "schema": 1,
+      "policy": "strict-v1",
+      "target": {
+        "triple": "x86_64-pc-windows-msvc",
+        "object": "coff",
+        "pointer_bits": "64",
+        "endian": "little",
+        "cpu_abi": "baseline-x86_64"
+      },
+      "compiler": {
+        "id": "clang",
+        "distribution": "llvm-upstream",
+        "version": "23.1.2",
+        "cxx_abi": "msvc"
+      },
+      "language": {
+        "standard": "c++23",
+        "exceptions": "off",
+        "rtti": "on",
+        "abi_options": [
+          "bitfield_layout=msvc",
+          "calling_convention=msvc",
+          "char_signedness=signed",
+          "enum_width=native",
+          "float_abi=default",
+          "struct_pack=default",
+          "vector_abi=default",
+          "wchar_width=16"
+        ]
+      },
+      "stdlib": {
+        "id": "msvc-stl",
+        "version": "14.42.34433",
+        "abi_version": "msvc-stl-143",
+        "abi_namespace": "na",
+        "iterator_debug_level": "0"
+      },
+      "runtime": {
+        "crt": "md-release",
+        "cxx_runtime": "msvc-stl-dynamic",
+        "cxxabi_runtime": "msvc",
+        "sdk_abi_id": "windows-sdk-10.0.99999.0-msvc-14.42.34433"
+      }
+    },
+    "canonical": "{\"compiler\":{\"cxx_abi\":\"msvc\",\"distribution\":\"llvm-upstream\",\"id\":\"clang\",\"version\":\"23.1.2\"},\"language\":{\"abi_options\":[\"bitfield_layout=msvc\",\"calling_convention=msvc\",\"char_signedness=signed\",\"enum_width=native\",\"float_abi=default\",\"struct_pack=default\",\"vector_abi=default\",\"wchar_width=16\"],\"exceptions\":\"off\",\"rtti\":\"on\",\"standard\":\"c++23\"},\"policy\":\"strict-v1\",\"runtime\":{\"crt\":\"md-release\",\"cxx_runtime\":\"msvc-stl-dynamic\",\"cxxabi_runtime\":\"msvc\",\"sdk_abi_id\":\"windows-sdk-10.0.99999.0-msvc-14.42.34433\"},\"schema\":1,\"stdlib\":{\"abi_namespace\":\"na\",\"abi_version\":\"msvc-stl-143\",\"id\":\"msvc-stl\",\"iterator_debug_level\":\"0\",\"version\":\"14.42.34433\"},\"target\":{\"cpu_abi\":\"baseline-x86_64\",\"endian\":\"little\",\"object\":\"coff\",\"pointer_bits\":\"64\",\"triple\":\"x86_64-pc-windows-msvc\"}}",
+    "canonical_byte_length": 779,
+    "sha256": "65e540973f0449be272a73e34753cfa71e4f91e12fdd901a6f5d65f8c5a5389c"
+  },
+  "mutation": {
+    "name": "iterator_debug_level_2",
+    "base": "synthetic_windows_profile",
+    "replace_pointer": "/stdlib/iterator_debug_level",
+    "replace_value": "2",
+    "sha256": "c39f19b0e2a8e3582779e27d4cb53282058c023bc5d398f8ff4e231aa3f92863"
+  },
+  "schema_cases": [
+    {
+      "name": "unknown_architecture",
+      "replacements": {
+        "/target/triple": "unknown-pc-windows-msvc"
+      },
+      "valid": false
+    },
+    {
+      "name": "compiler_version_trailing_newline",
+      "replacements": {
+        "/compiler/version": "23.1.2\n"
+      },
+      "valid": false
+    },
+    {
+      "name": "abi_option_trailing_newline",
+      "replacements": {
+        "/language/abi_options/3": "enum_width=native\n"
+      },
+      "valid": false
+    },
+    {
+      "name": "wrong_stl_abi_family",
+      "replacements": {
+        "/stdlib/abi_version": "1"
+      },
+      "valid": false
+    },
+    {
+      "name": "wrong_vector_architecture",
+      "replacements": {
+        "/language/abi_options/6": "vector_abi=aapcs64"
+      },
+      "valid": false
+    },
+    {
+      "name": "windows_arm64_unsupported",
+      "replacements": {
+        "/target/triple": "aarch64-pc-windows-msvc",
+        "/target/cpu_abi": "aapcs64"
+      },
+      "valid": false
+    },
+    {
+      "name": "windows_arm32_unsupported",
+      "replacements": {
+        "/target/triple": "armv7-pc-windows-msvc",
+        "/target/cpu_abi": "aapcs32",
+        "/target/pointer_bits": "32"
+      },
+      "valid": false
+    }
+  ]
+}

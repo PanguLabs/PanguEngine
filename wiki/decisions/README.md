@@ -16,6 +16,8 @@
 | [0005](0005-one-module-one-library.md) | 一个 Module 对应一个静态库或动态库 | Accepted | [Plugin / Module](../core/plugin-module.md)、[Build System](../foundation/build-system.md) |
 | [0006](0006-three-service-modes.md) | Concrete / Contract / Registry Service 三模式 | Accepted | [Service](../core/service.md) |
 | [0007](0007-error-diagnostics.md) | 错误值、失败报告与基础诊断分离 | Accepted | [错误处理与基础诊断](../foundation/error-diagnostics.md) |
+| [0008](0008-module-registration-lifetime.md) | 统一 Module 注册与生命周期语义 | Accepted | [Module Registration & Lifetime v1](../core/module-registration-lifetime.md) |
+| [0009](0009-abi-profile-fingerprint.md) | 冻结 ABI Profile / Fingerprint v1 | Accepted | [ABI Profile / Fingerprint](../foundation/abi-profile-fingerprint.md) |
 
 ## 推荐格式
 
