@@ -1,7 +1,7 @@
 # PanguEngine 设计文档索引
 
 > 状态：维护中（Index）
-> 更新：2026-10-20
+> 更新：2026-10-21
 > 约定：文档文件名使用英文 kebab-case，正文中文优先，专业术语可使用英文。
 
 ## 如何阅读
@@ -30,6 +30,7 @@
 | 文档 | 决策范围 | 状态 |
 | --- | --- | --- |
 | [C++ 规范](foundation/cpp-guidelines.md) | C++23、禁用异常、编译期优先、现行风格配置 | Partially Frozen |
+| [错误处理与基础诊断](foundation/error-diagnostics.md) | 值错误、失败报告、Assert/Check/Fatal、有界日志与应急路径 | Frozen（设计语义）；具体 API 未冻结 |
 | [构建系统](foundation/build-system.md) | CMake 4.0+、一个 Module 一个 STATIC/SHARED 库 Target | Partially Frozen |
 | [工具链](foundation/toolchain.md) | 全平台共性契约与编译器选择矩阵 | Partially Frozen |
 | [Android 工具链](foundation/android-toolchain.md) | NDK/SDK、官方 Clang、CMake/Gradle 配置与验证 | Partially Frozen |
@@ -60,6 +61,7 @@
 - [ADR-0004：按平台配置 Clang、统一 C++23](decisions/0004-platform-clang-toolchains.md)
 - [ADR-0005：一个 Module 一个静态库或动态库](decisions/0005-one-module-one-library.md)
 - [ADR-0006：三种 Service 模式](decisions/0006-three-service-modes.md)
+- [ADR-0007：错误值、失败报告与基础诊断分离](decisions/0007-error-diagnostics.md)
 
 ## 文档维护规则
 

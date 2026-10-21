@@ -1,7 +1,7 @@
 # PanguEngine 总体架构基线
 
 > 状态：Partially Frozen（技术基线与职责分层冻结；具体接口仍待完善）
-> 更新：2026-10-20
+> 更新：2026-10-21
 
 ## 目标与范围
 
@@ -43,6 +43,7 @@ Foundation (C++23, Clang, CMake, Platform, ABI)
 | Service | 不使用 Subsystem 架构；采用 Host/Context/World Scope 与 Concrete / Contract / Registry Service 三种模式 | [Service](core/service.md) |
 | 反射声明 | 使用 pga Clang 属性，不以 PG_CLASS 等宏标记 | [反射/元数据](core/reflection-meta.md) |
 | 内存 | 明确来源、所有权、生命周期与安全释放 | [内存管理](core/memory-management.md) |
+| 错误与诊断 | 无堆分配值错误 + `std::expected`；重要操作独立失败报告；有界日志与 Fatal 应急路径分离 | [错误处理与基础诊断](foundation/error-diagnostics.md) |
 
 ## 跨领域设计原则
 
@@ -63,6 +64,8 @@ Foundation (C++23, Clang, CMake, Platform, ABI)
 ## 未冻结的顶层事项
 
 ECS 与 Object/Meta 的组合、Scheduler、Job、Asset、Editor UI、事件体系、序列化格式、VFS、Networking、可执行程序布局、具体运行时服务 API 和目录组织，尚需独立规范或更新后的设计记录。No Subsystem / Scoped Service 的设计原则见 [Service](core/service.md)，当前 PoC 签名不视为已冻结 API。
+
+错误返回、失败报告、断言与基础日志的设计语义已由 [错误处理与基础诊断](foundation/error-diagnostics.md) 冻结；具体 API、布局、容量及平台实现仍待设计，不属于已完成的 Runtime 能力。
 
 ## 设计状态与实现状态
 

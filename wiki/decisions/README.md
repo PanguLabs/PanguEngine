@@ -1,7 +1,7 @@
 # Architecture Decision Records (ADR)
 
 > 状态：规范性索引
-> 更新：2026-10-20
+> 更新：2026-10-21
 
 本目录记录影响架构长期演化的重要决策，包括备选方案、选择原因、后果及被替代关系。**ADR 不是子系统的第二份详细规范**；日常实施以相应 Foundation/Core/Runtime 文档为准。
 
@@ -15,6 +15,7 @@
 | [0004](0004-platform-clang-toolchains.md) | 按平台选择 Clang（Android NDK 自带）+ 统一 C++23 | Accepted | [Toolchain](../foundation/toolchain.md) |
 | [0005](0005-one-module-one-library.md) | 一个 Module 对应一个静态库或动态库 | Accepted | [Plugin / Module](../core/plugin-module.md)、[Build System](../foundation/build-system.md) |
 | [0006](0006-three-service-modes.md) | Concrete / Contract / Registry Service 三模式 | Accepted | [Service](../core/service.md) |
+| [0007](0007-error-diagnostics.md) | 错误值、失败报告与基础诊断分离 | Accepted | [错误处理与基础诊断](../foundation/error-diagnostics.md) |
 
 ## 推荐格式
 
