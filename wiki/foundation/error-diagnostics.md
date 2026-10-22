@@ -5,6 +5,17 @@
 > 决策：[ADR-0007：错误值、失败报告与基础诊断分离](../decisions/0007-error-diagnostics.md)
 > 前置约束：[C++ 规范](cpp-guidelines.md)、[ABI](abi.md)、[内存所有权](../core/memory-management.md)、[Service](../core/service.md)
 
+## 当前正式实现切片（2026-10-22）
+
+已新增 `Source/Runtime/Foundation/` 的真实 `PanguFoundation` STATIC Module（一个 CMake Library Target）：
+
+- `Public/Error.h`：`pg::ErrorDomainId`、`pg::Error`、`pg::NativeErrorCode` / `NativeErrorSourceId`；无字符串指针、虚表、共享插件状态和默认 Error 成功哨兵。编译期错误域用 `ErrorDomainId::Constant<非零数值>()`，来自外部的数字用 `TryFromRaw()` 显式拒绝全零；Native Code 使用 `std::optional` 明确是否存在，零值本身不是缺失。
+- `Public/Result.h`：`pg::Result<T> = std::expected<T, pg::Error>`、`pg::Status = Result<void>`。返回它们的可失败业务函数仍须自行标注 `[[nodiscard]]`，错误传播使用 `std::unexpected`。
+- `Private/Error.cpp`：非 `constexpr` 的 `pg::MakeError` 便利入口；其有无及签名不是冻结 ABI 要求。
+- `Tests/Foundation/ErrorTests.cpp`：覆盖常量构造、强类型身份、零域拒绝、显式 Native Code、`Status` 成败、`Result` 原错误传播，以及类型的拷贝/布局基本性质。Windows、WSL Ubuntu、macOS 的 CTest 运行已通过，Android/iOS 的 `PanguFoundation` 静态库目标编译已通过。
+
+**明确仍未冻结**：`ErrorDomainId` 临时采用 64 位数字的选择及其分配治理；`NativeErrorSourceId` 编码；`pg::Error` 的精确内存布局、对齐与五平台跨动态库 ABI；错误字典/外部报告的实现。当前实现使用 `std::optional<NativeErrorCode>` 按值存储，不应在 ABI 合同和验证通过前作为可卸载 Plugin 的已认证 Public ABI。此切片不包含 ErrorReport、Logging、Check/Fatal、全平台系统错误捕获，也不改变本文件既有 Frozen **语义**。
+
 ## 1. 目标与适用范围
 
 本规范设计引擎、工具和 Plugin 共用的失败表达、传播与基础诊断契约。目标是让调用方明确区分“操作失败但状态有效”和“进程已经不能安全继续”，并保证诊断设施不会破坏 Module 卸载、Scope 所有权或无异常约定。

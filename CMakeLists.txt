@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 4.0)
 
+include(cmake/ValidateBuildEnvironment.cmake)
 project(PanguEngine LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -11,10 +12,16 @@ include(cmake/Platform/Common/BuildOptions.cmake)
 include(cmake/PanguPlatform.cmake)
 include(cmake/Platform/Common/Module.cmake)
 
+add_subdirectory(Source/Runtime/Foundation)
 add_subdirectory(Source/Runtime/Module)
 
 include(CTest)
 if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
+    add_test(NAME BuildEnvironment
+        COMMAND "${CMAKE_COMMAND}" "-DPANGU_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+            -P "${PROJECT_SOURCE_DIR}/Tests/CMake/EnvironmentTests.cmake"
+    )
+    add_subdirectory(Tests/Foundation)
     add_subdirectory(Tests/Module)
 elseif(BUILD_TESTING AND CMAKE_CROSSCOMPILING)
     message(STATUS "Pangu CTest executables skipped for cross-compiled targets.")

@@ -42,6 +42,12 @@ Linux 通过 WSL 访问同一源码目录 `/mnt/d/Git/PanguEngine`；macOS 使�
 
 本节记录当前落地的目录组织、五平台最小 CMake Presets 和 **Module Identity 切片**编译证据；不意味着完整 Build System API、运行时注册/Loader、Android/iOS 应用链接、签名/真机或多平台 Runtime 已冻结/完成。
 
+## 构建环境预检与基础回归（2026-10-22）
+
+根 `CMakeLists.txt` 已在 `project()` **之前**引入 `cmake/ValidateBuildEnvironment.cmake`：桌面平台及 iOS 检查 `LLVM_ROOT` 和必要的 Clang / `clang-scan-deps` 可执行文件；Android 在官方 NDK Toolchain 的 `CMAKE_TOOLCHAIN_FILE` 已选择时检查 `ANDROID_HOME`、`ANDROID_NDK_HOME` 和 Toolchain 文件是否存在。这样新建缓存时缺失环境变量会直接得到带 `Pangu ... preflight` 的诊断；现有平台 Settings 仍继续做后续工具链身份与版本校验。
+
+正式 `Tests/CMake/EnvironmentTests.cmake` 在 Windows、WSL Ubuntu 和 macOS 通过 CTest 验证缺失环境变量时必须明确拒绝。当前三平台均通过 `BuildEnvironment`、`FoundationError`、`ModuleIdentity` 三项回归；Android/iOS 的 `PanguFoundation` 和 `PanguModule` 仍只验证 STATIC 目标编译/归档，不提供交叉设备运行结果。新增 `Source/Runtime/Foundation/` 对应独立 `PanguFoundation` STATIC Target，符合一 Module 一库。
+
 ## 已落地的轻量化 CMake 配置（实现层，非新架构冻结）
 
 参考本地 O3DE 的分平台 CMake Presets、平台分发与编译规则复用思想，**仅借鉴组织方式**；不引入其 `ly_add_target` / `GEM_MODULE` / 全局 Monolithic 配置、资源/安装系统或第二构建内核。
