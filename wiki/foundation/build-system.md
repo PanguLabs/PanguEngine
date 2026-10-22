@@ -15,6 +15,15 @@
 - ThirdParty 可以是独立的 CMake 目标，并被 Pangu Module 依赖；不强制使用 Package Adapter，也不要求每个 ThirdParty 目标都成为 Pangu Module。
 - CMake 是构建关系的权威来源；Plugin 的安装、发现和版本信息仍可能需要独立 Manifest，不因此形成第二份构建配置。
 
+## Monolithic / Modular 与 Module 库类型的边界
+
+**已确定的设计约束**：`STATIC` / `SHARED` 是 CMake 原生的 **Library Target 类型**，直接描述每个 Pangu Module 的编译、链接和产物；`Monolithic` / `Modular` **不是 Module 类型，也不是新的引擎架构层**。**只有在需要对整个 Engine / Game / Editor 统一施加部署或链接策略时，才将 Monolithic / Modular 作为顶层 CMake 构建选项**（如 Preset 或顶层 Cache 配置），不要求每个工程必须声明或选择该选项。
+
+- 顶层策略可影响 Module 的默认 `STATIC` / `SHARED` 选择及最终装配方式，但不能取代每个 Module 最终落实为唯一真实 CMake Library Target 的既有规则；允许因平台或功能需要显式混用两类目标。
+- `Monolithic` 不等于禁止所有动态 Plugin，`Modular` 也不等于所有 Module 必须为 `SHARED`；两者描述的是整体部署取向，而非逐 Module 类型。
+- CMake 内置的 `BUILD_SHARED_LIBS` 仅控制**未明确指定**库类型的 `add_library()`，不把它误当成 Pangu 的全局部署协议，也不无差别覆盖 ThirdParty 的库类型。
+- 顶层选项的**实际名称、默认值、Preset 组织、平台映射与是否需要实现**尚未冻结；本次仅确定其适用层级和按需引入原则。
+
 ## “一个 Module 一个库”的范围
 
 | 事项 | 冻结约束 |
@@ -52,7 +61,7 @@
 | 主题 | 待决问题 |
 | --- | --- |
 | CMake 组织 | 根工程、子工程、Preset、Toolchain、`pg_add_module()` 等包装 API |
-| 库类型 | STATIC / SHARED 的默认选择和跨平台构建策略 |
+| 库类型与部署策略 | `STATIC` / `SHARED` 是逐 Module CMake Target 类型；`Monolithic` / `Modular` 仅在需要统一部署策略时作为顶层 CMake 选项。具体默认库类型、Preset、平台策略与选项命名待决 |
 | 产物布局 | 库、Manifest、符号文件、动态库导出、安装和分发目录 |
 | Meta 生成 | Clang 属性提取、代码生成、增量依赖、多配置构建 |
 | ABI | Profile Schema / Canonical / Fingerprint 算法与兼容判定已冻结；待实现的是每 TU 配置采集、生成器、装载前预检及二次校验的具体接口 |

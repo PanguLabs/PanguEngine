@@ -1,8 +1,9 @@
 # ADR-0009：冻结 ABI Profile / Fingerprint v1
 
-> Status: Accepted（Schema、Canonical、哈希与兼容判定的设计协议；不代表平台实现完成）
+> Status: Accepted（Schema、Canonical、哈希与兼容判定协议；SHARED 入口形式由 ADR-0010 部分修订，不代表平台实现完成）
 > 日期：2026-10-21
 > 权威规范：[ABI Profile / Fingerprint v1](../foundation/abi-profile-fingerprint.md)
+> SHARED 入口形式修订：[ADR-0010](0010-unified-cpp-module-entry.md)，不修改本 ADR 冻结的 Fingerprint 算法/严格校验政策
 > 基于：[ABI 基线](../foundation/abi.md)、[工具链决策](0004-platform-clang-toolchains.md)、[Module 注册与生命周期](0008-module-registration-lifetime.md)
 
 ## Context
@@ -16,7 +17,7 @@
 3. Fingerprint = SHA-256(`ASCII("PANGU_ABI_PROFILE_V1") + 0x00 + canonical UTF-8 bytes`)，完整 32 字节/64 字符小写十六进制，不截断。规范测试向量与变异向量随 Wiki 保存。
 4. v1 仅采用**严格配置等值**兼容策略；工具链/标准库 ABI、CRT、RTTI、目标 ABI、布局选项、SDK/NDK/Sysroot ABI 身份不匹配时拒绝 C++ 边界。Compiler Patch 或 SDK 身份变化在 v1 亦保守拒绝；需要经验证新兼容政策才允许放宽。
 5. Profile 和 Fingerprint 来自**真实构建**，必须覆盖 Host 及 STATIC/SHARED Module 的受控 C++ 交互目标与 ABI 关键 TU 配置；不能由用户手填声明兼容。
-6. SHARED 装载先预检兼容元数据，OS Load 后通过版本化窄 C Discovery 二次检查，只有成功后调用受控 C++ 注册入口；STATIC 在最终组合/装配时进行校验。`LoadLibrary/dlopen` 可能提前运行初始化代码，二次校验不能宣称阻止任意代码提前执行。
+6. SHARED 装载前必须对**与实际加载产物可验证绑定**的元数据完成 ABI Profile/Fingerprint、版本及 C++ Public Module API Contract 预检；预检失败不得 OS Load，更不得进入原生 C++ Query。OS Load 后通过版本化稳定导出符号获得原生 C++23 ModuleDefinition，进行 Profile/接口信息二次一致性校验，成功后才执行统一 C++ 注册；STATIC 在最终组合/装配时进行校验。此处入口形式依 [ADR-0010](0010-unified-cpp-module-entry.md) 修订，**不再需要窄 C Discovery POD**。`LoadLibrary/dlopen` 可能提前运行初始化代码，二次校验不能宣称阻止任意代码提前执行。
 7. Fingerprint 不包含 BuildIdentity、ModuleId、PluginId；它不是签名，不证明 Public API/ODR、Allocator、Lifetime 或代码来源安全。Module 协议、公共接口契约及 ModuleCodePin/ServiceRef 仍单独检查。
 
 ## Consequences
@@ -28,6 +29,6 @@
 
 ## Open Questions
 
-AbiProfile/AbiFingerprint 的 C++ API 内存布局、生成工具、Target 每 TU 的选项采集、平台 SDK/Runtime 具体探针、SHARED 查询入口二进制布局与符号、可信预检元数据嵌入方式、Public ABI Surface Digest、Plugin Manifest、真实五平台验收。以上不属于本 ADR 的已冻结范围。
+AbiProfile/AbiFingerprint 的 C++ API 内存布局、生成工具、Target 每 TU 的选项采集、平台 SDK/Runtime 具体探针、SHARED C++ Query 入口 Public ABI / 稳定导出符号、可信预检元数据嵌入与实际加载产物绑定方式、Public ABI Surface Digest、Plugin Manifest、真实五平台验收。以上不属于本 ADR 的已冻结范围。
 
 **本决策不等于已构建引擎 Module、完成动态装载或做完跨平台 ABI 实测。**

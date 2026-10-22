@@ -1,7 +1,7 @@
 # PanguEngine 设计文档索引
 
 > 状态：维护中（Index）
-> 更新：2026-10-21
+> 更新：2026-10-22
 > 约定：文档文件名使用英文 kebab-case，正文中文优先，专业术语可使用英文。
 
 ## 如何阅读
@@ -46,6 +46,7 @@
 | [Engine Host](core/engine-host.md) | 采用 EngineHost 命名与宿主职责方向 | Partially Frozen |
 | [Plugin 与 Module](core/plugin-module.md) | Plugin/Module 职责、单 Module 单库、CodePin 与安全卸载 | Partially Frozen |
 | [Module 注册与生命周期 v1](core/module-registration-lifetime.md) | STATIC/SHARED 统一注册、可回滚事务、生命周期与 CodePin | Frozen（设计语义）；具体 API 未冻结 |
+| [ModuleDescriptor & Registration API v1](core/module-api.md) | 身份/依赖、统一 C++ 入口、Catalog、Scope 装配、操作进度与清理契约 | Partially Frozen（行为冻结；Public API/ABI 待验证，见 ADR-0011） |
 | [内存管理](core/memory-management.md) | Pangu Memory Ownership Contract v1 | Frozen（规范 v1） |
 | [反射和元数据](core/reflection-meta.md) | pga 属性、禁止反射标记宏、不 Fork LLVM | Partially Frozen |
 | [Service / Context](core/service.md) | No Subsystem、Host/Context/World 与 Concrete / Contract / Registry Service 三模式 | Frozen（设计语义）；API PoC |
@@ -66,6 +67,8 @@
 - [ADR-0007：错误值、失败报告与基础诊断分离](decisions/0007-error-diagnostics.md)
 - [ADR-0008：统一 Module 注册与生命周期](decisions/0008-module-registration-lifetime.md)
 - [ADR-0009：ABI Profile / Fingerprint v1](decisions/0009-abi-profile-fingerprint.md)
+- [ADR-0010：STATIC/SHARED 统一原生 C++23 Module 接口](decisions/0010-unified-cpp-module-entry.md)
+- [ADR-0011：冻结 Module API v1 的行为契约](decisions/0011-module-api-behavior-contract.md)
 
 ## 文档维护规则
 

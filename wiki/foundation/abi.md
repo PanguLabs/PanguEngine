@@ -52,6 +52,6 @@ AbiProfile v1 的**已冻结完整字段表、规范化规则、指纹算法和�
 
 ## 未冻结的内容
 
-AbiProfile/AbiFingerprint 的具体 C++ 内存布局和公开 API、机器可读 `.pgmodule` Manifest 格式、精确动态发现入口 POD/符号、ABI 采集工具和每 TU 校验算法、可信预检元数据嵌入/签名方式、公开类型的 API Surface Digest、SDK/运行库真实验收、RTTI/visibility/Class Layout 的跨平台细化约束，以及 Plugin 分发与热重载。**五平台工具链/标准库选型以及 Profile v1 的 Schema、Canonical、SHA-256、严格相容政策和 STATIC/SHARED 校验阶段均已冻结**；不应再次列作未决。
+AbiProfile/AbiFingerprint 的具体 C++ 内存布局和公开 API、机器可读 `.pgmodule` Manifest 格式、原生 C++23 Query 的固定导出符号/公共接口 ABI、ABI 采集工具和每 TU 校验算法、可信预检元数据嵌入/签名方式、公开类型的 API Surface Digest、SDK/运行库真实验收、RTTI/visibility/Class Layout 的跨平台细化约束，以及 Plugin 分发与热重载。**五平台工具链/标准库选型以及 Profile v1 的 Schema、Canonical、SHA-256、严格相容政策和 STATIC/SHARED 校验阶段均已冻结**；不应再次列作未决。
 
 后续若记录这些决策，需要更新本文件并提交相应 ADR；不得直接从过往示例代码认定已经生效。

@@ -131,14 +131,14 @@ CMake Target -> Compiler / Runtime Probe -> Canonical Profile + SHA-256
                  -> 受控产物/预检材料关联
                  -> 无执行的装载前兼容性 Preflight
                  -> OS LoadLibrary / dlopen
-                 -> 版本化窄 C Discovery + 二次 Profile 校验
-                 -> 受控 C++ 注册入口
+                 -> 稳定导出名定位原生 C++23 Query + 二次 Profile/接口契约复核
+                 -> 统一 C++23 Registration
                  -> Module Registration Transaction -> Active
 ```
 
-1. **预检**必须在 OS 装载外部候选代码前尽可能通过非执行式读取完成版本/平台/ABI Profile 比较；侧载元数据与产物必须有可验证的关联，不能单凭可篡改 Sidecar 文件证明库本身一致。预检工艺/嵌入节、哈希/签名可信策略另行冻结。
-2. `LoadLibrary/dlopen` **可能先运行全局构造或 DLL 初始化器**，故装载后二次校验仅保证调用 Pangu C++ 注册入口前已验证，不代表任意外部代码从未执行。v1 禁止依赖动态库全局构造完成业务注册；非可信库运行安全需独立解决。
-3. SHARED 查询入口必须为版本化的窄 C 兼容发现协议，交换内容包含最小 Protocol Version、结构大小、Profile/Fingerprint、受控 C++ 注册函数入口信息。**精确符号名、POD 布局、字节序/对齐及入口签名不在本次冻结范围**。
+1. **预检**必须在 OS Load 前以非执行式读取完成版本/平台/ABI Profile、Fingerprint 和原生 C++ ModuleDefinition Public API Contract 的严格验证；预检数据必须与**实际将加载的产物**可验证地绑定，不能单凭可篡改 Sidecar 认定一致。若产物身份、预检材料、ABI/API 合法性或预检后到 OS Load 的 TOCTOU 风险无法确认，应 Fail Closed、禁止 OS Load/C++ Query。预检工艺/嵌入节、可信绑定和签名策略另行冻结。
+2. `LoadLibrary/dlopen` **可能先运行全局构造或 DLL 初始化器**。统一 C++23 Query 路线因此要求在 OS Load **之前**完成真实产物绑定和受控 C++ ABI/Public API 预检；装载后二次校验仅复核一致性，不能宣称阻止任意加载时执行。v1 禁止依赖动态库全局构造完成业务注册；非可信库运行安全需独立解决。
+3. SHARED 发现入口由 [ADR-0010](../decisions/0010-unified-cpp-module-entry.md) 修订为**版本化稳定 `extern "C"` 导出名，仅用于定位原生 C++23 `ModuleDefinition` Query**，STATIC/SHARED 共用注册接口，**不需要独立窄 C POD Discovery**。由于 Query 即交换受控 C++ 类型，在执行 OS Load / C++ Query **之前**必须通过与实际加载产物可验证绑定的元数据，完成 ABI Profile/Fingerprint、协议版本和 C++ ModuleDefinition Public API Contract 的预检；预检无法验证即 Fail Closed。加载后 Query 的 Descriptor/Canonical/Digest 与预检结果必须复核一致，成功才进入注册。**精确符号名、C++ Public API 布局与调用约定、可信预检产物绑定/TOCTOU 工艺仍未冻结**。
 4. 只有兼容性和 Module Interface Contract 检查通过，才可以进行 C++ 注册、使用 STL/Result 或发布 Service/Registry 能力；失败报告应保留可读字段差异，并按 Module v1 事务回滚。
 5. 预检/二次校验不替代最后的 ModuleCodePin、Borrow、Allocator/GPU 安全卸载契约。
 
@@ -148,7 +148,7 @@ Schema/测试向量的临时 **C++23 验证探针**位于本地 `.probe/abi-prof
 
 平台验证目标依照现有 Toolchain 约束：Windows/WSL Linux/macOS 做本机跨库加载测试；Android/iOS 先完成目标编译链接与 ABI 采集，设备运行/打包必须独立验收。现有探针不自动代表正式引擎功能通过。
 
-**尚未冻结**：AbiProfile/AbiFingerprint 的 C++ 对象内存布局、具体 Toolchain Probe 实现、精确 Runtime/SDK 身份提取工具、机器可读 Manifest/导出符号/POD、ModuleDescriptor Public API、公共接口签名与 API Surface Digest、包内可信元数据绑定、签名认证、跨版本兼容例外、多个 Host/Hot Reload。上述属于实现或后续专项协议，**不影响本次冻结的 JSON Schema、Fingerprint 算法与严格相容判定**。
+**尚未冻结**：AbiProfile/AbiFingerprint 的 C++ 对象内存布局、具体 Toolchain Probe 实现、精确 Runtime/SDK 身份提取工具、机器可读 Manifest、原生 C++ Query 导出符号/API 契约、ModuleDescriptor Public API、公共接口签名与 API Surface Digest、包内可信元数据绑定、签名认证、跨版本兼容例外、多个 Host/Hot Reload。上述属于实现或后续专项协议，**不影响本次冻结的 JSON Schema、Fingerprint 算法与严格相容判定**。
 
 ## 8. 参考
 

@@ -1,7 +1,7 @@
 # Architecture Decision Records (ADR)
 
 > 状态：规范性索引
-> 更新：2026-10-21
+> 更新：2026-10-22
 
 本目录记录影响架构长期演化的重要决策，包括备选方案、选择原因、后果及被替代关系。**ADR 不是子系统的第二份详细规范**；日常实施以相应 Foundation/Core/Runtime 文档为准。
 
@@ -16,8 +16,10 @@
 | [0005](0005-one-module-one-library.md) | 一个 Module 对应一个静态库或动态库 | Accepted | [Plugin / Module](../core/plugin-module.md)、[Build System](../foundation/build-system.md) |
 | [0006](0006-three-service-modes.md) | Concrete / Contract / Registry Service 三模式 | Accepted | [Service](../core/service.md) |
 | [0007](0007-error-diagnostics.md) | 错误值、失败报告与基础诊断分离 | Accepted | [错误处理与基础诊断](../foundation/error-diagnostics.md) |
-| [0008](0008-module-registration-lifetime.md) | 统一 Module 注册与生命周期语义 | Accepted | [Module Registration & Lifetime v1](../core/module-registration-lifetime.md) |
-| [0009](0009-abi-profile-fingerprint.md) | 冻结 ABI Profile / Fingerprint v1 | Accepted | [ABI Profile / Fingerprint](../foundation/abi-profile-fingerprint.md) |
+| [0008](0008-module-registration-lifetime.md) | 统一 Module 注册与生命周期语义（SHARED 入口部分由 ADR-0010 修订） | Accepted | [Module Registration & Lifetime v1](../core/module-registration-lifetime.md) |
+| [0009](0009-abi-profile-fingerprint.md) | 冻结 ABI Profile / Fingerprint v1（SHARED 入口部分由 ADR-0010 修订） | Accepted | [ABI Profile / Fingerprint](../foundation/abi-profile-fingerprint.md) |
+| [0010](0010-unified-cpp-module-entry.md) | 统一 STATIC/SHARED 原生 C++23 Module 发现与注册 | Accepted（技术路线） | [Module API v1](../core/module-api.md) |
+| [0011](0011-module-api-behavior-contract.md) | 冻结 Module API v1 的行为契约 | Accepted（行为；Public API/ABI 待验证） | [Module API v1](../core/module-api.md) |
 
 ## 推荐格式
 
