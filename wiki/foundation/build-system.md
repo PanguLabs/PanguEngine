@@ -1,7 +1,7 @@
 # Pangu 构建系统
 
 > 状态：Partially Frozen（采用 CMake 4.0+、单 Module 单库构建规则已冻结；具体构建 API/产物协议待设计）
-> 更新：2026-10-21
+> 更新：2026-10-22
 > 决策：[ADR-0001：采用 CMake](../decisions/0001-adopt-cmake.md)、[ADR-0005：一个 Module 一个库](../decisions/0005-one-module-one-library.md)
 
 ## 已确定的决策
@@ -23,6 +23,85 @@
 - `Monolithic` 不等于禁止所有动态 Plugin，`Modular` 也不等于所有 Module 必须为 `SHARED`；两者描述的是整体部署取向，而非逐 Module 类型。
 - CMake 内置的 `BUILD_SHARED_LIBS` 仅控制**未明确指定**库类型的 `add_library()`，不把它误当成 Pangu 的全局部署协议，也不无差别覆盖 ThirdParty 的库类型。
 - 顶层选项的**实际名称、默认值、Preset 组织、平台映射与是否需要实现**尚未冻结；本次仅确定其适用层级和按需引入原则。
+
+## 当前正式构建目录
+
+当前仓库的 CMake 正式构建树位于根目录 `Build/`，**按目标平台隔离**，不再借用 `.probe/` 放置正式代码的构建输出：
+
+| 平台 | 相对仓库路径 | 当前状态 |
+| --- | --- | --- |
+| Windows | `Build/Windows/` | Clang 23 + Ninja 配置、构建和 Module Identity CTest 已通过 |
+| WSL Ubuntu Linux | `Build/Linux/` | Clang 23 + libc++ 配置、构建和 Module Identity CTest 已通过 |
+| macOS | `Build/macOS/` | MacPorts Clang 23 + Ninja 配置、构建和 Module Identity CTest 已通过 |
+| Android | `Build/Android/` | NDK r30 / arm64-v8a / API 29：Module Identity STATIC 构建通过；未部署/运行 |
+| iOS | `Build/iOS/` | MacPorts Clang 23 / iPhoneOS 18.2 SDK / arm64：Module Identity STATIC 构建通过；未部署/运行 |
+
+Linux 通过 WSL 访问同一源码目录 `/mnt/d/Git/PanguEngine`；macOS 使用 `ssh -o BatchMode=yes moozen-macos`，在现有 SMB 挂载 `/Users/moozen/WindowsGit/PanguEngine` 上**直接读取同一份源码并输出到共享的 `Build/macOS/`**，不复制代码到 macOS 的临时目录。各平台的实际 CMake 编译器、libc++ / SDK 及生成工具配置仍以本机受控 Toolchain 为准。
+
+`Build/` 已被 `.gitignore` 忽略。临时设计探针及其局部构建才使用 `.probe/`；此前 `.probe/module-public-api-build`、`.probe/module-public-api-linux` 和对应临时源码包已在正式构建验证后清理；**不得把其他已有 `.probe` 当成本次构建删除**。
+
+本节记录当前落地的目录组织、五平台最小 CMake Presets 和 **Module Identity 切片**编译证据；不意味着完整 Build System API、运行时注册/Loader、Android/iOS 应用链接、签名/真机或多平台 Runtime 已冻结/完成。
+
+## 已落地的轻量化 CMake 配置（实现层，非新架构冻结）
+
+参考本地 O3DE 的分平台 CMake Presets、平台分发与编译规则复用思想，**仅借鉴组织方式**；不引入其 `ly_add_target` / `GEM_MODULE` / 全局 Monolithic 配置、资源/安装系统或第二构建内核。
+
+```text
+CMakeLists.txt
+CMakePresets.json
+cmake/
+  PanguPlatform.cmake
+  Platform/
+    Common/BuildOptions.cmake
+    Common/Module.cmake
+    Common/CMakePresets.json
+    Windows/Settings.cmake + CMakePresets.json
+    Linux/Settings.cmake   + CMakePresets.json
+    macOS/Settings.cmake   + CMakePresets.json
+    Android/Settings.cmake + CMakePresets.json
+    iOS/Settings.cmake     + Toolchain.cmake + CMakePresets.json
+```
+
+- `PanguPlatform.cmake` 在 `project(... LANGUAGES CXX)` 后按 **目标平台** 选择配置，并拒绝错误的 Clang 版本/不支持的平台；Android 只允许官方 NDK Toolchain 的 Clang，不套用桌面 LLVM 23 规则。
+- `Pangu::BuildOptions` 是无产物的 **INTERFACE 配置目标**，为显式依赖它的 Target 设置 C++23、`-fno-exceptions` 和基础警告参数，不全局污染 ThirdParty。RTTI 以及 ABI 相关 Release/Debug、CRT/Iterator 模式不得假定由该目标自动校验；完整 ABI Profile v1 采集尚未实现。
+- `pangu_configure_module(<existing-target>)` 仅为现有 `add_library(... STATIC|SHARED ...)` Target 应用相同编译规则、PIC 和输出目录；必须**先创建**真实 Module Target，不隐式生成 Library、Manifest、Catalog 或 ModuleId。当前 `PanguModule` 通过 `add_library(PanguModule STATIC ...)` 建立，`Pangu::Module` 仅是 Alias。
+- 平台 Settings 负责目标特殊规则：Windows 使用 Clang + MSVC STL（Windows ARM 不在 v1）；Linux 查找匹配 LLVM 的 libc++ 头文件、`__config_site`、运行库及 RPATH，缺失时拒绝，不退回 `libstdc++`，不同安装布局可用 `PANGU_LIBCXX_ROOT` 显式覆盖；macOS 默认 MacPorts Clang 23；Android 采用 NDK Clang；iOS 采用 MacPorts Clang 23 + 独立 iPhoneOS SDK。
+- `cmake/` 不写死本机工具链安装路径。Windows、Linux、macOS、iOS 从 `LLVM_ROOT` 派生编译器和 `clang-scan-deps` 路径，并校验编译器位于该安装目录内；Android 从 `ANDROID_HOME` 读取 SDK 目录、从 `ANDROID_NDK_HOME` 选择官方 NDK Toolchain，并校验实际使用的 NDK 与环境变量一致。
+- `Lib/` 存放 STATIC Library（以及平台归档产物）；`Bin/` 存放动态库/可执行程序。当前只有 Module Identity 正式代码与测试，不意味着完整 Plugin、ModuleManager 或 Shader/Asset Pipeline 已实现。
+- CMake Preset 默认 Ninja + Release，配置并导出 `compile_commands.json`；桌面平台 CTest 由 `BUILD_TESTING` 控制，交叉编译暂不创建无法直接运行的测试程序。Android 预设以 NDK r30 已验证的 ARM64/API29 为默认验收切片，iOS 预设以本地 iPhoneOS18.2/arm64/iOS18.0 为验证参数；它们**不是永久支持下限**，未来可按目标更换。
+
+先在启动 CMake 的环境中设置下列变量；目录值由本机配置提供，不写入共享 Preset：
+
+| 环境变量 | 使用平台 | 含义 |
+| --- | --- | --- |
+| `LLVM_ROOT` | Windows、Linux、macOS、iOS | LLVM 23 安装前缀，其下包含 `bin/clang++`（Windows 为 `.exe`）及 `bin/clang-scan-deps`；Apple 平台选择 MacPorts LLVM |
+| `ANDROID_HOME` | Android 的构建宿主 | Android SDK 安装根目录 |
+| `ANDROID_NDK_HOME` | Android 的构建宿主 | NDK 安装根目录，其下包含 `build/cmake/android.toolchain.cmake` |
+| `PANGU_IOS_SDK_PATH` | iOS 的 macOS 宿主 | 独立安装的 iPhoneOS Device SDK；未设置时先通过 `xcrun --sdk iphoneos --show-sdk-path` 查找，失败或目录无效时回退到 `$HOME/Library/Developer/SDKs/iPhoneOS18.2.sdk`；仍不存在则要求显式设置 |
+
+macOS 可在 `~/.zshenv` 导出 `LLVM_ROOT`；WSL Ubuntu 可由 `/etc/profile.d/llvm.sh` 配置，并在 `~/.bashrc` 中引用。非登录且非交互的 Bash 不会自动读取这些登录配置，自动化调用方应传入环境变量或使用登录 Shell。
+
+从相应平台的 PanguEngine 仓库根目录运行：
+
+```sh
+cmake --preset windows        # Windows PowerShell
+cmake --build --preset windows
+ctest --preset windows
+
+cmake --preset linux          # WSL Ubuntu
+cmake --build --preset linux
+ctest --preset linux
+
+cmake --preset macos          # ssh moozen-macos；直接使用 WindowsGit SMB 源码
+cmake --build --preset macos
+ctest --preset macos
+```
+
+Android 设置 `ANDROID_HOME`、`ANDROID_NDK_HOME` 后，从 Windows 或已安装 SDK/NDK 的宿主运行 `cmake --preset android-arm64` / `cmake --build --preset android-arm64`。iOS 设置 `LLVM_ROOT` 并确认 SDK 可由 `PANGU_IOS_SDK_PATH`、`xcrun` 或上述独立 SDK 回退目录定位后，在 macOS 上运行 `cmake --preset ios-arm64` / `cmake --build --preset ios-arm64`。两种移动平台目前只验收了 Module Identity STATIC 的交叉编译和归档产物，不等于应用链接、设备运行或完整目标 ABI 验证。
+
+使用各 Preset 时若需清除旧 CMake 缓存中的手工编译参数，可执行 `cmake --fresh --preset <name>`；切换 `LLVM_ROOT` 或 SDK/NDK 时也应重新配置。不要把 Windows、Linux、macOS 的二进制缓存混在同一 `Build/` 子目录。
+
+**尚未冻结/实现**：`pangu_configure_module` 的长期包装 API、完整工具链锁定（Windows SDK/MSVC STL、Linux libc++ ABI 配置、各平台 SDK 的精确 Profile）、PanguMeta、完整插件封装、Monolithic/Modular 顶层策略、安装/分发和多配置产物政策。这次完成的是可工作的最小构建接线，不将实验便利配置提升为跨平台 ABI 安全证明。
 
 ## “一个 Module 一个库”的范围
 
@@ -60,13 +139,13 @@
 
 | 主题 | 待决问题 |
 | --- | --- |
-| CMake 组织 | 根工程、子工程、Preset、Toolchain、`pg_add_module()` 等包装 API |
+| CMake 组织 | 根工程、五平台 Presets 和最小 Module 设置已经落地；长期封装 API、Generator 组合、多配置与完整目标 Toolchain 管理尚未冻结 |
 | 库类型与部署策略 | `STATIC` / `SHARED` 是逐 Module CMake Target 类型；`Monolithic` / `Modular` 仅在需要统一部署策略时作为顶层 CMake 选项。具体默认库类型、Preset、平台策略与选项命名待决 |
 | 产物布局 | 库、Manifest、符号文件、动态库导出、安装和分发目录 |
 | Meta 生成 | Clang 属性提取、代码生成、增量依赖、多配置构建 |
 | ABI | Profile Schema / Canonical / Fingerprint 算法与兼容判定已冻结；待实现的是每 TU 配置采集、生成器、装载前预检及二次校验的具体接口 |
 | ThirdParty | Source/Binary 版本、目标导出与平台链接 |
-| 交叉编译 | Windows / WSL Linux / macOS / Android / iOS Toolchain 与 SDK |
+| 交叉编译 | Android ARM64/iOS ARM64 的 STATIC Module Identity 已用当前 NDK/SDK 编译；其余 Android ABI、iOS 设备执行与跨平台真实 SHARED 加载仍待验收 |
 
 ## 验证要求
 

@@ -1,0 +1,38 @@
+{
+  "version": 9,
+  "include": [
+    "../Common/CMakePresets.json"
+  ],
+  "configurePresets": [
+    {
+      "name": "macos",
+      "displayName": "macOS MacPorts Clang 23 / Ninja",
+      "inherits": "pangu-ninja",
+      "binaryDir": "${sourceDir}/Build/macOS",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "$env{LLVM_ROOT}/bin/clang++",
+        "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS": "$env{LLVM_ROOT}/bin/clang-scan-deps"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "macos",
+      "configurePreset": "macos"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "macos",
+      "configurePreset": "macos",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

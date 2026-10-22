@@ -1,0 +1,31 @@
+{
+  "version": 9,
+  "include": [
+    "../Common/CMakePresets.json"
+  ],
+  "configurePresets": [
+    {
+      "name": "ios-arm64",
+      "displayName": "iOS arm64 / MacPorts Clang 23",
+      "inherits": "pangu-ninja",
+      "binaryDir": "${sourceDir}/Build/iOS",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "toolchainFile": "${sourceDir}/cmake/Platform/iOS/Toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "18.0",
+        "BUILD_TESTING": false
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "ios-arm64",
+      "configurePreset": "ios-arm64"
+    }
+  ]
+}

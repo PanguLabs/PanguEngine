@@ -1,0 +1,15 @@
+{
+  "version": 9,
+  "cmakeMinimumRequired": {
+    "major": 4,
+    "minor": 0,
+    "patch": 0
+  },
+  "include": [
+    "cmake/Platform/Windows/CMakePresets.json",
+    "cmake/Platform/Linux/CMakePresets.json",
+    "cmake/Platform/macOS/CMakePresets.json",
+    "cmake/Platform/Android/CMakePresets.json",
+    "cmake/Platform/iOS/CMakePresets.json"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "version": 9,
+  "include": [
+    "../Common/CMakePresets.json"
+  ],
+  "configurePresets": [
+    {
+      "name": "windows",
+      "displayName": "Windows Clang 23 / Ninja",
+      "inherits": "pangu-ninja",
+      "binaryDir": "${sourceDir}/Build/Windows",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "$env{LLVM_ROOT}/bin/clang++.exe",
+        "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS": "$env{LLVM_ROOT}/bin/clang-scan-deps.exe"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows",
+      "configurePreset": "windows"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "windows",
+      "configurePreset": "windows",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

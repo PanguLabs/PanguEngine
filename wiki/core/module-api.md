@@ -340,6 +340,21 @@ public:
 
 ## 9. 本轮验证证据与限制
 
+### 9.1 正式 Module Identity 代码起步（2026-10-22）
+
+已在 `Source/Runtime/Module/` 创建第一个实际 CMake `STATIC` Target：`PanguModule`，并在仓库根目录建立最小 CMake 入口、将长期回归测试放在 `Tests/Module/`。这只实现已冻结身份/版本规则的一小部分，**不表示 `ModuleDefinition`、`RegistrationContext`、`ModuleManager`、`ModuleCodePin`、ABI Profile 采集或 SHARED Loader 已实现**。
+
+- Public `Source/Runtime/Module/Public/ModuleIdentity.h`（公开 include 使用 `#include <ModuleIdentity.h>`）提供 `pg::module::ModuleId`（16 字节强类型，全零无效）和 `ModuleVersion`（三段整数，`constexpr` 比较）；无分配 `FormatModuleId` 支持 `constexpr` 和规范化的 32 字符小写十六进制。
+- 内部 `Private/ModuleIdentityParse.h` / `ModuleIdentity.cpp` 严格解析十六进制文本，拒绝长度错误、大写/非法字符与全零 ID；因通用 `pg::Error` Public API 尚未冻结，该领域专属错误**仅保留于内部**，将来的跨模块公共解析接口须遵循 ADR-0007 转换为 `std::expected<T, pg::Error>`。
+- CMake 目标使用 C++23、Clang、`-fno-exceptions`，非 Windows 目标明确使用 `libc++`，静态库启用 PIC 以便以后组合进入 SHARED。该根工程尚不是完整引擎构建/部署配置。
+- `Tests/Module/ModuleIdentityTests.cpp` 通过 `static_assert` 与 CTest 检查身份类型性质、编译期版本比较与格式化、合法往返及非法文本拒绝。Windows Clang 23.1.0、WSL Ubuntu Clang 23.1.0、macOS MacPorts Clang 23.1.2 **各 1/1 CTest 通过**；Windows `clang-format --dry-run --Werror` 与按编译数据库执行的 `clang-tidy` 无新增诊断。
+- 正式构建输出已迁移至仓库根目录 `Build/Windows`、`Build/Linux`、`Build/macOS`（各平台 Module Identity CTest 1/1 通过）；`Build/Android` 的 NDK r30 ARM64 STATIC Module Identity 编译及 `Build/iOS` 的 MacPorts Clang 23 + iPhoneOS SDK ARM64 STATIC Module Identity 编译均已通过（无运行/部署验收）。macOS 使用 `ssh -o BatchMode=yes moozen-macos`，直接从已挂载的 `/Users/moozen/WindowsGit/PanguEngine` 共享源码配置/构建，**不拷贝源码**。
+- WSL 的 LLVM libc++ 安装需在配置阶段显式提供实际标准库的两个头文件目录（含 `__config_site`）和库搜索目录；现通过 `cmake/Platform/Linux/Settings.cmake` 基于实际 Clang 安装前缀识别头文件和库，并可通过 `PANGU_LIBCXX_ROOT` 覆盖，不再要求手填 `CMAKE_CXX_FLAGS`。macOS 的 `macos` Preset 显式选择 `clang-scan-deps-mp-23`。先前 `.probe/module-public-api-*` 临时构建与 macOS `/tmp/pangu-module-public-api-*` 副本均已清理，原有其他探针未动。上述结果仅覆盖身份切片，Android/iOS 尚未执行。
+
+
+
+### 9.2 既有行为契约探针（非正式源码）
+
 2026-10-22，本地 `.probe/module-api-freeze/` 使用 Windows x64、Clang 23.1.0、MSVC STL、C++23、CMake 4.4.3 / Ninja、禁用异常与 Release 配置完成 **9/9 CTest**。本轮风格修正后，Windows 复验仍为 **9/9**，WSL Ubuntu 使用 Clang 23.1.0 / libc++ 同样完成 **9/9 CTest**。探针被 Git 忽略，不是正式 Runtime 或版本化回归测试；生产实现需将第 7 节要求迁入正式 CMake/CTest。
 
 | 证据 | 覆盖内容 | 不代表 |

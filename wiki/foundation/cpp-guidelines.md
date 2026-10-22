@@ -172,6 +172,7 @@ UseTexture(*result);
 ## 11. 工程质量与代码风格
 
 - 按仓库 `.clang-format` / `.clang-tidy` 配置执行；新增检查规则应经项目验证。第三方代码与引擎本体的 Warning Policy 分离。
+- **MUST**：PanguEngine 自有 C++ 头文件统一使用 `.h` 扩展名，不使用 `.hpp`；已有 ThirdParty 源码不因此批量改名。当前 Module 公开头文件直接位于对应 `Public/` 下（如 `Source/Runtime/Module/Public/ModuleIdentity.h`），私有头文件位于 `Private/`，引入时使用 `#include <ModuleIdentity.h>`。
 - **SHOULD** Include What You Use；PCH 用于编译性能，不掩盖实际头文件依赖。C++ Modules 语言特性的使用范围另行决策。
 - **SHOULD** 让 Core System 可在不启动完整 EngineHost 的测试环境独立运行；通过显式 Host/Context/World 依赖避免隐藏全局单例。
 - **SHOULD** 把 Profiler/Trace、内存统计、日志和任务跟踪设计为可裁剪的诊断功能；Shipping 可以移除可选成本，但不能移除安全访问、正确释放或必要同步。

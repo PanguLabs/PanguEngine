@@ -1,0 +1,38 @@
+{
+  "version": 9,
+  "include": [
+    "../Common/CMakePresets.json"
+  ],
+  "configurePresets": [
+    {
+      "name": "linux",
+      "displayName": "Linux Clang 23 / libc++ / Ninja",
+      "inherits": "pangu-ninja",
+      "binaryDir": "${sourceDir}/Build/Linux",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "$env{LLVM_ROOT}/bin/clang++",
+        "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS": "$env{LLVM_ROOT}/bin/clang-scan-deps"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux",
+      "configurePreset": "linux"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "linux",
+      "configurePreset": "linux",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

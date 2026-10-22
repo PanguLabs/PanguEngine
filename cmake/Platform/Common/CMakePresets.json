@@ -1,0 +1,15 @@
+{
+  "version": 9,
+  "configurePresets": [
+    {
+      "name": "pangu-ninja",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": true,
+        "BUILD_TESTING": true
+      }
+    }
+  ]
+}

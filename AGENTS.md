@@ -31,7 +31,7 @@
 - 从 **Codex** 进入时，使用当前 Agent 提供的本地文件和终端工具。
 - 从 **ChatGPT Web** 进入时，**不要调用 Codex**；优先使用 ChatGPT Web 中已安装的插件，通过 **Desktop Commander** 访问和操作本地仓库。
 - 优先在本地仓库 `D:\Git\PanguEngine` 检查与修改代码。需要核对远程版本时，使用 GitHub 仓库。
-- 执行 Linux 命令时使用 WSL Ubuntu；执行 macOS 命令时使用 `ssh -o BatchMode=yes moozen-macos`。macOS/iOS 的编译器与 SDK 细节见 [`wiki/foundation/apple-toolchain.md`](wiki/foundation/apple-toolchain.md)；Android 以只读参考项目 `D:\AllProject\AndroidStudio\CppDemo` 的构建流程为参照，具体配置见 [`wiki/foundation/android-toolchain.md`](wiki/foundation/android-toolchain.md)。不要将 Windows 路径、Shell 或平台库行为直接视为可跨平台复用。
+- 执行 Linux 命令时使用 WSL Ubuntu；执行 macOS 命令时使用 `ssh -o BatchMode=yes moozen-macos`。**macOS 通过已挂载的 `/Users/moozen/WindowsGit/PanguEngine` 直接访问同一份源码，禁止将源码复制到 macOS 临时目录再构建**。正式构建优先使用根目录 `CMakePresets.json` 和各平台 `Build/<Platform>/` 输出。macOS/iOS 的编译器与 SDK 细节见 [`wiki/foundation/apple-toolchain.md`](wiki/foundation/apple-toolchain.md)；Android 以只读参考项目 `D:\AllProject\AndroidStudio\CppDemo` 的构建流程为参照，具体配置见 [`wiki/foundation/android-toolchain.md`](wiki/foundation/android-toolchain.md)。不要将 Windows 路径、Shell 或平台库行为直接视为可跨平台复用。
 - 共享 Agent Skills 的唯一规范目录为 `.agents/skills/`。
 - 新工作区可从仓库根目录执行 `python Scripts/setup-agent-links.py`，为 Claude Code 生成本地 Skills 映射：Windows 使用 Junction，Linux/macOS 使用 Symlink。
 - `.claude/skills` 是本地生成的目录映射，不应提交到 Git；Codex 可以直接使用 `.agents/skills/`。

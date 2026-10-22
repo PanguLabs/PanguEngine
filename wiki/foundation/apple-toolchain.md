@@ -2,7 +2,7 @@
 
 > 设计状态：Partially Frozen（macOS/iOS 默认 MacPorts Clang23，iOS AppleClang 仅作对照；正式 Toolchain 与部署流程未冻结）
 > 验证状态：macOS 原生探针编译、链接、运行通过；iOS 两个编译器的 Compile+Link 通过，部署待验证
-> 更新：2026-10-20
+> 更新：2026-10-22
 > 决策：[ADR-0004](../decisions/0004-platform-clang-toolchains.md)
 
 ## macOS：MacPorts LLVM Clang 23
@@ -17,6 +17,8 @@
 
 macOS 下已完成 C++23 原生 Clang23 + libc++ 编译、链接和运行。须显式选择 MacPorts 编译器，不依赖默认 AppleClang。
 
+正式 CMake 配置从环境变量 `LLVM_ROOT` 派生 `bin/clang++`、`bin/clang-scan-deps` 等路径，不写死 MacPorts 安装位置。本机对应 `LLVM_ROOT=/opt/local/libexec/llvm-23`，可用 `llvm-config-mp-23 --prefix` 查询；表中 `/opt/local/bin/*-mp-23` 是版本化命令入口。切换安装目录后需重新配置构建树。
+
 ## iOS：独立安装的 iPhoneOS 18.2 SDK
 
 **已确认 SDK 路径存在：**
@@ -28,6 +30,8 @@ macOS 下已完成 C++23 原生 Clang23 + libc++ 编译、链接和运行。须�
 SDK 内有 `SDKSettings.json`、`usr/include`、`usr/lib/libc++.1.tbd`、`usr/lib/libSystem.B.tbd` 及 `Foundation.framework`。SDK 声明 `CanonicalName=iphoneos18.2`，包含 iOS ARM64 目标平台。
 
 当前活动 Developer Directory 仍是 `/Library/Developer/CommandLineTools`，所以 `xcrun --sdk iphoneos --show-sdk-path` 无法自动发现这份位于用户目录的 SDK，`xcodebuild` 也无法正常用于 iOS 工程。这**不代表 SDK 不存在或不能直接使用**。
+
+iOS CMake Toolchain 同样从 `LLVM_ROOT` 选择编译器。SDK 优先读取 `PANGU_IOS_SDK_PATH`，未设置时使用 `xcrun --sdk iphoneos --show-sdk-path`；若查找失败或返回的目录不存在，则回退到 `$HOME/Library/Developer/SDKs/iPhoneOS18.2.sdk`，兼容当前未安装 Xcode 的宿主。该目录也不存在时要求显式设置 `PANGU_IOS_SDK_PATH`；显式配置的无效路径会直接报错。
 
 ## iOS 编译器验证及选择
 
