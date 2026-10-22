@@ -41,7 +41,7 @@
 
 ### SHARED Module
 
-1. Module 加载器在通过装载前可信产物绑定与 C++ ABI/Public Module API Contract 预检后，才允许获取动态库句柄；通过一个版本化稳定 `extern "C"` 导出名定位**原生 C++23 ModuleDefinition Query**（候选 `PanguModule_QueryV1`），该 C Language Linkage 仅用于**按名找符号**，不是 C POD 交换协议或全引擎 C Bootstrap。
+1. Module 加载器在通过装载前可信产物绑定与 C++ ABI/Public Module API Contract 预检后，才允许获取动态库句柄；通过一个版本化稳定 `extern "C"` 导出名定位**原生 C++23 ModuleDefinition Query**（候选 `PanguModuleQueryV1`），该 C Language Linkage 仅用于**按名找符号**，不是 C POD 交换协议或全引擎 C Bootstrap。
 2. STATIC 和 SHARED 使用同一种原生 C++23 `ModuleDefinition`、Descriptor 和 `RegistrationContext`，SHARED **不再要求窄 C POD Discovery、数值 C 状态码转换或 `void*` 注册桥**。仅在真实加载产物的 ABI Profile/Fingerprint、协议版本及 ModuleDefinition Public API Contract 均完成**装载前**预检时，才可按受控 C++ ABI 调用 Query；装载后二次复核通过后执行统一的 C++ 注册事务。
 3. 需要区分构建/安装阶段的预检与装载后的嵌入数据验证：`LoadLibrary`/`dlopen` 可能在取得导出入口之前运行 DLL 初始化器/全局构造，因此运行时符号校验**不能**宣称所有插件代码已在执行前受到 ABI 验证。装载前预检及装载后二次验证遵循 [ABI Profile v1](../foundation/abi-profile-fingerprint.md)；禁止依赖全局构造产生业务注册副作用。预检不等于防恶意代码的沙箱或签名机制。
 4. 动态导出入口由 CMake/PanguMeta 等生成，不要求业务 Module 手写导出符号或注册桥；ABI 指纹算法和字节表示遵循 ABI Profile v1。查询函数返回的 C++ Descriptor/依赖字符串等数据在 CodePin 有效期内借用并由 Host 复制；精确符号名称、C++ Public API 布局/契约和平台调用约定仍待验证。此技术路线依 [ADR-0010](../decisions/0010-unified-cpp-module-entry.md) 修订。

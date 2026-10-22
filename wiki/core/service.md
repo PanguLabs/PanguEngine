@@ -74,17 +74,24 @@ Service Contract Identity 独立于 Provider ModuleId；同一单 Provider Contr
 ## 服务注册的最小 API 方向
 
 ```cpp
-namespace pg::service {
-enum class Scope : std::uint8_t { Host, Context, World };
+namespace pg::service
+{
+enum class Scope : std::uint8_t
+{
+    kHost,
+    kContext,
+    kWorld,
+};
 struct ServiceId;
-struct Dependency { ServiceId id; Scope scope; };
+struct Dependency; // 关联 ServiceId 与 Scope；完整布局待 API 设计。
 class Registry;
 class Registration;
-template<class T> class ServiceRef;
-}
+template <class T>
+class ServiceRef;
+} // namespace pg::service
 ```
 
-预期 Host/Context 对核心 Concrete Service 使用强类型成员 API；动态 Contract 才需要 Scoped `Registry::acquire<T>()`；Registry Service 使用各业务 Module 自己的 Registry API，不引入 ExtensionDescriptor。
+预期 Host/Context 对核心 Concrete Service 使用强类型成员 API；动态 Contract 才需要 Scoped `Registry::Acquire<T>()`；Registry Service 使用各业务 Module 自己的 Registry API，不引入 ExtensionDescriptor。
 
 ## 当前 PoC 与生产边界
 
@@ -94,7 +101,7 @@ template<class T> class ServiceRef;
 
 **未完成**：统一 EngineHost 启动状态机、ModuleManager 的真实 CodePin 接口、TaskGroup/Async Drain、Provider Hot Swap、异常/致命 OOM 策略整合、完整的并发 register/start/stop、正式的 Actor/World Ownership、Android/iOS 运行验证。本 PoC 的 Registration 与辅助状态字段不能当作最终 Public ABI。
 
-尤其注意：PoC 中 `Registry::stop_all()` 是非阻塞的 `Busy` 检查，正式 EngineHost 必须先安排 Scoped TaskGroup、回调撤销及 Content/GPU 退休，之后重试 Drain；不得直接强制释放。
+尤其注意：PoC 中 `Registry::StopAll()` 是非阻塞的 `Busy` 检查，正式 EngineHost 必须先安排 Scoped TaskGroup、回调撤销及 Content/GPU 退休，之后重试 Drain；不得直接强制释放。
 
 ## 状态冻结范围
 

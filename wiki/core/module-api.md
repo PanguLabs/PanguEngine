@@ -30,35 +30,39 @@ namespace pg::module
 {
 struct ModuleId
 {
-    std::array<std::byte, 16> bytes{};
+    std::array<std::byte, 16> Bytes{};
 };
 
 struct ModuleVersion
 {
-    std::uint32_t major{};
-    std::uint32_t minor{};
-    std::uint32_t patch{};
+    std::uint32_t Major{};
+    std::uint32_t Minor{};
+    std::uint32_t Patch{};
 };
 
-enum class DependencyKind : std::uint8_t { Required, Optional };
+enum class DependencyKind : std::uint8_t
+{
+    kRequired,
+    kOptional,
+};
 
 struct ModuleDependency
 {
-    ModuleId id;
-    ModuleVersion version;           // v1 精确匹配；可选依赖仍需要显式绑定
-    DependencyKind kind{};
+    ModuleId Id{};
+    ModuleVersion Version{}; // v1 精确匹配；可选依赖仍需要显式绑定
+    DependencyKind Kind{};
 };
 
 struct ModuleDescriptor
 {
-    ModuleId id;
-    ModuleVersion version;
-    std::uint32_t protocolVersion{1};
-    pg::AbiFingerprint abiFingerprint; // 由实际构建生成，不准手填
-    std::string_view canonicalAbiProfile; // 同次构建生成的 Canonical JSON，供验证及字段差异报告
-    std::span<const ModuleDependency> dependencies;
-    std::string_view displayName;    // 可选诊断用途，非身份
-    std::string_view buildIdentity;  // 非 ABI Fingerprint
+    ModuleId Id{};
+    ModuleVersion Version{};
+    std::uint32_t ProtocolVersion{1};
+    pg::AbiFingerprint AbiFingerprint{};  // 由实际构建生成，不准手填
+    std::string_view CanonicalAbiProfile; // 同次构建生成的 Canonical JSON，供验证及字段差异报告
+    std::span<const ModuleDependency> Dependencies;
+    std::string_view DisplayName;   // 可选诊断用途，非身份
+    std::string_view BuildIdentity; // 非 ABI Fingerprint
 };
 
 class RegistrationContext;
@@ -67,9 +71,9 @@ using RegisterModuleFn = pg::Status (*)(RegistrationContext&) noexcept;
 
 struct ModuleDefinition
 {
-    ModuleDescriptor descriptor;
-    RegisterModuleFn registerModule{}; // 必填；默认空值不是合法的 ModuleDefinition
-    const StaticModuleCatalog* linkedStaticModules{}; // SHARED 承载的 STATIC 项；字段形状未冻结
+    ModuleDescriptor Descriptor{};
+    RegisterModuleFn RegisterModule{};                // 必填；默认空值不是合法的 ModuleDefinition
+    const StaticModuleCatalog* LinkedStaticModules{}; // SHARED 承载的 STATIC 项；字段形状未冻结
 };
 
 using QueryModuleFn = const ModuleDefinition* (*)() noexcept;
@@ -78,7 +82,7 @@ using QueryModuleFn = const ModuleDefinition* (*)() noexcept;
 
 `pg::Status`、`pg::AbiFingerprint` 的具体 C++ API 尚未冻结，此处**不是可独立编译的 Public Header**。注册入口不使用异常；回滚、失败报告由 Host 所有的操作上下文负责。
 
-**入口有效性**：STATIC / SHARED 使用同一验证规则：Query 入口、Query 返回的 `ModuleDefinition*` 和其中的 `registerModule` 均须非空，否则在进入注册前返回定义无效错误。无需登记任何能力的 Module 仍提供显式返回成功的空操作注册函数，不以空函数指针表达该语义。非空检查不代替 ABI、接口契约和代码驻留校验。
+**入口有效性**：STATIC / SHARED 使用同一验证规则：Query 入口、Query 返回的 `ModuleDefinition*` 和其中的 `RegisterModule` 均须非空，否则在进入注册前返回定义无效错误。无需登记任何能力的 Module 仍提供显式返回成功的空操作注册函数，不以空函数指针表达该语义。非空检查不代替 ABI、接口契约和代码驻留校验。
 
 **数据生存期**：上述 `span/string_view` 只在取得有效 CodePin 的查询/登记窗口内借用。ModuleManager 必须复制 ModuleId、版本、依赖列表、必要字符串和报告到 Host 拥有的存储，然后才能让这些记录跨卸载继续存在。不得保存指向候选动态库段的悬空借用。
 
@@ -104,21 +108,21 @@ namespace pg::module
 {
 struct StaticCatalogEntry
 {
-    QueryModuleFn query;  // 同一原生 C++23 Query，直接链接保留
+    QueryModuleFn Query{}; // 同一原生 C++23 Query，直接链接保留
 };
 
 struct StaticModuleCatalog
 {
-    std::span<const StaticCatalogEntry> entries;
+    std::span<const StaticCatalogEntry> Entries;
 };
-}
+} // namespace pg::module
 ```
 
 Catalog 构造函数/数组必须直接引用各静态 Module 的显式查询入口，确保静态归档中的相应对象文件被链接器拉入，不依赖业务全局构造、静态初始化顺序或对所有 Module 无差别 `whole-archive`。其生成行为由**最终链接目标**决定，不把 Catalog 当成 Module 的另一个物理库。
 
-`StaticCatalogEntry::query` 指向代码的实际承载者：若静态代码装入可卸载的动态库，CodePin 保护该动态库；单独 STATIC 归档不执行 OS 卸载。按 ABI v1，在最终链接/装配阶段验证参与 C++ 互操作的 STATIC Module Profile，不能把成功链接当成 ABI 相容证明。Host 在登记阶段把 Descriptor 复制进自身内存，并检查重复 ID、依赖和版本；Profile/Digest 的有效性与一致性同样必须验证，不能仅比较声明的 Fingerprint。
+`StaticCatalogEntry::Query` 指向代码的实际承载者：若静态代码装入可卸载的动态库，CodePin 保护该动态库；单独 STATIC 归档不执行 OS 卸载。按 ABI v1，在最终链接/装配阶段验证参与 C++ 互操作的 STATIC Module Profile，不能把成功链接当成 ABI 相容证明。Host 在登记阶段把 Descriptor 复制进自身内存，并检查重复 ID、依赖和版本；Profile/Digest 的有效性与一致性同样必须验证，不能仅比较声明的 Fingerprint。
 
-**动态承载库内的 STATIC Module**：每个最终承载目标生成自己的完整、扁平 STATIC Catalog。EXE 的 Catalog 在宿主启动时显式交付；SHARED S 的唯一 Query 返回 S 的定义，并通过原生 C++ 数据关联提供其承载的全部 STATIC 条目（上文 `linkedStaticModules` 为字段提案）。叶子 STATIC 定义不递归携带 Catalog；Catalog 不包含承载者自身，也不包含另一个 SHARED 的条目。不再导出第二个发现符号。
+**动态承载库内的 STATIC Module**：每个最终承载目标生成自己的完整、扁平 STATIC Catalog。EXE 的 Catalog 在宿主启动时显式交付；SHARED S 的唯一 Query 返回 S 的定义，并通过原生 C++ 数据关联提供其承载的全部 STATIC 条目（上文 `LinkedStaticModules` 为字段提案）。叶子 STATIC 定义不递归携带 Catalog；Catalog 不包含承载者自身，也不包含另一个 SHARED 的条目。不再导出第二个发现符号。
 
 例如 S 链入 STATIC A/B，Host 通过 S 的一次入口定位发现 S/A/B，分别验证并预留三个 ModuleId、建立独立生命周期记录，再按依赖顺序注册。装载成功须让 Host 取得或查询该组全部逻辑 Module 的句柄，不能只返回 S 而留下无法驱动注册/清理的 A/B。整组身份预留对竞争装载不可半完成；出现重复 ID 或非法条目时不发布其中任何一项，也不交付部分成功句柄，并回滚本次取得的所有预留及 OS 持有。该组元数据、接口和代码的预检必须覆盖实际承载的全部 Module。
 
@@ -130,20 +134,19 @@ S/A/B 的记录和 CodePin 都关联同一个真实 OS 承载句柄。停止某�
 
 **已确认技术路线：STATIC / SHARED 共享同一种 `pg::module::ModuleDefinition` 和原生 C++23 注册函数签名。SHARED 不再采用独立的 C POD Discovery、C 状态码协议或 `void*` Registration Bridge。** 仅动态库的入口定位方式不同。
 
-建议固定查找符号 `PanguModule_QueryV1`（名称与平台导出细节尚待验证）；`extern "C"` **只确保可通过固定名称查询该符号**，不是在声明 C 数据交换协议，不意味着返回的 C++ 对象跨不兼容 ABI 仍安全。动态库内的生成包装函数转调其原生 C++ Query；STATIC Catalog 可直接引用对应原生函数：
+建议固定查找符号 `PanguModuleQueryV1`（名称与平台导出细节尚待验证）；`extern "C"` **只确保可通过固定名称查询该符号**，不是在声明 C 数据交换协议，不意味着返回的 C++ 对象跨不兼容 ABI 仍安全。动态库内的生成包装函数转调其原生 C++ Query；STATIC Catalog 可直接引用对应原生函数：
 
 ```cpp
 namespace pg::module
 {
-    // 引擎 C++23 内部使用上文统一定义的 QueryModuleFn 类型。
-    // 以下由每个 Module 的生成代码提供；函数名按 Module 唯一化。
-    const ModuleDefinition* QueryExampleModule() noexcept;
-}
+// 引擎 C++23 内部使用上文统一定义的 QueryModuleFn 类型。
+// 以下由每个 Module 的生成代码提供；函数名按 Module 唯一化。
+const ModuleDefinition* QueryExampleModule() noexcept;
+} // namespace pg::module
 
 // SHARED 才导出；生成器使该符号对应当前唯一 Module Target。
 // PG_EXPORT 为平台可见性示意，不是反射标记宏。
-extern "C" PG_EXPORT const pg::module::ModuleDefinition*
-PanguModule_QueryV1() noexcept
+extern "C" PG_EXPORT const pg::module::ModuleDefinition* PanguModuleQueryV1() noexcept
 {
     return pg::module::QueryExampleModule();
 }
@@ -160,11 +163,11 @@ PanguModule_QueryV1() noexcept
 3. **OS Load**：由 ModuleManager 取得并维护真实动态库句柄；`LoadLibrary/dlopen` 可能先执行 DLL 初始化器及全局构造，因此 Preflight 不等于不可信代码沙箱或签名认证。
 4. **Symbol Lookup / C++ Query**：只在 Preflight 通过后，用 `GetProcAddress/dlsym` 等定位固定版本符号，按**已确认兼容**的 C++ 函数类型调用，获得 `const ModuleDefinition*`；返回空值/失配视为失败。Query 只能返回有效、在代码驻留期稳定的定义视图，不得通过静态构造完成业务注册。不得在 Preflight 前解引用模块提供的 C++ 对象。
 5. **Post-Load Recheck**：在持有有效代码驻留保护时，验证返回的 Descriptor 完整 Profile/预生成 Canonical JSON/Fingerprint、协议版本、ModuleId、依赖与预检数据一致（包含解析、规范化、长度上限与 Digest 重算）；再检查 Public Interface Contract、冲突和依赖图，并按第 2 节拒绝空注册入口。Fingerprints 一致不证明 Public API/ODR，也不是签名。Descriptor 的借用 `span/string_view` 必须在卸载前复制到 Host 存储；任意失败均不进入注册。
-6. **Native C++ Registration**：对 STATIC 与 SHARED 一律由 ModuleManager 调用 `ModuleDefinition::registerModule(RegistrationContext&)`，返回 `pg::Status`（具体类型仍待 ADR-0007 API 冻结），使用同一事务、Scope/Owner、Error 报告、回滚与 CodePin 规则。无需转换 C 错误码或调用单独注册 Bridge。
+6. **Native C++ Registration**：对 STATIC 与 SHARED 一律由 ModuleManager 调用 `ModuleDefinition::RegisterModule(RegistrationContext&)`，返回 `pg::Status`（具体类型仍待 ADR-0007 API 冻结），使用同一事务、Scope/Owner、Error 报告、回滚与 CodePin 规则。无需转换 C 错误码或调用单独注册 Bridge。
 
 **数据与生命周期约束**：模块查询入口仅定位/返回元数据，不负责初始化业务实例。Query/注册入口和回调的所在代码必须驻留；引用字段和析构/分配器来源受 Memory Contract 约束。Module 卸载先撤销业务与在途调用、排空 Scope Borrow，最后释放实际动态库。静态 Module 不进行 OS Unload。
 
-**冻结范围区分**：**统一 C++23 ModuleDefinition/Registration + SHARED 稳定 C-linkage 符号定位** 的机制保持 ADR-0010 约束；`PanguModule_QueryV1` 的最终名称、`ModuleDefinition` 的 Public 类型布局/接口契约、载入前可信产物绑定工艺、导出调用约定、错误及并发实现仍属 Draft/待验证，不宣称跨平台已验收。
+**冻结范围区分**：**统一 C++23 ModuleDefinition/Registration + SHARED 稳定 C-linkage 符号定位** 的机制保持 ADR-0010 约束；`PanguModuleQueryV1` 的最终名称、`ModuleDefinition` 的 Public 类型布局/接口契约、载入前可信产物绑定工艺、导出调用约定、错误及并发实现仍属 Draft/待验证，不宣称跨平台已验收。
 
 ## 5. RegistrationContext：声明与提交分离
 
@@ -176,24 +179,21 @@ namespace pg::module
 class RegistrationContext
 {
 public:
-    template<class TContract, class TFactory>
-    [[nodiscard]] pg::Status DeclareContractProvider(
-        pg::service::Scope scope, TFactory&& factory) noexcept;
+    template <class TContract, class TFactory>
+    [[nodiscard]] pg::Status DeclareContractProvider(pg::service::Scope scope, TFactory&& factory) noexcept;
 
-    template<class TRegistry, class TContributionFactory>
-    [[nodiscard]] pg::Status DeclareContribution(
-        pg::service::Scope scope, TContributionFactory&& factory) noexcept;
+    template <class TRegistry, class TContributionFactory>
+    [[nodiscard]] pg::Status DeclareContribution(pg::service::Scope scope, TContributionFactory&& factory) noexcept;
 
-    template<class TWorkFactory>
-    [[nodiscard]] pg::Status DeclareRuntimeWork(
-        pg::service::Scope scope, TWorkFactory&& factory) noexcept;
+    template <class TWorkFactory>
+    [[nodiscard]] pg::Status DeclareRuntimeWork(pg::service::Scope scope, TWorkFactory&& factory) noexcept;
 };
-}
+} // namespace pg::module
 ```
 
 此处模板仅表示**强类型方向**；具体约束、Factory 所有权、键/Provider ID、类型擦除点、无异常内存失败策略依赖 Service API 的进一步设计，尚不能直接固定签名。对于已确定的 Concrete Service，Scope Owner 直接构造/注入，可完全跳过动态 Registry。
 
-`pg::service::Scope` 只表示 Host / Context / World **种类**，不标识具体实例。Module 级声明可记录后续装配策略；向 Registry 实际安装时，Host 必须将事务显式绑定到具体 Scope Owner 及其所属 Host/Context，并校验 Scope 方向。不得仅凭 `Scope::Context` 或 `Scope::World` 选择任意实例，或隐式向全部实例发布。具体目标 Scope 的句柄/上下文签名仍待 Service API 评审。
+`pg::service::Scope` 只表示 Host / Context / World **种类**，不标识具体实例。Module 级声明可记录后续装配策略；向 Registry 实际安装时，Host 必须将事务显式绑定到具体 Scope Owner 及其所属 Host/Context，并校验 Scope 方向。不得仅凭 `Scope::kContext` 或 `Scope::kWorld` 选择任意实例，或隐式向全部实例发布。具体目标 Scope 的句柄/上下文签名仍待 Service API 评审。
 
 **一次声明，多次装配**：每次成功 Load 的生命周期至多执行一次 Module 注册回调；重复 Register 前置拒绝。注册产物是 Host/Manager 持有且有代码保护的可重复装配声明。Provider、Contribution 和运行工作均通过工厂/配方在具体 Scope 创建状态，不把一个只能消费一次的可移动对象当成多 Scope 的实例来源。工厂本身可以仅移动，但其调用契约必须支持多次装配；可共享的只读状态须显式声明所有权，可变实例及撤销 Token 按 Scope 独立持有。
 
@@ -231,10 +231,10 @@ Registered 装配阶段及 Activate 失败均使用上述协议收尾，不能�
 ```cpp
 namespace pg::module
 {
-struct ModuleHandle; // 强类型、非拥有句柄；必须防止复用后的 ABA
-struct ModuleLoadCandidate; // 已发现的 STATIC 项或 SHARED 产物
-struct ModuleLoadResult; // 根 Module 与本次接纳的全部逻辑 Module 句柄；具体容器/布局未冻结
-struct ModuleOperationReport; // 操作入口拥有；交付后独立于 Host/Module 存活的有界诊断
+struct ModuleHandle;            // 强类型、非拥有句柄；必须防止复用后的 ABA
+struct ModuleLoadCandidate;     // 已发现的 STATIC 项或 SHARED 产物
+struct ModuleLoadResult;        // 根 Module 与本次接纳的全部逻辑 Module 句柄；具体容器/布局未冻结
+struct ModuleOperationReport;   // 操作入口拥有；交付后独立于 Host/Module 存活的有界诊断
 struct ModuleOperationProgress; // 独立表达调用后的状态/清理责任，不从 Error 推断阶段
 
 class ModuleCodePin
@@ -250,21 +250,16 @@ public:
 class ModuleManager
 {
 public:
-    [[nodiscard]] pg::Result<ModuleLoadResult> Load(
-        const ModuleLoadCandidate&, ModuleOperationProgress&, ModuleOperationReport&) noexcept;
-    [[nodiscard]] pg::Status Register(
-        ModuleHandle, ModuleOperationProgress&, ModuleOperationReport&) noexcept;
-    [[nodiscard]] pg::Status Activate(
-        ModuleHandle, ModuleOperationProgress&, ModuleOperationReport&) noexcept;
-    [[nodiscard]] pg::Status BeginUnload(
-        ModuleHandle, ModuleOperationProgress&, ModuleOperationReport&) noexcept;
-    [[nodiscard]] pg::Status TryFinishUnload(
-        ModuleHandle, ModuleOperationProgress&, ModuleOperationReport&) noexcept;
+    [[nodiscard]] pg::Result<ModuleLoadResult> Load(const ModuleLoadCandidate&, ModuleOperationProgress&,
+                                                    ModuleOperationReport&) noexcept;
+    [[nodiscard]] pg::Status Register(ModuleHandle, ModuleOperationProgress&, ModuleOperationReport&) noexcept;
+    [[nodiscard]] pg::Status Activate(ModuleHandle, ModuleOperationProgress&, ModuleOperationReport&) noexcept;
+    [[nodiscard]] pg::Status BeginUnload(ModuleHandle, ModuleOperationProgress&, ModuleOperationReport&) noexcept;
+    [[nodiscard]] pg::Status TryFinishUnload(ModuleHandle, ModuleOperationProgress&, ModuleOperationReport&) noexcept;
 
-    [[nodiscard]] pg::Result<ModuleCodePin> TryPinForBusiness(
-        ModuleHandle) noexcept;
+    [[nodiscard]] pg::Result<ModuleCodePin> TryPinForBusiness(ModuleHandle) noexcept;
 };
-}
+} // namespace pg::module
 ```
 
 `ModuleHandle` 建议为带代际的强类型不拥有句柄，不得携带裸 `ModuleRecord*` 供任意业务长期访问。Manager、其控制块及 OS 库句柄是驻留所有者；`ModuleCodePin` 为独立 Move-only RAII 代码保护，**不隐式延长 Service 实例生命期**。
@@ -345,13 +340,15 @@ public:
 
 ## 9. 本轮验证证据与限制
 
-2026-10-22，本地 `.probe/module-api-freeze/` 使用 Windows x64、Clang 23.1.0、MSVC STL、C++23、CMake 4.4.3 / Ninja、禁用异常与 Release 配置完成 **9/9 CTest**。探针被 Git 忽略，不是正式 Runtime 或版本化回归测试；生产实现需将第 7 节要求迁入正式 CMake/CTest。
+2026-10-22，本地 `.probe/module-api-freeze/` 使用 Windows x64、Clang 23.1.0、MSVC STL、C++23、CMake 4.4.3 / Ninja、禁用异常与 Release 配置完成 **9/9 CTest**。本轮风格修正后，Windows 复验仍为 **9/9**，WSL Ubuntu 使用 Clang 23.1.0 / libc++ 同样完成 **9/9 CTest**。探针被 Git 忽略，不是正式 Runtime 或版本化回归测试；生产实现需将第 7 节要求迁入正式 CMake/CTest。
 
 | 证据 | 覆盖内容 | 不代表 |
 | --- | --- | --- |
 | 8 项 C++ 状态模型测试 | 身份解析/往返、精确版本与绑定条件、相同 Error 的不同进度、注册/激活失败后清理、Scope 局部回滚与关闭闸门、无句柄装载失败的继续清理 | 生产 ModuleManager、真实线程争用、任务调度、图算法、OOM 或完整报告存储已实现 |
-| 1 项真实动态库测试 | 两个 STATIC 库链接进一个 SHARED，单 Query 可达全部定义，跨 DLL 原生 C++ 注册，空入口/重复 ID 拒绝，宿主复制元数据；测试账本在记录/Pin 未清空前拒绝释放库，清空后 FreeLibrary 成功 | 生产 CodePin/原子计数、预检/TOCTOU、完整 ABI Profile 采集或安全加载外部产物已验证 |
-| 导出表与裁剪构建 | `llvm-readobj --coff-exports` 仅列出 `PanguModule_QueryV1`，启用 `/OPT:REF` 后 STATIC 查询入口可达 | 导出名/Language Linkage 在全部目标平台已冻结 |
+| 1 项真实动态库测试 | 两个 STATIC 库链接进一个 SHARED，单 Query 可达全部定义，跨动态库原生 C++ 注册，空入口/重复 ID 拒绝，宿主复制元数据；测试账本在记录/Pin 未清空前拒绝释放库，清空后 Windows FreeLibrary / Linux dlclose 成功 | 生产 CodePin/原子计数、预检/TOCTOU、完整 ABI Profile 采集或安全加载外部产物已验证 |
+| 导出表与裁剪构建 | Windows `llvm-readobj --coff-exports` 仅列出 `PanguModuleQueryV1`，启用 `/OPT:REF` 后 STATIC 查询入口可达 | 导出名/Language Linkage 在全部目标平台已冻结 |
+
+探针声明、导出定义及宿主符号查找均已按 `.clang-tidy` 的 CamelCase 规则统一为 `PanguModuleQueryV1`，并通过上述重建与复验；精确 Public API/ABI 仍未冻结。
 
 复现入口：
 
@@ -362,4 +359,4 @@ ctest --test-dir .probe/module-api-freeze/build-win --output-on-failure
 llvm-readobj --coff-exports .probe/module-api-freeze/build-win/probe_shared.dll
 ```
 
-本轮未完成 Linux/macOS/Android/iOS 的此组验收：当前受限会话中 WSL 返回 `E_ACCESSDENIED`，`moozen-macos` 未能解析；Android/iOS 未运行该探针。既有平台工具链验收不能代替本接口验收。测试动态库为同次构建的固定夹具，未实现可信预检；它不降低 ADR-0010 对生产 SHARED Loader 的 Fail Closed 要求。
+本轮未完成 macOS/Android/iOS 的此组验收。早期受限会话中 WSL 返回 `E_ACCESSDENIED`；本轮通过获准的 WSL 执行完成了上述 Linux 复验。Android 四 ABI 的工具链 smoke 探针已另行重建，但不能代替本接口验收；macOS/iOS 未运行本探针。测试动态库为同次构建的固定夹具，未实现可信预检；它不降低 ADR-0010 对生产 SHARED Loader 的 Fail Closed 要求。

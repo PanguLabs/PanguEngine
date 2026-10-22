@@ -189,6 +189,8 @@ UseTexture(*result);
 | 大括号 | Allman |
 | 指针星号 | 类型侧：`int* value` |
 | 类型名 / 函数名 | CamelCase / CamelCase |
+| 数据成员 | CamelCase（无前后缀） |
+| 枚举值 | `kCamelCase` |
 | 普通变量 / 命名空间 | camelBack / lower_case |
 | 常量 | `kCamelCase`（详见 clang-tidy） |
 

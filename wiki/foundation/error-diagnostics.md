@@ -89,7 +89,7 @@ template <typename T>
 using Result = std::expected<T, Error>;
 
 using Status = Result<void>;
-}
+} // namespace pg
 ```
 
 - 返回 Result/Status 的可失败函数 MUST 标记 `[[nodiscard]]`；不得假定类型别名本身就提供这一诊断。

@@ -16,7 +16,7 @@ PanguEngine 是受控 C++23 + Clang 构建的引擎：同目标进程的 C++ Mod
 
 1. **统一数据和行为**：STATIC/SHARED 共享原生 C++23 `pg::module::ModuleDefinition`、`ModuleDescriptor` 与 `RegistrationContext`、`RegisterModuleFn` 语义。Module 注册是可回滚事务，注册成功不代表 Service Ready；不要求统一 `IModule` 虚基类、`ExtensionDescriptor` 或 `BinaryImage`。
 2. **STATIC**：CMake/PanguMeta 生成显式 Catalog，通过按 Module 唯一化的 C++ 查询函数指针直接引用 ModuleDefinition，并在最终链接/装配阶段执行受控 ABI/Profile 和接口契约验证；不依赖全局静态初始化顺序。
-3. **SHARED**：使用一个版本化稳定名称的导出符号（候选 `PanguModule_QueryV1`），以 `extern "C"` 保证符号可被 `GetProcAddress/dlsym` 按名称查找；该导出函数**返回原生 C++23 `ModuleDefinition` 指针**。C Language Linkage 用于**符号定位**，不意味着返回数据拥有独立的稳定 C ABI。包装代码由构建生成，开发者不需手写业务标记宏。
+3. **SHARED**：使用一个版本化稳定名称的导出符号（候选 `PanguModuleQueryV1`），以 `extern "C"` 保证符号可被 `GetProcAddress/dlsym` 按名称查找；该导出函数**返回原生 C++23 `ModuleDefinition` 指针**。C Language Linkage 用于**符号定位**，不意味着返回数据拥有独立的稳定 C ABI。包装代码由构建生成，开发者不需手写业务标记宏。
 4. **不用独立 C Discovery**：取消 `PgModuleDiscoveryV1` / `PgModuleDependencyV1`、C 状态码转换和 `void*` `RegistrationContext` Bridge。发现后通过同一个 C++ RegisterModuleFn 执行事务注册，遵守 ADR-0007 的结构化 Error/Result 约束。
 5. **强制受控的 Preflight**：在 **OS Load 和首次 C++ Query 之前**，必须基于与实际加载产物可验证绑定的非执行元数据完成目标平台、ABI Profile v1、完整 Fingerprint、Query/ModuleDefinition Public Module API Contract 及协议版本一致性验证。未验证、无法将预检结果绑定到加载产物、无法解决 TOCTOU，或受控 C++ ABI/API 不兼容时应 **Fail Closed**，不得尝试 C++ Query。ABI Fingerprint 不等于接口签名、包签名或恶意代码安全保证。预检元数据的嵌入/绑定工艺仍待冻结，但不得以信任可替换 Sidecar 代替产物身份验证。
 6. **装载后复核**：OS Load 成功后才获取稳定导出符号，在已验证兼容的 C++ ABI 下调用 Query；返回的 ModuleDefinition 必须继续核验真实 Profile、Canonical/Digest、ModuleId、依赖及接口契约与预检材料一致，全部通过才能调用 C++ 注册入口。Host 深复制必要 Descriptor 数据，保留驻留保护并按既定 Module 生命周期卸载。
