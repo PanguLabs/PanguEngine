@@ -45,7 +45,7 @@ stderr 只作简短提示。调用方应分别捕获退出码和 stdout；即使
 
 ## 编译依赖与实验边界
 
-- `AbiProfile.h` 使用 `<nlohmann/json_fwd.hpp>`，`Fingerprint` 实现在 `AbiProfile.cpp`；宿主工具和测试共享 `PanguAbiProfileCore`，不为 Runtime 新增 Module。
+- `AbiProfile.h` 使用 `<nlohmann/json_fwd.hpp>`，`Fingerprint` 实现在 `AbiProfile.cpp`；宿主工具和测试共享 `PanguAbiProfile`，不为 Runtime 新增 Module。
 - 固定使用 v3.12.0；`json.hpp` 提供 `_json` / `_json_pointer`，测试仅在局部作用域显式引入 `nlohmann::literals`，上层 CMake 用 `JSON_USE_GLOBAL_UDLS=0` 禁止引入全局命名空间。
 - `JsonExtras` CTest 验证版本、稳定版 DOM/Pointer/字面量及 `allow_exceptions=false` 的解析失败行为；不使用预览版零拷贝 API。
 - 头文件来自同一正式版本的 submodule，不混用其他版本；详见 [ThirdParty 说明](../../Source/ThirdParty/NlohmannJson/README.md)。

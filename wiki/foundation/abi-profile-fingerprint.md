@@ -144,7 +144,7 @@ CMake Target -> Compiler / Runtime Probe -> Canonical Profile + SHA-256
 
 ## 当前 Build-Time 编码工具的实现进展（2026-10-22）
 
-已新增正式 C++23 `Tools/AbiProfile`（构建宿主上的 `PanguAbiProfileTool` 可执行程序，**非** Pangu Runtime Module）与 `Tests/AbiProfile`（`AbiProfileVectors`、`AbiProfileCli`、`JsonExtras`、`AbiProfileIo` 四组 CTest）。之前被忽略的 `.probe/abi-profile` 只作为设计验证历史保留，正式回归已经进入版本化 `Tests/`。工具通过受控的 header-only nlohmann/json v3.12.0 正式发布版（`Source/ThirdParty/NlohmannJson/Repo` Git submodule，许可证保留在上游仓库，外层使用 INTERFACE Target；ABI 工具及测试共用仅宿主侧的 `PanguAbiProfileCore` STATIC 库，不新增 Runtime Module）读取 JSON。
+已新增正式 C++23 `Tools/AbiProfile`（构建宿主上的 `PanguAbiProfileTool` 可执行程序，**非** Pangu Runtime Module）与 `Tests/AbiProfile`（`AbiProfileVectors`、`AbiProfileCli`、`JsonExtras`、`AbiProfileIo` 四组 CTest）。之前被忽略的 `.probe/abi-profile` 只作为设计验证历史保留，正式回归已经进入版本化 `Tests/`。工具通过受控的 header-only nlohmann/json v3.12.0 正式发布版（`Source/ThirdParty/NlohmannJson/Repo` Git submodule，许可证保留在上游仓库，外层使用 INTERFACE Target；ABI 工具及测试共用仅宿主侧的 `PanguAbiProfile` STATIC 库，不新增 Runtime Module）读取 JSON。
 
 目前工具可以对提供的 Profile 进行 v1 Schema 子集词汇的 **显式支持校验**、严格值/平台组合检查、重复 JSON Key 拒绝、冻结 Schema 的内容 SHA-256 校验（只归一化 CRLF/LF，防止替换成宽松规则）、v1 约束下的 RFC 8785 Canonical JSON、领域分隔 SHA-256，并输出两个构建期文件；失败返回非零且清理此前可能残留的输出，拒绝输出路径覆盖 Schema/Profile 输入文件。Frozen Windows 向量 Canonical 长度为 779 字节，Baseline 与 Iterator Debug Level 变异的两组 SHA-256 已纳入正式回归；测试覆盖五平台的合法/非法 Profile 组合与格式拒绝，桌面 Windows、WSL Linux、macOS 均运行通过。
 
@@ -171,3 +171,9 @@ Schema/测试向量的临时 **C++23 验证探针**位于本地 `.probe/abi-prof
 - [libc++ Vendor ABI Options](https://libcxx.llvm.org/VendorDocumentation.html)
 - [Microsoft STL / _ITERATOR_DEBUG_LEVEL](https://github.com/microsoft/STL/blob/main/stl/inc/yvals.h)
 - [Microsoft detect_mismatch](https://learn.microsoft.com/en-us/cpp/preprocessor/detect-mismatch)
+
+## 2026-10-23：Compiler Evidence 的阶段性实现
+
+`Tests/Toolchain/` 与 `Tests/Toolchain/AuditCompilerMacros.cmake` 已落地首批**从真实 CMake 编译命令得到的 Clang 宏证据**：两个正式 Pangu Module 源文件 + 一项普通 ThirdParty 源文件 + 一项 Pangu Module 策略探针。证据包含编译命令 SHA-256、宏文本 SHA-256、STL/CRT/RTTI/异常/CPU 等事实，输出 `Build/<Platform>/Abi/compile-evidence.json`，且明确标记 `trusted: false`。五平台均完成编译阶段审计；三个桌面平台新增成功与 RTTI/Exception 两组冲突拒绝测试。
+
+**冻结的 JSON Schema、Canonical Serialization、Fingerprint 算法和兼容协议均未修改。** 当前宏证据尚不能证明 SDK/NDK/CRT 等实际链接来源，不能完整构造有效 v1 Profile、不能代表所有 TU，更不能证明 Profile 与实际产物的可信绑定。后续须结合原始 Toolchain、SDK 文件和真实链接命令 Fail Closed 地补齐字段，然后才能让正式 `PanguAbiProfileTool` 从已核验材料自动生成 Fingerprint。详见 [Toolchain 编译审计](../../Tests/Toolchain/README.md)。

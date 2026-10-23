@@ -84,3 +84,7 @@ Source/ThirdParty/<DependencyName>/
 `NlohmannJson/Repo` 固定到官方 v3.12.0 正式发布版，外层直接暴露 `single_include` 并设置
 `JSON_USE_GLOBAL_UDLS=0`。该依赖只供宿主 ABI Profile 工具及测试使用，
 没有新增 Runtime Module，没有启用上游测试，也没有在配置阶段执行下载。
+
+## 编译型第三方的实际验证（2026-10-23）
+
+`Tests/Toolchain/ThirdParty` 创建一个编译真实 C++23 源码的普通 `ThirdParty::CompiledProbe` STATIC Target，不调用 `pangu_configure_module()`，不链接 `PanguBuildOptions`。通过 Windows、WSL Linux、macOS、Android ARM64、iOS ARM64 五平台编译及其实际 TU 宏一致性审计，并在 Windows/Linux/macOS 上执行真实的 ThirdParty + Pangu STATIC 库链接和 CTest，验证此前区分「Toolchain 选择」和「Pangu Target Policy」的方案至少适用于该代表性编译型 ThirdParty。该目标仅用于回归，不是引擎功能依赖，也不证明任意外部库都已具备相同 ABI。详见 [验证说明](../../Tests/Toolchain/README.md)。

@@ -37,7 +37,7 @@ Plugin / Module 体系要兼顾静态构建与动态扩展、Game 与 Editor 运
 
 - `Pangu::` **MUST 仅用于真实 Pangu Module Target 的别名**（例如 `Pangu::Foundation`、`Pangu::ECS`）。每个 Module 仍对应唯一实际 `STATIC` / `SHARED` Library Target。
 - `ThirdParty::` **MUST 用于项目对外提供的第三方依赖 Target 名称**（例如 `ThirdParty::NlohmannJson`、`ThirdParty::Asio`）；允许原生 CMake `ALIAS` 指向上游 Target，不为命名创建多余库。第三方 SDK 可暴露多个 Target。
-- `PanguBuildOptions`、`PanguAbiProfileTool`、`PanguAbiProfileCore` 等自有构建策略、工具与辅助 Target 使用**无 `Pangu::` 前缀**的普通名称；它们不是 Pangu Module。**不保留旧 `Pangu::BuildOptions` 或 `Pangu::NlohmannJson` 别名。**
+- `PanguBuildOptions`、`PanguAbiProfileTool`、`PanguAbiProfile` 等自有构建策略、工具与辅助 Target 使用**无 `Pangu::` 前缀**的普通名称；它们不是 Pangu Module。**不保留旧 `Pangu::BuildOptions` 或 `Pangu::NlohmannJson` 别名。**
 - 编译器、标准库、SDK/NDK 的基础选择由 CMake Toolchain/Preset 统一提供；`PanguBuildOptions` 为引擎代码施加 C++23、无异常和警告策略，ThirdParty 不调用 `pangu_configure_module()`。
 - 第三方依赖只需进入 CMake 图（`INTERFACE` / `STATIC` / `SHARED` / `IMPORTED` 或上游 Target），不引入 External Module、ThirdParty Manager、统一 Package Adapter 或构建 Wrapper。
 

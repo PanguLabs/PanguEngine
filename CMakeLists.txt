@@ -22,14 +22,6 @@ if(NOT CMAKE_CROSSCOMPILING)
 endif()
 
 include(CTest)
-if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
-    add_test(NAME BuildEnvironment
-        COMMAND "${CMAKE_COMMAND}" "-DPANGU_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
-            -P "${PROJECT_SOURCE_DIR}/Tests/CMake/EnvironmentTests.cmake"
-    )
-    add_subdirectory(Tests/AbiProfile)
-    add_subdirectory(Tests/Foundation)
-    add_subdirectory(Tests/Module)
-elseif(BUILD_TESTING AND CMAKE_CROSSCOMPILING)
-    message(STATUS "Pangu CTest executables skipped for cross-compiled targets.")
+if(BUILD_TESTING)
+    add_subdirectory(Tests)
 endif()

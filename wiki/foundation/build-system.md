@@ -22,7 +22,7 @@
 | --- | --- | --- |
 | `Pangu::` | **仅限真实 Pangu Module**；每个 Module 唯一对应实际 `STATIC` / `SHARED` Target | `Pangu::Foundation`、`Pangu::Module` |
 | `ThirdParty::` | 第三方依赖的 CMake 构建接口；允许 `INTERFACE` / `STATIC` / `SHARED` / `IMPORTED` 和上游 Target `ALIAS` | `ThirdParty::NlohmannJson`、`ThirdParty::Flecs` |
-| 无上述命名空间 | Pangu 自有构建策略、宿主程序、构建工具、测试或辅助库（不是 Module） | `PanguBuildOptions`、`PanguAbiProfileTool`、`PanguAbiProfileCore` |
+| 无上述命名空间 | Pangu 自有构建策略、宿主程序、构建工具、测试或辅助库（不是 Module） | `PanguBuildOptions`、`PanguAbiProfileTool`、`PanguAbiProfile` |
 
 ```cmake
 add_library(PanguFoundation STATIC Private/Error.cpp)
@@ -103,7 +103,7 @@ cmake/
 - 平台 Settings 负责目标特殊规则：Windows 使用 Clang + MSVC STL（Windows ARM 不在 v1）；Linux Toolchain 在 `project()` 前选择并核对匹配 LLVM 的 libc++ 头文件、`__config_site`、运行库及 RPATH；缺失时拒绝，不退回 `libstdc++`，不同安装布局可用 `PANGU_LIBCXX_ROOT` 显式覆盖；macOS Toolchain 统一选择 MacPorts Clang 23 与 libc++；Android 采用 NDK Clang；iOS 采用 MacPorts Clang 23 + 独立 iPhoneOS SDK。
 - `cmake/` 不写死本机工具链安装路径。Windows、Linux、macOS、iOS 从 `LLVM_ROOT` 派生编译器和 `clang-scan-deps` 路径，并校验编译器位于该安装目录内；Android 从 `ANDROID_HOME` 读取 SDK 目录、从 `ANDROID_NDK_HOME` 选择官方 NDK Toolchain，并校验实际使用的 NDK 与环境变量一致。
 - `Lib/` 存放 STATIC Library（以及平台归档产物）；`Bin/` 存放动态库/可执行程序。当前只有 Module Identity 正式代码与测试，不意味着完整 Plugin、ModuleManager 或 Shader/Asset Pipeline 已实现。
-- CMake Preset 默认 Ninja + Release，配置并导出 `compile_commands.json`；桌面平台 CTest 由 `BUILD_TESTING` 控制，交叉编译暂不创建无法直接运行的测试程序。Android 预设以 NDK r30 已验证的 ARM64/API29 为默认验收切片，iOS 预设以本地 iPhoneOS18.2/arm64/iOS18.0 为验证参数；它们**不是永久支持下限**，未来可按目标更换。
+- CMake Preset 默认 Ninja + Release，配置并导出 `compile_commands.json`；根目录仅通过 `BUILD_TESTING` 控制 `Tests/` 总入口，测试子目录及本机/交叉编译分支统一由 `Tests/CMakeLists.txt` 组织。`BUILD_TESTING=OFF` 完整排除测试库、测试程序及测试宏审计目标；交叉编译开启测试时保留编译型 Toolchain 验证，暂不创建无法直接运行的测试程序。Android 预设以 NDK r30 已验证的 ARM64/API29 为默认验收切片，iOS 预设以本地 iPhoneOS18.2/arm64/iOS18.0 为验证参数；它们**不是永久支持下限**，未来可按目标更换。
 
 先在启动 CMake 的环境中设置下列变量；目录值由本机配置提供，不写入共享 Preset：
 
@@ -133,6 +133,8 @@ ctest --preset macos
 ```
 
 Android 设置 `ANDROID_HOME`、`ANDROID_NDK_HOME` 后，从 Windows 或已安装 SDK/NDK 的宿主运行 `cmake --preset android-arm64` / `cmake --build --preset android-arm64`。iOS 设置 `LLVM_ROOT` 并确认 SDK 可由 `PANGU_IOS_SDK_PATH`、`xcrun` 或上述独立 SDK 回退目录定位后，在 macOS 上运行 `cmake --preset ios-arm64` / `cmake --build --preset ios-arm64`。两种移动平台目前只验收了 Module Identity STATIC 的交叉编译和归档产物，不等于应用链接、设备运行或完整目标 ABI 验证。
+
+Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正式目标。需要同时编译 Toolchain 回归库并执行宏审计时，配置命令分别追加 `-DBUILD_TESTING=ON`（`cmake --preset android-arm64 -DBUILD_TESTING=ON` 或在 macOS 执行 `cmake --preset ios-arm64 -DBUILD_TESTING=ON`）；随后仍使用对应的构建 Preset。交叉编译的测试入口不会创建设备测试程序。
 
 本次将 Linux/macOS 标准库参数从 `PanguBuildOptions` 迁移至 Toolchain，**升级已有构建目录时必须使用** `cmake --fresh --preset <name>` 使 `CMAKE_CXX_FLAGS_INIT` 与链接参数重新初始化；之后可使用普通 `cmake --preset <name>`。切换 `LLVM_ROOT` 或 SDK/NDK 时也应重新配置。不要把 Windows、Linux、macOS 的二进制缓存混在同一 `Build/` 子目录。
 
@@ -185,3 +187,13 @@ Android 设置 `ANDROID_HOME`、`ANDROID_NDK_HOME` 后，从 Windows 或已安�
 ## 验证要求
 
 后续至少验证 Module 与 Target 的一对一关系、产物数量、编译数据库、增量构建一致性、Meta 生成依赖、ABI 兼容配置、CodePin 以及平台矩阵。已有 PoC 不等于正式 Runtime / 多平台验收。
+
+## 编译型 ThirdParty 与 ABI Compiler Evidence 审计（2026-10-23）
+
+在不增设 Pangu Module Wrapper 的前提下，已新增 `Tests/Toolchain/` 的普通 `ThirdParty::CompiledProbe` STATIC Target 和使用 `pangu_configure_module()` 的 `Pangu::ToolchainProbe` STATIC Target。二者均编译真实 C++23 源码；前者不链接 `PanguBuildOptions`，但和正式 Module 一样继承对应平台 Toolchain 的编译器与标准库配置。
+
+`BUILD_TESTING=ON` 时，测试入口的 `PANGU_VALIDATE_TOOLCHAIN` 子选项默认为 ON，编译四个代表性 TU 并运行 `PanguAbiCompileAudit`：两项正式 Runtime 源文件、普通 ThirdParty、Pangu Module 探针。该子选项设为 OFF 仅关闭 Toolchain 回归；总开关 `BUILD_TESTING=OFF` 则完整排除全部测试目标，包括缓存中仍启用的 Toolchain 子选项。`Tests/Toolchain/AuditCompilerMacros.cmake` 从 CMake **实际生成的 `compile_commands.json`** 中提取命令，调用 Clang `-E -dM` 获取宏证据，并审计 Clang Patch、STL、CRT、RTTI、C++ 标准、目标宽度、指令集、Android API 等是否一致。输出到 `Build/<Platform>/Abi/compile-evidence.json`，携带命令和宏文本的 SHA-256，但显式为 `trusted: false`。
+
+新 CTest `ToolchainLibraryLink`（真实静态库链接及 C++23 返回类型运行）、`AbiCompileAudit`、`AbiCompileAuditRejectRTTI`、`AbiCompileAuditRejectEXCEPTIONS` 已在 Windows/WSL Linux/macOS 验证；后二者是真正修改 Clang 参数的负向测试，拒绝异常/RTTI 冲突且失败不残留证据。Android/iOS 在宿主的交叉编译流程中执行同样的 Clang 审计，不执行设备程序。参见 [Toolchain 验证细节](../../Tests/Toolchain/README.md)。
+
+**仍未完成**：SDK/CRT/STL 二进制的可信来源验证、全部 TU 覆盖、冻结 ABI Profile v1 所有字段的自动映射、Canonical/Fingerprint 和 Module 产物的可信绑定。此阶段的 Compiler Evidence 不是已经认证的 ABI Fingerprint，也不允许作为 SHARED Loader 的放行依据。
