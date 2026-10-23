@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 4.0)
 add_library(PanguAbiProfile STATIC
     Private/AbiProfile.cpp
     Private/ToolIo.cpp
+    Private/WindowsProfile.cpp
 )
 set_target_properties(PanguAbiProfile PROPERTIES
     ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Lib"

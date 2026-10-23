@@ -21,6 +21,9 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_subdirectory(Tools/AbiProfile)
 endif()
 
+include(cmake/AbiProfile/Windows.cmake)
+pangu_enable_windows_abi_profiles(PanguFoundation PanguModule)
+
 include(CTest)
 if(BUILD_TESTING)
     add_subdirectory(Tests)

@@ -3,6 +3,7 @@
 #include "Sha256.h"
 #include "ToolIo.h"
 #include "ToolReport.h"
+#include "WindowsProfile.h"
 
 #include <array>
 #include <cstddef>
@@ -19,6 +20,49 @@ namespace pg::abi
 {
 namespace
 {
+[[nodiscard]] int CollectWindows(const std::filesystem::path& evidencePath, const std::filesystem::path& profileOutput,
+                                 FailureReport& report)
+{
+    const auto same = IsSameFile(evidencePath, profileOutput, report);
+    if (!same || *same)
+    {
+        if (same)
+        {
+            (void)report.Add(ToolError::kPathConflict, "windows_collect_paths", profileOutput.generic_string());
+        }
+        return 2;
+    }
+    if (!RemoveGeneratedFile(profileOutput, report))
+    {
+        report.CleanupIncomplete = true;
+        return 4;
+    }
+    const auto contents = ReadFile(evidencePath, "read_windows_evidence", report);
+    if (!contents)
+    {
+        return 3;
+    }
+    const auto evidence = ParseUnique(*contents);
+    if (!evidence)
+    {
+        (void)report.Add(ToolError::kInvalidProfile, "parse_windows_evidence", evidencePath.generic_string());
+        return 3;
+    }
+    const auto profile = BuildWindowsProfile(*evidence, report);
+    if (!profile)
+    {
+        return 3;
+    }
+    if (!WriteFile(profileOutput, CanonicalJson(*profile), report))
+    {
+        report.CleanupIncomplete |= !RemoveGeneratedFile(profileOutput, report);
+        return 4;
+    }
+    std::cerr
+        << "Windows profile mapped from compiler evidence; binary binding and final consumer link NOT ATTESTED.\n";
+    return 0;
+}
+
 [[nodiscard]] std::string NormalizeSchemaNewlines(std::string_view raw)
 {
     std::string normalized(raw);
@@ -141,11 +185,26 @@ int Main(const std::filesystem::path& schemaPath, const std::filesystem::path& p
 int main(int argc, char* const* argv)
 {
     pg::abi::FailureReport report;
+    if (argc == 4)
+    {
+        const auto collectionArgs = std::span(argv, static_cast<std::size_t>(argc)).subspan<1>();
+        if (std::string_view(collectionArgs.front()) == "--collect-windows")
+        {
+            const int result =
+                pg::abi::CollectWindows(collectionArgs.subspan<1>().front(), collectionArgs.back(), report);
+            if (result != 0)
+            {
+                report.WriteJson(std::cout);
+            }
+            return result;
+        }
+    }
     if (argc != 5)
     {
         (void)report.Add(pg::abi::ToolError::kArguments, "arguments");
         report.WriteJson(std::cout);
         std::cerr << "Usage: PanguAbiProfileTool <schema.json> <profile.json> <canonical-out> <sha256-out>\n";
+        std::cerr << "       PanguAbiProfileTool --collect-windows <compiler-evidence.json> <profile-out>\n";
         return 2;
     }
     const auto args = std::span(argv, static_cast<std::size_t>(argc)).subspan<1>();

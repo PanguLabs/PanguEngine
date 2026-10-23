@@ -148,7 +148,7 @@ CMake Target -> Compiler / Runtime Probe -> Canonical Profile + SHA-256
 
 目前工具可以对提供的 Profile 进行 v1 Schema 子集词汇的 **显式支持校验**、严格值/平台组合检查、重复 JSON Key 拒绝、冻结 Schema 的内容 SHA-256 校验（只归一化 CRLF/LF，防止替换成宽松规则）、v1 约束下的 RFC 8785 Canonical JSON、领域分隔 SHA-256，并输出两个构建期文件；失败返回非零且清理此前可能残留的输出，拒绝输出路径覆盖 Schema/Profile 输入文件。Frozen Windows 向量 Canonical 长度为 779 字节，Baseline 与 Iterator Debug Level 变异的两组 SHA-256 已纳入正式回归；测试覆盖五平台的合法/非法 Profile 组合与格式拒绝，桌面 Windows、WSL Linux、macOS 均运行通过。
 
-**当前是“Profile 声明内容有效 + Fingerprint 算法正确”的工具阶段，尚非“经实际编译证明的 ABI Profile”。** 工具故意不从人工输入 Profile 推断受信任身份；其 stderr 会标明 `provenance and TU ABI options NOT ATTESTED`。下一阶段必须加入实际编译参数、Target Triple、STL/CRT/SDK/NDK 宏和 Runtime 的来源采集、每个 TU 的选项一致性检查与可信产物绑定，才能自动生成与真实 Module 关联的“已验证” Fingerprint。未完成这些步骤前**不得**把该 CLI 接入生产 SHARED Loader 并据其摘要相等放行不可信模块。参见 [工具使用说明](../../Tools/AbiProfile/README.md)。
+原四参数编码模式只保证 Profile 声明内容与 Fingerprint 算法，不从人工 JSON 推断受信任身份；其 stderr 仍标明 `provenance and TU ABI options NOT ATTESTED`。2026-10-23 增加了下面的 Windows 正式采集切片。其他平台的自动采集、最终消费者校验与可信产物绑定仍未完成；**不得**把该 CLI 据摘要相等接入生产 SHARED Loader 放行候选库。参见 [工具使用说明](../../Tools/AbiProfile/README.md)。
 
 2026-10-23 补充了原始 NUL、输出路径别名、独立输出清理、真实 Close 失败及有界报告回归。
 文件提交显式检查 write/flush/close；清理逐项尝试，无法完成时在独立 stdout JSON 报告中标明
@@ -156,6 +156,22 @@ CMake Target -> Compiler / Runtime Probe -> Canonical Profile + SHA-256
 不由此冻结通用 Foundation ErrorReport 或扩展已冻结的 ABI Profile 字节协议。
 
 ## 7. 验收矩阵与非冻结范围
+
+### Windows 正式采集首切片（2026-10-23）
+
+`Tools/AbiProfile` 与 `cmake/AbiProfile/` 已为 Windows native Ninja x64 的 `PanguFoundation`、`PanguModule`
+接入独立于测试总开关的自动采集。实际对象清单与编译数据库按 output 精确关联，检查每个 TU 的参数、
+有效宏、前端 Target、实际 STL/SDK 头与 COFF 运行库指令；用全部真实对象的未运行链接探针核验 CRT/STL 选库、
+SDK 版本化 Manifest 和 MSVC 工具集安装元数据，然后复用冻结 Schema/Canonical/Fingerprint 编码。
+结果在 `Build/Windows/Abi/<Target>/`；Profile 内不写路径，来源材料另存私有证据。
+
+当前支持非 UNITY STATIC、原生 x64、默认布局与受控参数集合；未知选项或无法表达的关键差异拒绝。
+未支持真实库依赖闭包的 Target 会显式拒绝。开始编译前失效旧结果，上游编译失败或采集失败不能沿用旧指纹。
+正式回归包括双 TU/同源多目标、第二个 TU 的冲突、响应文件及重复/缺失对象拒绝；私有证据字段不构成新冻结协议。
+
+`evidence.json` 明确限定为 `controlled-windows-static-build`，并保留 `binary_binding=false`、
+`final_consumer_validated=false`。这一实现补齐本切片的自动配置采集与 Profile 生成，**没有完成**最终消费者/STATIC Catalog
+装配检查、Public Header ABI/ODR 验收、可信产物绑定、SHARED 预检或加载后复核。其他四平台的正式自动采集仍待实现。
 
 Schema/测试向量的临时 **C++23 验证探针**位于本地 `.probe/abi-profile/`（被 `.gitignore` 排除，**不是正式 Tests，也不是版本化回归测试**），使用 Clang + CMake + CTest + 旧版 JSON 探针实现。它仅覆盖本 Schema 使用的 JSON Schema 关键字，并核对 Canonical JSON/SHA-256 测试向量；不是完整 JSON Schema 实现，也不代表实际 Toolchain/Loader 已集成。正式 ABI 回归测试须在引擎 C++23 实现完成后接入仓库 CMake + CTest。仍必须验证：Canonical JSON/SHA-256 测试向量、字段顺序不变性、变异拒绝、同 ABI 跨 Target/C++ 标准库交换、Windows `_ITERATOR_DEBUG_LEVEL`/CRT 拒绝、libc++ ABI namespace/version 变异、Toolchain Patch 差异、每 TU 配置一致性、STATIC Catalog 组合、SHARED 预检+二次入口、ModuleCodePin/失败回滚，以及宿主与动态库生命周期。
 

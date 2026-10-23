@@ -37,7 +37,7 @@
 | [Android 工具链](foundation/android-toolchain.md) | NDK/SDK、官方 Clang、CMake/Gradle 配置与验证 | Partially Frozen |
 | [Apple 工具链](foundation/apple-toolchain.md) | MacPorts、macOS/iOS SDK、构建及验证 | Partially Frozen |
 | [ABI](foundation/abi.md) | 同受控构建内的兼容性与所有权原则 | Partially Frozen |
-| [ABI Profile / Fingerprint v1](foundation/abi-profile-fingerprint.md) | 固定 Schema、RFC 8785 Canonical、SHA-256、严格相容与加载协议；含机器可读 Schema / 向量 | Frozen（设计协议）；工具/API 未实现 |
+| [ABI Profile / Fingerprint v1](foundation/abi-profile-fingerprint.md) | 固定 Schema、RFC 8785 Canonical、SHA-256、严格相容与加载协议；含机器可读 Schema / 向量 | Frozen（设计协议）；编码工具与 Windows x64 采集切片已实现，完整加载协议待实现 |
 | [平台](foundation/platform.md) | 五平台目标与开发环境 | Partially Frozen |
 
 ## Core
