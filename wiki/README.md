@@ -32,6 +32,7 @@
 | [C++ 规范与最佳实践](foundation/cpp-guidelines.md) | C++23、Compile/Build-Time First、Zero-Overhead、类型/所有权安全、ECS/Event/调度建议与代码风格 | Partially Frozen |
 | [错误处理与基础诊断](foundation/error-diagnostics.md) | 值错误、失败报告、Assert/Check/Fatal、有界日志与应急路径 | Frozen（设计语义）；具体 API 未冻结 |
 | [构建系统](foundation/build-system.md) | CMake 4.0+、一个 Module 一个 STATIC/SHARED 库 Target | Partially Frozen |
+| [ThirdParty 接入](foundation/third-party.md) | Git submodule、项目构建接入、功能 Module 封装与补丁管理 | Partially Frozen |
 | [工具链](foundation/toolchain.md) | 全平台共性契约与编译器选择矩阵 | Partially Frozen |
 | [Android 工具链](foundation/android-toolchain.md) | NDK/SDK、官方 Clang、CMake/Gradle 配置与验证 | Partially Frozen |
 | [Apple 工具链](foundation/apple-toolchain.md) | MacPorts、macOS/iOS SDK、构建及验证 | Partially Frozen |

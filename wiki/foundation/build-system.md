@@ -13,6 +13,7 @@
 - 不允许把一个 Module 拆成多个 Module Library Target，也不允许多个逻辑 Module 合并定义为同一个 Module Library Target。Meta 生成注册代码应加入同一 Module Target。
 - **Plugin 是功能分发/启用单位，不要求有自己的库目标**，可以包含多个 Module 或只包含 Assets。
 - ThirdParty 可以是独立的 CMake 目标，并被 Pangu Module 依赖；不强制使用 Package Adapter，也不要求每个 ThirdParty 目标都成为 Pangu Module。
+- 第三方源码使用 `Source/ThirdParty/<Name>/Repo` Git submodule，外层维护项目 CMake 接入；第三方 API 集中在功能 Module 私有实现中，宿主工具及依赖测试除外。目录、固定版本与补丁规则见 [ThirdParty 接入](third-party.md)。
 - CMake 是构建关系的权威来源；Plugin 的安装、发现和版本信息仍可能需要独立 Manifest，不因此形成第二份构建配置。
 
 ## Monolithic / Modular 与 Module 库类型的边界
@@ -47,6 +48,13 @@ Linux 通过 WSL 访问同一源码目录 `/mnt/d/Git/PanguEngine`；macOS 使�
 根 `CMakeLists.txt` 已在 `project()` **之前**引入 `cmake/ValidateBuildEnvironment.cmake`：桌面平台及 iOS 检查 `LLVM_ROOT` 和必要的 Clang / `clang-scan-deps` 可执行文件；Android 在官方 NDK Toolchain 的 `CMAKE_TOOLCHAIN_FILE` 已选择时检查 `ANDROID_HOME`、`ANDROID_NDK_HOME` 和 Toolchain 文件是否存在。这样新建缓存时缺失环境变量会直接得到带 `Pangu ... preflight` 的诊断；现有平台 Settings 仍继续做后续工具链身份与版本校验。
 
 正式 `Tests/CMake/EnvironmentTests.cmake` 在 Windows、WSL Ubuntu 和 macOS 通过 CTest 验证缺失环境变量时必须明确拒绝。当前三平台均通过 `BuildEnvironment`、`FoundationError`、`ModuleIdentity` 三项回归；Android/iOS 的 `PanguFoundation` 和 `PanguModule` 仍只验证 STATIC 目标编译/归档，不提供交叉设备运行结果。新增 `Source/Runtime/Foundation/` 对应独立 `PanguFoundation` STATIC Target，符合一 Module 一库。
+
+## 已接入的 ABI Profile v1 构建期工具（2026-10-22）
+
+- 桌面平台 CMake 增加 `Tools/AbiProfile` 的本机工具 `PanguAbiProfileTool`，输出至对应 `Build/<Platform>/Bin/`；它不是 Pangu Module，也不改变单 Module 单 Library Target 约束。
+- `Source/ThirdParty/NlohmannJson/Repo` 是 nlohmann/json 的 Git submodule，固定到官方 v3.12.0 正式发布版。外层 CMake 使用 `Repo/single_include` 创建 `Pangu::NlohmannJson` INTERFACE Target，设置 `JSON_USE_GLOBAL_UDLS=0`；许可证保留在上游仓库，仅工具和 ABI Profile Tests 引用，不配置上游工程，不在构建时下载。
+- `Tests/AbiProfile` 包含冻结 JSON Schema/Canonical/SHA256 向量和真实 CLI 的成功/失败/防残留和篡改 Schema 拒绝测试。Windows/Linux/macOS 的本机 CTest 验证覆盖两项 ABI 测试；Android/iOS 交叉编译**跳过宿主工具和 CTest**，仍照常编译 Runtime STATIC Module。
+- 目前没有进行 Toolchain 真实 ABI 字段采集、每 TU 选项审计、自动生成已认证的 Module Fingerprint 或动态库预检放行。**不能将能计算哈希误认为 ABI 已经验证。** 具体进度见 [ABI Profile / Fingerprint v1](abi-profile-fingerprint.md)。
 
 ## 已落地的轻量化 CMake 配置（实现层，非新架构冻结）
 

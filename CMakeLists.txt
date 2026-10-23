@@ -12,8 +12,14 @@ include(cmake/Platform/Common/BuildOptions.cmake)
 include(cmake/PanguPlatform.cmake)
 include(cmake/Platform/Common/Module.cmake)
 
+add_subdirectory(Source/ThirdParty/NlohmannJson)
 add_subdirectory(Source/Runtime/Foundation)
 add_subdirectory(Source/Runtime/Module)
+
+# AbiProfile is a host-side tool; mobile cross builds do not execute it.
+if(NOT CMAKE_CROSSCOMPILING)
+    add_subdirectory(Tools/AbiProfile)
+endif()
 
 include(CTest)
 if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
@@ -21,6 +27,7 @@ if(BUILD_TESTING AND NOT CMAKE_CROSSCOMPILING)
         COMMAND "${CMAKE_COMMAND}" "-DPANGU_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
             -P "${PROJECT_SOURCE_DIR}/Tests/CMake/EnvironmentTests.cmake"
     )
+    add_subdirectory(Tests/AbiProfile)
     add_subdirectory(Tests/Foundation)
     add_subdirectory(Tests/Module)
 elseif(BUILD_TESTING AND CMAKE_CROSSCOMPILING)
