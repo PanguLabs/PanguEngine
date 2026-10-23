@@ -12,7 +12,8 @@ function(pangu_configure_module targetName)
         message(FATAL_ERROR "Pangu Module '${targetName}' must be STATIC or SHARED.")
     endif()
 
-    target_link_libraries("${targetName}" PUBLIC Pangu::BuildOptions)
+    # Warnings and no-exception policy apply to this Module, not to its consumers.
+    target_link_libraries("${targetName}" PRIVATE PanguBuildOptions)
     set_target_properties("${targetName}" PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON

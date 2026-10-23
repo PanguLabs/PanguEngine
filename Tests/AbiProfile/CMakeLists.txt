@@ -5,7 +5,7 @@ add_executable(PanguAbiProfileTests
     JsonForwardTests.cpp
 )
 
-target_link_libraries(PanguAbiProfileTests PRIVATE Pangu::BuildOptions PanguAbiProfileCore)
+target_link_libraries(PanguAbiProfileTests PRIVATE PanguBuildOptions PanguAbiProfileCore)
 target_include_directories(PanguAbiProfileTests PRIVATE
     "${PROJECT_SOURCE_DIR}/Tools/AbiProfile/Private"
 )
@@ -24,12 +24,12 @@ add_test(NAME AbiProfileCli
 )
 
 add_executable(PanguJsonExtrasTests JsonExtrasTests.cpp)
-target_link_libraries(PanguJsonExtrasTests PRIVATE Pangu::BuildOptions Pangu::NlohmannJson)
+target_link_libraries(PanguJsonExtrasTests PRIVATE PanguBuildOptions ThirdParty::NlohmannJson)
 set_target_properties(PanguJsonExtrasTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")
 add_test(NAME JsonExtras COMMAND PanguJsonExtrasTests)
 
 add_executable(PanguAbiProfileIoTests IoTests.cpp)
-target_link_libraries(PanguAbiProfileIoTests PRIVATE Pangu::BuildOptions PanguAbiProfileCore)
+target_link_libraries(PanguAbiProfileIoTests PRIVATE PanguBuildOptions PanguAbiProfileCore)
 target_include_directories(PanguAbiProfileIoTests PRIVATE "${PROJECT_SOURCE_DIR}/Tools/AbiProfile/Private")
 set_target_properties(PanguAbiProfileIoTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")
 add_test(NAME AbiProfileIo COMMAND PanguAbiProfileIoTests "${CMAKE_CURRENT_BINARY_DIR}")

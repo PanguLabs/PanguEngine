@@ -14,8 +14,8 @@
         "lhs": "${hostSystemName}",
         "rhs": "Darwin"
       },
+      "toolchainFile": "${sourceDir}/cmake/Platform/macOS/Toolchain.cmake",
       "cacheVariables": {
-        "CMAKE_CXX_COMPILER": "$env{LLVM_ROOT}/bin/clang++",
         "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS": "$env{LLVM_ROOT}/bin/clang-scan-deps"
       }
     }

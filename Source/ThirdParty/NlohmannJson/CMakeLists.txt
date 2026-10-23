@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.0)
 
 # Platform/toolchain validation is performed by the PanguEngine root project.
-if(NOT TARGET Pangu::BuildOptions)
+if(NOT TARGET PanguBuildOptions)
     message(FATAL_ERROR "NlohmannJson must be configured through the PanguEngine root project.")
 endif()
 
@@ -17,11 +17,11 @@ endforeach()
 
 # Use our target/configuration instead of configuring upstream tests and options.
 # This header-only dependency is compiled in its consumers' toolchain context.
-add_library(PanguNlohmannJson INTERFACE)
-add_library(Pangu::NlohmannJson ALIAS PanguNlohmannJson)
-target_include_directories(PanguNlohmannJson SYSTEM INTERFACE
+add_library(ThirdPartyNlohmannJson INTERFACE)
+add_library(ThirdParty::NlohmannJson ALIAS ThirdPartyNlohmannJson)
+target_include_directories(ThirdPartyNlohmannJson SYSTEM INTERFACE
     "${nlohmannJsonIncludeDir}"
 )
 
 # Keep literal operators in nlohmann::literals, without global namespace imports.
-target_compile_definitions(PanguNlohmannJson INTERFACE JSON_USE_GLOBAL_UDLS=0)
+target_compile_definitions(ThirdPartyNlohmannJson INTERFACE JSON_USE_GLOBAL_UDLS=0)

@@ -1,6 +1,6 @@
 // json.hpp undefines this configuration macro after consuming it.
 #if !defined(JSON_USE_GLOBAL_UDLS) || JSON_USE_GLOBAL_UDLS != 0
-#error "Pangu::NlohmannJson must disable global JSON literal imports"
+#error "ThirdParty::NlohmannJson must disable global JSON literal imports"
 #endif
 
 #include <nlohmann/json.hpp>

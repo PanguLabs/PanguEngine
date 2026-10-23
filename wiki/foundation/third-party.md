@@ -1,17 +1,19 @@
 # ThirdParty 接入与功能封装
 
-> 状态：Partially Frozen（目录组织、固定提交和功能封装原则已确定；逐库补丁与完整部署接线按需要实现）
+> 状态：Partially Frozen（CMake Target 命名、Module/ThirdParty 边界已冻结；获取方式、逐库补丁及部署策略按依赖确定）
 > 更新：2026-10-23
 > 相关：[构建系统](build-system.md)、[工具链](toolchain.md)、[Plugin / Module](../core/plugin-module.md)、[ABI](abi.md)
 
 ## 源码与构建入口
 
-第三方源码统一通过 Git submodule 引入：
+第三方库作为**普通 CMake Target** 纳入构建。对于需要将上游源码保存在仓库中的开源库，优先使用固定提交的 Git submodule；也允许固定版本的 Vendor Snapshot、预编译 SDK、系统库或 SDK/Framework。具体获取方式由依赖特点决定，**不引入统一 ThirdParty Package Manager**。
+
+目前 nlohmann/json 使用以下目录约定（其他依赖按需要调整）：
 
 ```text
 Source/ThirdParty/<DependencyName>/
-  Repo/                  # 官方仓库或明确维护的 fork，Git submodule
-  CMakeLists.txt         # PanguEngine 维护的构建接入规则
+  Repo/                  # 本依赖选择 submodule 时使用
+  CMakeLists.txt         # 需要项目适配时维护，也可直接使用上游 CMake
   README.md              # 来源、许可证、版本说明、构建选项与验证要求
   Patch/                 # 按需建立，保存对上游源码的补丁
 ```
@@ -20,17 +22,18 @@ Source/ThirdParty/<DependencyName>/
 例如 `NlohmannJson` 对应上游 `nlohmann/json`；一个 SDK 可以包含多个实际库。
 `Repo/` 内的文件归上游仓库管理，外层文件归 PanguEngine 管理。
 
-- submodule 固定到明确提交，由主仓库 gitlink 记录，不以浮动分支决定构建输入。
-- 首次检出使用 `git clone --recurse-submodules <PanguEngine URL>`；已有工作区执行 `git submodule update --init --recursive`。
-- 切换主仓库版本后重新执行初始化/更新命令，使源码与该版本 gitlink 一致。
-- CMake 配置阶段不联网、不执行 submodule 更新；缺失必要文件时报告初始化命令并失败。
-- 升级先检查 `Repo/` 的本地修改，再检出目标提交、复核许可证及补丁、执行验证，最后更新主仓库 gitlink。不得自动覆盖本地修改。
+- 采用 submodule 时固定到明确提交，由主仓库 gitlink 记录，不以浮动分支决定构建输入。预编译 SDK 或 Snapshot 同样必须记录版本、来源、许可证和校验信息。
+- 对采用 submodule 的依赖，首次检出可使用 `git clone --recurse-submodules <PanguEngine URL>`；已有工作区执行 `git submodule update --init --recursive`。
+- 切换主仓库版本后，对 submodule 重新执行初始化/更新命令，使源码与 gitlink 一致。
+- CMake 配置阶段不联网、不隐式下载或执行 submodule 更新；缺失必要文件时给出明确诊断。
+- 升级 submodule 前先检查 `Repo/` 的本地修改，再检出目标提交、复核许可证及补丁、执行验证，最后更新 gitlink；不得自动覆盖本地修改。
 
 ## 项目构建配置
 
 外层 `CMakeLists.txt` 最低要求 CMake 4.0，并在根工程已校验的平台与工具链上下文中定义 Target。
-编译型第三方 Target 使用项目指定的编译器、标准库与所需 ABI 配置，逐库显式设置必要选项；
-不将引擎警告策略无差别施加到上游源码，也不直接调用 `pangu_configure_module()` 把依赖标记为引擎 Module。
+编译型第三方 Target 自动使用对应平台 Toolchain/Preset 选定的编译器与标准库；
+第三方特有的 ABI 宏、编译参数和链接要求仍由其自身 Target 显式设置。不得将引擎警告策略
+无差别施加到上游源码，也不调用 `pangu_configure_module()` 将依赖标记为引擎 Module。
 
 可以由外层直接列出源码创建 STATIC/SHARED Target；需要上游构建逻辑时，也可设置上游选项后
 使用 `add_subdirectory(Repo)`，再对实际 Target 调整必要配置。不得仅因同处一棵 CMake 构建树，
@@ -40,19 +43,29 @@ Source/ThirdParty/<DependencyName>/
 构建选项、Include、宏和链接依赖均通过 Target 表达，不使用全局 Include/Link 目录。
 源代码获取方式与功能接口封装分开处理；submodule 不自动提供 ABI 兼容、安全卸载或状态迁移。
 
-## 功能 Module 与第三方 API
+## CMake Target 命名与构建职责（Frozen）
 
-第三方 API 的使用集中在负责接入的功能 Pangu Module 的私有实现中，其他引擎模块通过该功能
-Module 的引擎接口使用能力。公共接口不暴露第三方类型和头文件；接入方负责错误转换、
-对象/分配器所有权、任务与回调撤销，以及所需代码的驻留。
+- **`Pangu::` 只表示真实的 Pangu Module**（如 `Pangu::Foundation`、`Pangu::ECS`）。
+- **`ThirdParty::` 表示第三方依赖**（如 `ThirdParty::NlohmannJson`、`ThirdParty::Asio`）。上游已提供 CMake Target 时可用原生 `ALIAS` 统一名称；不为命名强制编译新的 Wrapper Library。
+- 引擎构建策略和工具使用普通 Target 名称（如 `PanguBuildOptions`、`PanguAbiProfileTool`），**不使用 `Pangu::`**。
+- 依赖通过 `target_link_libraries(... PRIVATE|PUBLIC|INTERFACE ...)` 明确表达。第三方 Target 不调用 `pangu_configure_module()`，不获得 ModuleId、注册、Service 或生命周期身份。
 
-一个功能 Module 可以封装多个第三方依赖，不要求一个依赖创建一个 Pangu Module，
-也不为每个依赖强制增加 Service、Registry 或运行时注册。独立宿主工具与依赖验证测试
-可以直接使用第三方 API；当前 ABI Profile 工具对 JSON 的使用属于这个范围。
+本规范不额外定义 `PanguThirdParty.cmake`、`pangu_add_third_party()`、External Module 或 Package Adapter。
 
-这一约束不改变一个 Pangu Module 对应一个实际 STATIC/SHARED Library Target 的规则。
-ThirdParty Target 与 Plugin/Module 的身份、注册和生命周期契约仍是不同职责。
-`PRIVATE` 链接关系有助于控制传播，但不能代替公共头文件检查和生命周期验证。
+## 第三方库与功能 Module 的四种关系
+
+| 模式 | 适用情况 | Pangu Module |
+| --- | --- | --- |
+| ① 直接依赖 | JSON、哈希等普通依赖由现有目标直接引用 | 不新增 |
+| ② 现有 Module 内适配 | 第三方用于当前功能 Module 的私有实现 | 不新增 |
+| ③ 独立编译/技术适配 | 如 Asio 单独编译、配置宏或处理平台差异 | 使用普通 CMake Target，不新增 |
+| ④ 独立引擎功能 | ECS、Renderer、Physics 等需要独立功能 API、身份或生命周期 | 建立对应功能 Pangu Module |
+
+**Pangu Module 封装的是引擎功能，而不是每个第三方库。** 一个功能 Module 可以依赖多个第三方 Target，不强制一库一 Module，也不为每个依赖新增 Service/Registry。
+
+第三方 API 默认优先通过使用方的 `PRIVATE` 依赖实现隔离；**不强制所有第三方类型都隐藏在 Pangu Module Public API 之外**。确需公开时应审查版本、API/ABI、对象/分配器所有权及销毁代码驻留。宿主工具和测试可以直接使用 `ThirdParty::` Target；ABI Profile 工具使用 JSON 就是现有实例。
+
+对于 Gameplay Hot Swap，第三方代码实际链接/装载到哪个 DLL，必须据此管理对象、回调、任务、线程和卸载时序；静态链接进入可卸载 DLL 的代码也需要 CodePin/Drain 约束。ThirdParty Target 名称及 `PRIVATE` 传播设置本身不提供运行时卸载安全。一个 Pangu Module 仍对应唯一实际 STATIC/SHARED Library Target。
 
 ## Patch 管理
 

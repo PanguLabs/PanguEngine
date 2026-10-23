@@ -1,0 +1,16 @@
+# Native macOS build with the selected MacPorts Clang; all C++ targets use libc++.
+if(NOT CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+    message(FATAL_ERROR "Pangu macOS toolchain requires a macOS build host.")
+endif()
+if("$ENV{LLVM_ROOT}" STREQUAL "" OR NOT IS_DIRECTORY "$ENV{LLVM_ROOT}")
+    message(FATAL_ERROR "Set LLVM_ROOT to the selected MacPorts Clang 23 installation.")
+endif()
+
+set(CMAKE_C_COMPILER "$ENV{LLVM_ROOT}/bin/clang")
+set(CMAKE_CXX_COMPILER "$ENV{LLVM_ROOT}/bin/clang++")
+set(CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS "$ENV{LLVM_ROOT}/bin/clang-scan-deps" CACHE FILEPATH "")
+string(FIND "${CMAKE_CXX_FLAGS_INIT}" "-stdlib=libc++" _pangu_has_libcxx_flags)
+if(_pangu_has_libcxx_flags EQUAL -1)
+    string(APPEND CMAKE_CXX_FLAGS_INIT " -stdlib=libc++")
+endif()
+unset(_pangu_has_libcxx_flags)

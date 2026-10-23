@@ -5,6 +5,12 @@ if("$ENV{LLVM_ROOT}" STREQUAL "" OR NOT IS_DIRECTORY "$ENV{LLVM_ROOT}")
 endif()
 set(CMAKE_C_COMPILER "$ENV{LLVM_ROOT}/bin/clang")
 set(CMAKE_CXX_COMPILER "$ENV{LLVM_ROOT}/bin/clang++")
+# Apply the SDK's libc++ selection to every C++ target, including third-party sources.
+string(FIND "${CMAKE_CXX_FLAGS_INIT}" "-stdlib=libc++" _pangu_has_libcxx_flags)
+if(_pangu_has_libcxx_flags EQUAL -1)
+    string(APPEND CMAKE_CXX_FLAGS_INIT " -stdlib=libc++")
+endif()
+unset(_pangu_has_libcxx_flags)
 set(CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS "$ENV{LLVM_ROOT}/bin/clang-scan-deps" CACHE FILEPATH "")
 
 if(DEFINED ENV{PANGU_IOS_SDK_PATH} AND NOT "$ENV{PANGU_IOS_SDK_PATH}" STREQUAL "")

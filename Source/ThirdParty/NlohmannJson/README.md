@@ -15,7 +15,7 @@
 | `json_fwd.hpp` | 仅声明类型，减轻不进行 JSON 运算的头文件依赖 |
 
 许可：MIT，见 `Repo/LICENSE.MIT`。只使用 Header-only + CMake INTERFACE Target
-`Pangu::NlohmannJson`，不使用 vcpkg、系统包、FetchContent 或构建时下载，
+`ThirdParty::NlohmannJson`，不使用 vcpkg、系统包、FetchContent 或构建时下载，
 不是 Pangu Module。上游源码不受项目 `.clang-format` 自动改写。
 当前没有上游修改，不创建 `Patch/`。
 

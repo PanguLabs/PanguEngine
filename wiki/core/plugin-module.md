@@ -1,7 +1,7 @@
 # Pangu Plugin / Module 架构基线
 
-> 状态：Partially Frozen（职责分离、单 Module 单库、三种 Service、注册/生命周期语义已冻结；Manifest/Descriptor 具体布局和 API 待冻结）
-> 更新：2026-10-22
+> 状态：Partially Frozen（职责分离、单 Module 单库、CMake Target 命名、三种 Service、注册/生命周期语义已冻结；Manifest/Descriptor 具体布局和 API 待冻结）
+> 更新：2026-10-23
 > 决策：[ADR-0005：单 Module 单库](../decisions/0005-one-module-one-library.md)、[ADR-0006：三种 Service 模式](../decisions/0006-three-service-modes.md)、[ADR-0008：Module 注册与生命周期](../decisions/0008-module-registration-lifetime.md)
 > 参考：[EngineHost](engine-host.md)、[Service](service.md)、[ABI](../foundation/abi.md)、[内存所有权](memory-management.md)、[构建系统](../foundation/build-system.md)
 
@@ -29,7 +29,22 @@ Plugin / Module 体系要兼顾静态构建与动态扩展、Game 与 Editor 运
 3. CMake `ALIAS` 不是第二个真实目标；Windows SHARED 随附的 import `.lib`、PDB 等是辅助产物，不属于第二个 Module。
 4. ThirdParty/工具/宿主可以有普通 CMake Target，但它们不会因此自动变为某个 Module 的额外 Library Target；Plugin 本身不要求生成 CMake Library。
 5. STATIC Module 最终进入 EXE 或共享库，不存在独立的静态库运行时卸载；若静态代码进入可卸载动态库，CodePin **必须**保护真实承载代码的动态库。SHARED Module 由 Module 加载器直接管理库句柄。
-6. 本规则冻结 Module 构建映射，**不冻结** `pg_add_module()`、库命名、Manifest、PanguMeta 注册入口或工具链平台加载函数。
+6. 本规则冻结 Module 构建映射及下述 CMake Target 命名空间规则，**不冻结** `pg_add_module()`、物理库文件名、Manifest、PanguMeta 注册入口或工具链平台加载函数。
+
+## Module 与 ThirdParty 的构建边界（Frozen）
+
+**CMake Target 是构建依赖节点，Pangu Module 是引擎逻辑代码单元；前者不自动获得后者的运行时身份。**
+
+- `Pangu::` **MUST 仅用于真实 Pangu Module Target 的别名**（例如 `Pangu::Foundation`、`Pangu::ECS`）。每个 Module 仍对应唯一实际 `STATIC` / `SHARED` Library Target。
+- `ThirdParty::` **MUST 用于项目对外提供的第三方依赖 Target 名称**（例如 `ThirdParty::NlohmannJson`、`ThirdParty::Asio`）；允许原生 CMake `ALIAS` 指向上游 Target，不为命名创建多余库。第三方 SDK 可暴露多个 Target。
+- `PanguBuildOptions`、`PanguAbiProfileTool`、`PanguAbiProfileCore` 等自有构建策略、工具与辅助 Target 使用**无 `Pangu::` 前缀**的普通名称；它们不是 Pangu Module。**不保留旧 `Pangu::BuildOptions` 或 `Pangu::NlohmannJson` 别名。**
+- 编译器、标准库、SDK/NDK 的基础选择由 CMake Toolchain/Preset 统一提供；`PanguBuildOptions` 为引擎代码施加 C++23、无异常和警告策略，ThirdParty 不调用 `pangu_configure_module()`。
+- 第三方依赖只需进入 CMake 图（`INTERFACE` / `STATIC` / `SHARED` / `IMPORTED` 或上游 Target），不引入 External Module、ThirdParty Manager、统一 Package Adapter 或构建 Wrapper。
+
+第三方库可直接被 Module 使用，也可在现有功能 Module 内适配；需要独立编译/平台适配时建立普通 CMake Target。
+**只有当能力本身形成独立的引擎功能、Module 身份或生命周期边界时，才建立新的 Pangu Module**，不因依赖库数量而增设 Module，也不强制每个 Module 都提供 Service。
+
+普通 ThirdParty 的动态库驻留仍需由实际链接/装载关系保证：若静态库代码被编入可卸载 Gameplay DLL，回调、线程、对象析构和借用必须在该 DLL 卸载前安全结束；仅为第三方库创建 Pangu Module 不自动解决 Hot Swap。详见 [ThirdParty 接入](../foundation/third-party.md) 和 [构建系统](../foundation/build-system.md)。
 
 ## 三种 Service 模式（Frozen）
 
