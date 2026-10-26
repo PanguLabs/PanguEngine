@@ -1,198 +1,124 @@
-#include "AbiProfile.h"
-#include "JsonSchema.h"
-#include "Sha256.h"
-#include "ToolIo.h"
+#include "Collection.h"
+#include "CollectionRequest.h"
+#include "CollectionState.h"
+#include "Encoding.h"
+#include "TechnicalClosure.h"
 #include "ToolReport.h"
-#include "WindowsProfile.h"
 
-#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <iostream>
-#include <optional>
-#include <source_location>
 #include <span>
 #include <string>
 #include <string_view>
-#include <utility>
+#include <vector>
 
-namespace pg::abi
-{
+#ifdef _WIN32
+#define NOMINMAX
+#include <Windows.h> // IWYU pragma: keep - supplies prerequisites for native UTF-8 conversion.
+#include <stringapiset.h>
+#include <utility>
+#include <winnls.h>
+#endif
+
 namespace
 {
-[[nodiscard]] int CollectWindows(const std::filesystem::path& evidencePath, const std::filesystem::path& profileOutput,
-                                 FailureReport& report)
-{
-    const auto same = IsSameFile(evidencePath, profileOutput, report);
-    if (!same || *same)
-    {
-        if (same)
-        {
-            (void)report.Add(ToolError::kPathConflict, "windows_collect_paths", profileOutput.generic_string());
-        }
-        return 2;
-    }
-    if (!RemoveGeneratedFile(profileOutput, report))
-    {
-        report.CleanupIncomplete = true;
-        return 4;
-    }
-    const auto contents = ReadFile(evidencePath, "read_windows_evidence", report);
-    if (!contents)
-    {
-        return 3;
-    }
-    const auto evidence = ParseUnique(*contents);
-    if (!evidence)
-    {
-        (void)report.Add(ToolError::kInvalidProfile, "parse_windows_evidence", evidencePath.generic_string());
-        return 3;
-    }
-    const auto profile = BuildWindowsProfile(*evidence, report);
-    if (!profile)
-    {
-        return 3;
-    }
-    if (!WriteFile(profileOutput, CanonicalJson(*profile), report))
-    {
-        report.CleanupIncomplete |= !RemoveGeneratedFile(profileOutput, report);
-        return 4;
-    }
-    std::cerr
-        << "Windows profile mapped from compiler evidence; binary binding and final consumer link NOT ATTESTED.\n";
-    return 0;
-}
-
-[[nodiscard]] std::string NormalizeSchemaNewlines(std::string_view raw)
-{
-    std::string normalized(raw);
-    std::size_t index = 0;
-    while ((index = normalized.find("\r\n", index)) != std::string::npos)
-    {
-        normalized.replace(index, 2, "\n");
-    }
-    return normalized;
-}
-
-[[nodiscard]] int Fail(FailureReport& report, ToolError error, int exitCode, std::string_view stage,
-                       const std::filesystem::path& path = {}, std::optional<std::size_t> byteOffset = std::nullopt,
-                       std::string_view jsonPointer = {}, std::source_location origin = std::source_location::current())
-{
-    // The CLI returns the exit category; the complete error is retained in the report.
-    (void)report.Add(error, stage, path.generic_string(), {}, byteOffset, jsonPointer, origin);
-    return exitCode;
-}
-
-// The tool validates JSON content only; compiler/runtime provenance is unverified.
-int Main(const std::filesystem::path& schemaPath, const std::filesystem::path& profilePath,
-         const std::filesystem::path& canonicalOutput, const std::filesystem::path& fingerprintOutput,
-         FailureReport& report)
-{
-    const std::array pairs{
-        std::pair{&canonicalOutput, &schemaPath},        std::pair{&canonicalOutput, &profilePath},
-        std::pair{&fingerprintOutput, &schemaPath},      std::pair{&fingerprintOutput, &profilePath},
-        std::pair{&canonicalOutput, &fingerprintOutput},
-    };
-    for (const auto& [left, right] : pairs)
-    {
-        const auto same = IsSameFile(*left, *right, report);
-        if (!same)
-        {
-            return 2;
-        }
-        if (*same)
-        {
-            return Fail(report, ToolError::kPathConflict, 2, "check_paths", *left);
-        }
-    }
-    // Invalidation must clear artifacts left by any prior successful invocation.
-    if (!ClearGeneratedFiles(canonicalOutput, fingerprintOutput, report))
-    {
-        return 4;
-    }
-
-    const auto schemaText = ReadFile(schemaPath, "read_schema", report);
-    if (!schemaText)
-    {
-        return 2;
-    }
-
-    // Checked-in frozen v1 Schema normalized to LF (CRLF/LF are equivalent).
-    constexpr std::string_view kPinnedSchemaSha256 = "8f08c59ad5afaa4bda53eb2767fc0bfb374c1104b3b1943d066f3125a4c41e25";
-    if (schemaText->empty() || Sha256Hex(NormalizeSchemaNewlines(*schemaText)) != kPinnedSchemaSha256)
-    {
-        return Fail(report, ToolError::kSchemaMismatch, 2, "validate_schema", schemaPath);
-    }
-
-    const auto schema = ParseUnique(*schemaText);
-    if (!schema || !schema->is_object() || !SchemaUsesSupportedKeywords(*schema))
-    {
-        return Fail(report, ToolError::kInvalidSchema, 2, "parse_schema", schemaPath);
-    }
-    const auto* id = Find(*schema, "$schema");
-    if (id == nullptr || !id->is_string() || Text(*id) != "https://json-schema.org/draft/2020-12/schema")
-    {
-        return Fail(report, ToolError::kInvalidSchema, 2, "validate_schema", schemaPath);
-    }
-
-    const auto profileText = ReadFile(profilePath, "read_profile", report);
-    if (!profileText)
-    {
-        return 3;
-    }
-    ParseDiagnostic diagnostic;
-    const auto profile = ParseUnique(*profileText, &diagnostic);
-    if (!profile)
-    {
-        return Fail(report, ToolError::kInvalidProfile, 3, "parse_profile", profilePath, diagnostic.ByteOffset);
-    }
-    ValidationDiagnostic validation;
-    if (!Validate(*schema, *profile, &validation))
-    {
-        report.Truncated |= validation.Path.Truncated;
-        return Fail(report, ToolError::kInvalidProfile, 3, "validate_profile", profilePath, std::nullopt,
-                    validation.Path.View(), validation.Origin);
-    }
-
-    const auto canonical = CanonicalJson(*profile);
-    const auto digest = Fingerprint(*profile);
-    if (!WriteFile(canonicalOutput, canonical, report))
-    {
-        // Preserve the write/commit error as primary; append every rollback error.
-        (void)ClearGeneratedFiles(canonicalOutput, fingerprintOutput, report);
-        return 4;
-    }
-    // Creation reveals filesystem aliases (case folding, normalization, short
-    // names) that cannot always be identified while both output names are absent.
-    const auto sameOutput = IsSameFile(canonicalOutput, fingerprintOutput, report);
-    if (!sameOutput || *sameOutput)
-    {
-        const int result = sameOutput ? Fail(report, ToolError::kPathConflict, 2, "check_paths", fingerprintOutput) : 2;
-        (void)ClearGeneratedFiles(canonicalOutput, fingerprintOutput, report);
-        return result;
-    }
-    if (!WriteFile(fingerprintOutput, digest, report))
-    {
-        (void)ClearGeneratedFiles(canonicalOutput, fingerprintOutput, report);
-        return 4;
-    }
-    std::cerr << "Profile Schema checked; provenance and TU ABI options NOT ATTESTED.\n";
-    return 0;
-}
-} // namespace
-} // namespace pg::abi
-
-int main(int argc, char* const* argv)
+int RunMain(int argc, char* const* argv)
 {
     pg::abi::FailureReport report;
+    if (argc >= 2 &&
+        std::string_view(std::span(argv, static_cast<std::size_t>(argc)).subspan<1>().front()) == "compile")
+    {
+        const auto arguments = std::span(argv, static_cast<std::size_t>(argc)).subspan<1>();
+        int result = 2;
+        if (arguments.size() >= 5 && std::string_view(arguments.subspan<1>().front()) == "--request" &&
+            std::string_view(arguments.subspan<3>().front()) == "--")
+        {
+            const std::string requestText(arguments.subspan<2>().front());
+            const auto request = pg::abi::ReadCollectionRequest(
+                std::filesystem::path(std::u8string(requestText.begin(), requestText.end())), report);
+            if (request)
+            {
+                std::vector<std::string> invocation;
+                for (const auto* argument : arguments.subspan<4>())
+                {
+                    invocation.emplace_back(argument);
+                }
+                result = pg::abi::RunCompilerInvocation(*request, invocation, report);
+            }
+        }
+        else
+        {
+            (void)report.Add(pg::abi::ToolError::kArguments, "compile_arguments");
+        }
+        if (report.Count != 0)
+        {
+            report.WriteJson(std::cout);
+        }
+        return result;
+    }
     if (argc == 4)
     {
-        const auto collectionArgs = std::span(argv, static_cast<std::size_t>(argc)).subspan<1>();
-        if (std::string_view(collectionArgs.front()) == "--collect-windows")
+        const auto command = std::span(argv, static_cast<std::size_t>(argc)).subspan<1>();
+        const std::string_view operation(command.front());
+        if (operation == "guard" || operation == "collect" || operation == "invalidate" ||
+            operation == "guard-technical" || operation == "collect-technical")
         {
-            const int result =
-                pg::abi::CollectWindows(collectionArgs.subspan<1>().front(), collectionArgs.back(), report);
-            if (result != 0)
+            int result = 2;
+            if (std::string_view(command.subspan<1>().front()) == "--request")
+            {
+                const std::string_view text(command.back());
+                const auto request = pg::abi::ReadCollectionRequest(
+                    std::filesystem::path(std::u8string(text.begin(), text.end())), report);
+                if (request)
+                {
+                    if (operation == "guard")
+                    {
+                        const auto state = pg::abi::GuardCollection(*request, report);
+                        result = state ? 0 : 3;
+                        if (state && *state == pg::abi::GuardDisposition::kRecollectRequired)
+                        {
+                            const auto collected = pg::abi::Collect(*request, report);
+                            result = collected ? 0 : 3;
+                            if (collected)
+                            {
+                                std::cout << "recollected\n";
+                            }
+                        }
+                        else if (state)
+                        {
+                            std::cout << (*state == pg::abi::GuardDisposition::kCurrent ? "current\n"
+                                                                                        : "build_required\n");
+                        }
+                    }
+                    else
+                    {
+                        pg::Status status;
+                        if (operation == "collect")
+                        {
+                            status = pg::abi::Collect(*request, report);
+                        }
+                        else if (operation == "guard-technical")
+                        {
+                            status = pg::abi::GuardTechnicalClosure(*request, report);
+                        }
+                        else if (operation == "collect-technical")
+                        {
+                            status = pg::abi::CollectTechnicalClosure(*request, report);
+                        }
+                        else
+                        {
+                            status = pg::abi::InvalidateCollection(*request, report);
+                        }
+                        result = status ? 0 : 3;
+                    }
+                }
+            }
+            else
+            {
+                (void)report.Add(pg::abi::ToolError::kArguments, "collection_arguments");
+            }
+            if (report.Count != 0)
             {
                 report.WriteJson(std::cout);
             }
@@ -204,13 +130,13 @@ int main(int argc, char* const* argv)
         (void)report.Add(pg::abi::ToolError::kArguments, "arguments");
         report.WriteJson(std::cout);
         std::cerr << "Usage: PanguAbiProfileTool <schema.json> <profile.json> <canonical-out> <sha256-out>\n";
-        std::cerr << "       PanguAbiProfileTool --collect-windows <compiler-evidence.json> <profile-out>\n";
+        std::cerr << "       PanguAbiProfileTool compile --request <v2.json> -- <compiler argv...>\n";
         return 2;
     }
     const auto args = std::span(argv, static_cast<std::size_t>(argc)).subspan<1>();
     // Exactly four parameters, guarded by argc above.
     // NOLINTBEGIN(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
-    const int result = pg::abi::Main(args[0], args[1], args[2], args[3], report);
+    const int result = pg::abi::EncodeProfileFiles(args[0], args[1], args[2], args[3], report);
     // NOLINTEND(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     if (result != 0)
     {
@@ -219,3 +145,35 @@ int main(int argc, char* const* argv)
     }
     return result;
 }
+} // namespace
+
+#ifdef _WIN32
+// The CRT entry point name and external linkage are fixed by Windows.
+// NOLINTNEXTLINE(readability-identifier-naming,misc-use-internal-linkage)
+int wmain(int argc, wchar_t* const* argv)
+{
+    std::vector<std::string> arguments;
+    for (const auto* argument : std::span(argv, static_cast<std::size_t>(argc)))
+    {
+        const int size =
+            ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, argument, -1, nullptr, 0, nullptr, nullptr);
+        if (size == 0)
+        {
+            return 2;
+        }
+        std::string text(static_cast<std::size_t>(size), '\0');
+        (void)::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, argument, -1, text.data(), size, nullptr, nullptr);
+        text.pop_back();
+        arguments.push_back(std::move(text));
+    }
+    std::vector<char*> pointers;
+    pointers.reserve(arguments.size());
+    for (auto& argument : arguments)
+    {
+        pointers.push_back(argument.data());
+    }
+    return RunMain(argc, pointers.data());
+}
+#else
+int main(int argc, char* const* argv) { return RunMain(argc, argv); }
+#endif

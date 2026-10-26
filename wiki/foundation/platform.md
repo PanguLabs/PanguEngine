@@ -1,7 +1,7 @@
 # Pangu 平台支持基线
 
 > 状态：Partially Frozen（目标平台与访问环境已确定；Runtime/HAL 与完整 CI 尚未冻结）
-> 更新：2026-10-20
+> 更新：2026-10-27
 
 ## 目标平台与验证状态
 
@@ -14,6 +14,8 @@
 | iOS | macOS 主机交叉编译 iPhoneOS Device | iOS ARM64 动态库编译与链接通过；签名、打包及真机/模拟器验证未完成 |
 
 **目标支持不等于完整引擎实现或设备运行验证。** 上表只列出验证层级，不作为平台工具链版本、路径和参数的权威来源。
+
+截至 2026-10-27，五平台受管 STATIC Module 的 ABI Collection 已完成验收：Windows x64、WSL Ubuntu Linux x64、macOS x64 通过完整 CTest，最近一轮分别为 **36/36、34/34、34/34（104/104）**；Android ARM64、iOS ARM64 通过真实目标编译/归档、Host 采集、增量 Guard 和完成引用摘要校验。Windows 另覆盖 Release MD、Debug MD、Release MT。该验收未执行 Android/iOS 目标程序，也不扩展至其他移动 ABI、Apple Silicon 或 Simulator。详见 [ABI Profile 实施状态](abi-profile-fingerprint.md)与[计划验收记录](../../docs/superpowers/plans/2026-10-23-abi-collection.md)。
 
 - 统一的编译器、C++ 标准库和版本选择：见 [Toolchain](toolchain.md)。
 - Android SDK/NDK、CMake、ABI 与验证细节：见 [Android 工具链](android-toolchain.md)。

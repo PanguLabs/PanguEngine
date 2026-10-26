@@ -1,7 +1,7 @@
 # PanguEngine 设计文档索引
 
 > 状态：维护中（Index）
-> 更新：2026-10-22
+> 更新：2026-10-27
 > 约定：文档文件名使用英文 kebab-case，正文中文优先，专业术语可使用英文。
 
 ## 如何阅读
@@ -37,7 +37,7 @@
 | [Android 工具链](foundation/android-toolchain.md) | NDK/SDK、官方 Clang、CMake/Gradle 配置与验证 | Partially Frozen |
 | [Apple 工具链](foundation/apple-toolchain.md) | MacPorts、macOS/iOS SDK、构建及验证 | Partially Frozen |
 | [ABI](foundation/abi.md) | 同受控构建内的兼容性与所有权原则 | Partially Frozen |
-| [ABI Profile / Fingerprint v1](foundation/abi-profile-fingerprint.md) | 固定 Schema、RFC 8785 Canonical、SHA-256、严格相容与加载协议；含机器可读 Schema / 向量 | Frozen（设计协议）；编码工具与 Windows x64 采集切片已实现，完整加载协议待实现 |
+| [ABI Profile / Fingerprint v1](foundation/abi-profile-fingerprint.md) | 固定 Schema、RFC 8785 Canonical、SHA-256、严格相容与加载协议；含机器可读 Schema / 向量 | Frozen（设计协议）；五平台 STATIC ABI Collection Task 1—12 已完成并独立复审通过（2026-10-27），最终 EXE/SHARED Loader 待实现 |
 | [平台](foundation/platform.md) | 五平台目标与开发环境 | Partially Frozen |
 
 ## Core

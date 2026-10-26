@@ -1,7 +1,7 @@
 # Architecture Decision Records (ADR)
 
 > 状态：规范性索引
-> 更新：2026-10-22
+> 更新：2026-10-25
 
 本目录记录影响架构长期演化的重要决策，包括备选方案、选择原因、后果及被替代关系。**ADR 不是子系统的第二份详细规范**；日常实施以相应 Foundation/Core/Runtime 文档为准。
 
@@ -20,6 +20,7 @@
 | [0009](0009-abi-profile-fingerprint.md) | 冻结 ABI Profile / Fingerprint v1（SHARED 入口部分由 ADR-0010 修订） | Accepted | [ABI Profile / Fingerprint](../foundation/abi-profile-fingerprint.md) |
 | [0010](0010-unified-cpp-module-entry.md) | 统一 STATIC/SHARED 原生 C++23 Module 发现与注册 | Accepted（技术路线） | [Module API v1](../core/module-api.md) |
 | [0011](0011-module-api-behavior-contract.md) | 冻结 Module API v1 的行为契约 | Accepted（行为；Public API/ABI 待验证） | [Module API v1](../core/module-api.md) |
+| [0012](0012-host-local-build-trees.md) | 共享源码、按宿主本地文件系统隔离构建树 | Accepted | [Build System](../foundation/build-system.md) |
 
 ## 推荐格式
 

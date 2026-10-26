@@ -7,6 +7,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <ostream>
 #include <source_location>
@@ -36,6 +37,7 @@ enum class ToolError : std::uint8_t
     kWriteOutput = 10,
     kFlushOutput = 11,
     kCloseFile = 12,
+    kInvalidRequest = 13,
 };
 
 template <std::size_t Capacity>
@@ -66,6 +68,37 @@ struct FailureEntry
     std::optional<std::size_t> ByteOffset;
 };
 
+struct ProbeFailure
+{
+    static constexpr std::size_t kArgumentCapacity = 32;
+    bool Present{};
+    bool Truncated{};
+    int ExitCode{};
+    ReportText<128> Stage;
+    ReportText<2048> Program;
+    ReportText<2048> Directory;
+    std::array<ReportText<256>, kArgumentCapacity> Arguments{};
+    std::size_t ArgumentCount{};
+    ReportText<8192> Stdout;
+    ReportText<32768> Stderr;
+
+    // Allocation is confined to delivery, just like the enclosing report.
+    [[nodiscard]] nlohmann::json Json() const
+    {
+        auto arguments = nlohmann::json::array();
+        for (std::size_t index = 0; index < ArgumentCount; ++index)
+        {
+            arguments.push_back(Arguments.at(index).View());
+        }
+        return {
+            {"stage", Stage.View()},         {"program", Program.View()},
+            {"directory", Directory.View()}, {"arguments", std::move(arguments)},
+            {"exit_code", ExitCode},         {"stdout", Stdout.View()},
+            {"stderr", Stderr.View()},       {"truncated", Truncated},
+        };
+    }
+};
+
 struct FailureReport
 {
     static constexpr std::size_t kCapacity = 8;
@@ -73,6 +106,10 @@ struct FailureReport
     std::size_t Count{};
     bool Truncated{};
     bool CleanupIncomplete{};
+    // Prepare the fixed budget before the operation. Keep it off the stack:
+    // state/dependency operations and tests can own many reports concurrently.
+    // Like other tool allocations, preparation does not promise recoverable OOM.
+    std::unique_ptr<ProbeFailure> Probe = std::make_unique<ProbeFailure>();
 
     [[nodiscard]] Error Add(ToolError code, std::string_view stage, std::string_view path = {},
                             std::error_code native = {}, std::optional<std::size_t> byteOffset = std::nullopt,
@@ -144,13 +181,17 @@ struct FailureReport
             }
             errors.push_back(std::move(item));
         }
-        const nlohmann::json report{
+        nlohmann::json report{
             {"schema", 1},
             {"operation", "abi-profile"},
             {"errors", std::move(errors)},
             {"truncated", Truncated},
             {"cleanup_incomplete", CleanupIncomplete},
         };
+        if (Probe && Probe->Present)
+        {
+            report.emplace("probe", Probe->Json());
+        }
         // A truncated path can end mid UTF-8 sequence; delivery must remain valid JSON.
         output << report.dump(-1, ' ', false, nlohmann::json::error_handler_t::replace) << '\n';
     }

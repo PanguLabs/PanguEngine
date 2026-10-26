@@ -8,7 +8,7 @@
       "name": "linux",
       "displayName": "Linux Clang 23 / libc++ / Ninja",
       "inherits": "pangu-ninja",
-      "binaryDir": "${sourceDir}/Build/Linux",
+      "binaryDir": "$env{HOME}/PanguEngineBuild/Linux",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",

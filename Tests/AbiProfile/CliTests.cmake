@@ -99,16 +99,21 @@ if(_aliasExit EQUAL 0 OR EXISTS "${_aliasAbsolute}")
     message(FATAL_ERROR "Relative/absolute aliases were accepted as distinct outputs.")
 endif()
 
-# Use the actual directory's case behavior, including Windows/Apple/SMB mounts.
+# Compare actual stored bytes: some CIFS mounts give separate inode/EXISTS results
+# for case variants even though both spellings refer to the same content.
 set(_caseCanonical "${PANGU_TEST_OUTPUT}/AbiProfileCli-Case.json")
 set(_caseDigest "${PANGU_TEST_OUTPUT}/abiprofilecli-case.json")
 file(REMOVE "${_caseCanonical}" "${_caseDigest}")
-file(WRITE "${_caseCanonical}" "probe directory case behavior")
+file(WRITE "${_caseCanonical}" "first-case-probe")
+file(WRITE "${_caseDigest}" "second-case-probe")
+file(READ "${_caseCanonical}" _caseProbeCanonical)
+file(READ "${_caseDigest}" _caseProbeDigest)
 set(_caseInsensitive FALSE)
-if(EXISTS "${_caseDigest}")
+if(NOT _caseProbeCanonical STREQUAL "first-case-probe" OR
+   NOT _caseProbeDigest STREQUAL "second-case-probe")
     set(_caseInsensitive TRUE)
 endif()
-file(REMOVE "${_caseCanonical}")
+file(REMOVE "${_caseCanonical}" "${_caseDigest}")
 execute_process(
     COMMAND "${PANGU_ABI_PROFILE_TOOL}" "${PANGU_TEST_SCHEMA}" "${_profile}"
         "${_caseCanonical}" "${_caseDigest}"

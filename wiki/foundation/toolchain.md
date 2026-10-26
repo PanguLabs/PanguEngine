@@ -1,7 +1,7 @@
 # Pangu 工具链与元数据工具
 
 > 状态：Partially Frozen（通用工具链契约与平台编译器选型已确定；完整 Toolchain/ABI/Meta 集成待定）
-> 更新：2026-10-20
+> 更新：2026-10-27
 > 决策：[ADR-0004](../decisions/0004-platform-clang-toolchains.md)
 
 ## 统一约束
@@ -11,7 +11,7 @@
 3. 构建底座为 **CMake 4.0+**；不 Fork `llvm-project`。有关 CMake Target、Preset、Toolchain 和构建依赖的契约见 [构建系统](build-system.md)。
 4. **编译器版本按平台选择**，不是全平台统一 LLVM23；配置阶段必须验证编译器类型、版本及目标 Toolchain 来源，不得在 Android 上使用通用 LLVM23 检查。
 5. 编译器与标准库/SDK/NDK 的基础选择由 CMake Preset/Toolchain 统一完成（Linux 与 macOS 使用专用 Toolchain，iOS 使用既有 Device Toolchain，Android 使用 NDK Toolchain，Windows 使用 Clang/MSVC STL Preset）；普通 ThirdParty C++ Target 不需要链接 `PanguBuildOptions` 才获得这一配置。
-6. 同一进程中的 Module 必须满足兼容的 ABI Profile 和所有权契约；应从实际构建记录编译器版本、Target Triple、标准库、SDK/NDK、异常与 Runtime 配置。精确 Fingerprint 规则见 [ABI Profile / Fingerprint v1](abi-profile-fingerprint.md)（已冻结设计协议；尚未实现）。
+6. 同一进程中的 Module 必须满足兼容的 ABI Profile 和所有权契约；应从实际构建记录编译器版本、Target Triple、标准库、SDK/NDK、异常与 Runtime 配置。精确 Fingerprint 规则见 [ABI Profile / Fingerprint v1](abi-profile-fingerprint.md)（设计协议已冻结，五平台 STATIC 构建内采集已实现并验收；最终 EXE/SHARED Loader 待实现）。
 7. Pangu 的扩展属性使用 `pga` 命名空间，反射标记不使用 `PG_CLASS`、`PG_PROPERTY` 等宏；属性和代码生成的有效性必须按实际目标编译器验证，详见 [Reflection / Meta](../core/reflection-meta.md)。
 
 ## 目标平台编译器选择

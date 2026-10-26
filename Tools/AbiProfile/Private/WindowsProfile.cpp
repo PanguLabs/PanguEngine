@@ -79,6 +79,21 @@ namespace
     return std::unexpected(report.Add(ToolError::kInvalidProfile, stage, detail));
 }
 
+[[nodiscard]] bool ProjectMacro(std::string_view definition)
+{
+    const auto name = definition.substr(0, definition.find('='));
+    // Implementation-reserved names include target/compiler/STL/CRT ABI controls.
+    // Only the explicitly interpreted controls in kSimple are accepted below.
+    return !name.empty() && name.front() != '_' &&
+           ((name.front() >= 'a' && name.front() <= 'z') || (name.front() >= 'A' && name.front() <= 'Z')) &&
+           std::ranges::all_of(name,
+                               [](char value)
+                               {
+                                   return (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z') ||
+                                          (value >= '0' && value <= '9') || value == '_';
+                               });
+}
+
 [[nodiscard]] Status CheckArguments(const Json& unit, FailureReport& report)
 {
     const auto* arguments = Find(unit, "arguments");
@@ -127,7 +142,16 @@ namespace
             return Reject(report, "windows_arguments", "non-string argument");
         }
         const auto arg = Text(value);
-        if (arg == "-I" || arg == "-isystem")
+        if (arg == "-D")
+        {
+            ++index;
+            if (index == arguments->size() || !arguments->at(index).is_string() ||
+                !ProjectMacro(Text(arguments->at(index))))
+            {
+                return Reject(report, "windows_arguments", arg);
+            }
+        }
+        else if (arg == "-I" || arg == "-isystem" || arg == "-include")
         {
             ++index;
             if (index == arguments->size() || !arguments->at(index).is_string() || Text(arguments->at(index)).empty())
@@ -151,8 +175,8 @@ namespace
                 return Reject(report, "windows_arguments", Text(arguments->at(index)));
             }
         }
-        else if (!std::ranges::contains(kSimple, arg) && (!arg.starts_with("-I") || arg.size() <= 2) &&
-                 (!arg.starts_with("-isystem") || arg.size() <= 8) &&
+        else if (!std::ranges::contains(kSimple, arg) && !(arg.starts_with("-D") && ProjectMacro(arg.substr(2))) &&
+                 (!arg.starts_with("-I") || arg.size() <= 2) && (!arg.starts_with("-isystem") || arg.size() <= 8) &&
                  !(arg.starts_with("--target=x86_64-") && arg.contains("-windows-msvc")) &&
                  (!arg.starts_with("-W") || arg.starts_with("-Wl,") || arg.starts_with("-Wa,") ||
                   arg.starts_with("-Wp,")))
@@ -178,6 +202,7 @@ struct RuntimePolicy
     std::string_view Standard;
     std::string_view Support;
     std::string_view Ucrt;
+    std::string_view Mismatch;
 };
 
 [[nodiscard]] const RuntimePolicy& Runtime(bool dynamic, bool debug)
@@ -190,6 +215,7 @@ struct RuntimePolicy
                 .Standard = "msvcprt.lib",
                 .Support = "vcruntime.lib",
                 .Ucrt = "ucrt.lib",
+                .Mismatch = "md_dynamicrelease",
             },
             {
                 .Crt = "md-debug",
@@ -197,6 +223,7 @@ struct RuntimePolicy
                 .Standard = "msvcprtd.lib",
                 .Support = "vcruntimed.lib",
                 .Ucrt = "ucrtd.lib",
+                .Mismatch = "mdd_dynamicdebug",
             },
             {
                 .Crt = "mt-release",
@@ -204,6 +231,7 @@ struct RuntimePolicy
                 .Standard = "libcpmt.lib",
                 .Support = "libvcruntime.lib",
                 .Ucrt = "libucrt.lib",
+                .Mismatch = "mt_staticrelease",
             },
             {
                 .Crt = "mt-debug",
@@ -211,10 +239,114 @@ struct RuntimePolicy
                 .Standard = "libcpmtd.lib",
                 .Support = "libvcruntimed.lib",
                 .Ucrt = "libucrtd.lib",
+                .Mismatch = "mtd_staticdebug",
             },
         },
     };
     return kPolicies.at((dynamic ? 0U : 2U) + (debug ? 1U : 0U));
+}
+
+[[nodiscard]] bool ObjectRuntimeMatches(std::string_view text, const RuntimePolicy& runtime, std::string_view iterator)
+{
+    // llvm-readobj prefixes the actual .drectve content with this line label.
+    // Synthetic mapper evidence may supply just the directive content.
+    constexpr std::string_view kLabel = "Directive(s):";
+    if (const auto offset = text.find(kLabel); offset != std::string_view::npos)
+    {
+        text.remove_prefix(offset + kLabel.size());
+    }
+    const auto normalized = Normalized(text);
+    text = normalized;
+    bool startup = false;
+    bool standard = false;
+    while (!text.empty())
+    {
+        std::string token;
+        bool quoted = false;
+        std::size_t consumed = 0;
+        for (const auto character : text)
+        {
+            ++consumed;
+            if (character == '"')
+            {
+                quoted = !quoted;
+            }
+            else if (!quoted && std::isspace(static_cast<unsigned char>(character)) != 0)
+            {
+                break;
+            }
+            else
+            {
+                token.push_back(character);
+            }
+        }
+        if (quoted)
+        {
+            return false;
+        }
+        text.remove_prefix(consumed);
+        if (token.starts_with('-'))
+        {
+            token.front() = '/';
+        }
+        constexpr std::string_view kDefault = "/defaultlib:";
+        constexpr std::string_view kNoDefault = "/nodefaultlib:";
+        constexpr std::string_view kMismatch = "/failifmismatch:runtimelibrary=";
+        constexpr std::string_view kIterator = "/failifmismatch:_iterator_debug_level=";
+        if (token.starts_with(kIterator))
+        {
+            if (std::string_view(token).substr(kIterator.size()) != iterator)
+            {
+                return false;
+            }
+        }
+        else if (token.starts_with(kMismatch))
+        {
+            if (std::string_view(token).substr(kMismatch.size()) != runtime.Mismatch)
+            {
+                return false;
+            }
+        }
+        else if (token == "/nodefaultlib")
+        {
+            return false;
+        }
+        else if (token.starts_with(kDefault) || token.starts_with(kNoDefault))
+        {
+            const bool disabled = token.starts_with(kNoDefault);
+            std::string library(std::string_view(token).substr(disabled ? kNoDefault.size() : kDefault.size()));
+            if (!library.ends_with(".lib"))
+            {
+                library += ".lib";
+            }
+            const auto basename = std::string_view(library).substr(library.find_last_of("/:") + 1);
+            bool crt = false;
+            for (const bool dynamic : std::array{false, true})
+            {
+                for (const bool debug : std::array{false, true})
+                {
+                    const auto& candidate = Runtime(dynamic, debug);
+                    crt |= basename == candidate.Startup || basename == candidate.Standard ||
+                           basename == candidate.Support || basename == candidate.Ucrt;
+                }
+            }
+            if (!crt)
+            {
+                continue;
+            }
+            // A path with the same basename can select a different provider;
+            // only bare names resolve through the independently checked witness.
+            if (disabled || library != basename ||
+                (basename != runtime.Startup && basename != runtime.Standard && basename != runtime.Support &&
+                 basename != runtime.Ucrt))
+            {
+                return false;
+            }
+            startup |= basename == runtime.Startup;
+            standard |= basename == runtime.Standard;
+        }
+    }
+    return startup && standard;
 }
 
 [[nodiscard]] Result<Environment> ReadEnvironment(const Json& evidence, FailureReport& report)
@@ -301,9 +433,7 @@ struct RuntimePolicy
     }
     const bool dynamic = dll == "1";
     const auto& runtime = Runtime(dynamic, debug);
-    const auto directives = Normalized(Field(unit, "directives"));
-    if (!directives.contains(std::string("/defaultlib:") + std::string(runtime.Startup)) ||
-        !directives.contains(std::string("/defaultlib:") + std::string(runtime.Standard)))
+    if (!ObjectRuntimeMatches(Field(unit, "directives"), runtime, iterator))
     {
         return std::unexpected(report.Add(ToolError::kInvalidProfile, "windows_object_runtime", Field(unit, "object")));
     }

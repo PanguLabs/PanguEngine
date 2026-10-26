@@ -2,6 +2,7 @@
 #include "ToolReport.h"
 #include "WindowsProfile.h"
 
+#include <array>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
@@ -86,6 +87,18 @@ int Main(const std::filesystem::path& schemaPath)
     const auto schema = ParseUnique(std::string(std::istreambuf_iterator<char>(input), {}));
     FailureReport report;
     const auto baseline = BuildWindowsProfile(Evidence(), report);
+    auto projectMacros = Evidence();
+    for (auto& unit : projectMacros.at("units"))
+    {
+        unit.at("arguments").push_back("-DJSON_USE_GLOBAL_UDLS=0");
+        unit.at("arguments").push_back("-DPANGU_ENABLE_PROFILING=1");
+    }
+    FailureReport projectReport;
+    const auto projectProfile = BuildWindowsProfile(projectMacros, projectReport);
+    expect(projectProfile && baseline && *projectProfile == *baseline, "ordinary project macros accepted");
+    expect(projectMacros.at("units").at(0).at("arguments").at(6) == "-DJSON_USE_GLOBAL_UDLS=0" &&
+               projectMacros.at("units").at(0).at("arguments").at(7) == "-DPANGU_ENABLE_PROFILING=1",
+           "ordinary project macros retained in evidence");
     expect(baseline && schema && Validate(*schema, *baseline), "complete two-TU profile conforms to frozen schema");
     if (baseline)
     {
@@ -162,6 +175,50 @@ int Main(const std::filesystem::path& schemaPath)
     changed = Evidence();
     changed.at("units").at(1).at("directives") = "/DEFAULTLIB:libcmt.lib";
     rejects(changed, "COFF/runtime policy disagreement rejected");
+    for (const auto* conflicting : std::array{
+             "msvcrtd.lib",
+             "libcmt.lib",
+             "libcmt",
+             "libcmtd.lib",
+             "msvcprtd.lib",
+             "libcpmt.lib",
+             "libcpmtd.lib",
+             "vcruntimed.lib",
+             "libvcruntime.lib",
+             "libvcruntimed.lib",
+             "ucrtd.lib",
+             "libucrt.lib",
+             "libucrtd.lib",
+         })
+    {
+        changed = Evidence();
+        changed.at("units").at(1).at("directives").get_ref<std::string&>() +=
+            " /DEFAULTLIB:" + std::string(conflicting);
+        rejects(changed, "additional conflicting CRT directive rejected");
+    }
+    for (const auto* spoofed : std::array{
+             "/DEFAULTLIB:msvcrt.lib.evil /DEFAULTLIB:msvcprt.lib",
+             "/DEFAULTLIB:msvcrt.lib /DEFAULTLIB:msvcprt.lib.evil",
+             R"(/DEFAULTLIB:msvcrt.lib /DEFAULTLIB:msvcprt.lib /DEFAULTLIB:"C:\rogue\msvcrt.lib")",
+             "/DEFAULTLIB:msvcrt.lib /DEFAULTLIB:msvcprt.lib /DEFAULTLIB:C:msvcrt.lib",
+             "/DEFAULTLIB:msvcrt.lib /DEFAULTLIB:msvcprt.lib /DEFAULTLIB:\"C:/rogue/libcmt.lib\"",
+             "/DEFAULTLIB:msvcrt.lib /DEFAULTLIB:msvcprt.lib /NODEFAULTLIB:msvcrt.lib",
+             "/DEFAULTLIB:msvcrt.lib /DEFAULTLIB:msvcprt.lib /FAILIFMISMATCH:\"RuntimeLibrary=MT_StaticRelease\"",
+         })
+    {
+        changed = Evidence();
+        changed.at("units").at(1).at("directives") = spoofed;
+        rejects(changed, "CRT directive token or provider spoof rejected");
+    }
+    changed = Evidence();
+    changed.at("units").at(1).at("directives") =
+        R"(/defaultlib:"MSVCRT.LIB" -DEFAULTLIB:MSVCPRT.LIB /DEFAULTLIB:"User library.lib")";
+    FailureReport quotedReport;
+    expect(BuildWindowsProfile(changed, quotedReport).has_value(), "quoted case-insensitive CRT tokens accepted");
+    changed = Evidence();
+    changed.at("units").at(1).at("directives") = "/DEFAULTLIB:msvcrt /DEFAULTLIB:msvcprt";
+    FailureReport extensionlessReport;
+    expect(BuildWindowsProfile(changed, extensionlessReport).has_value(), "extensionless CRT names accepted");
     rejects(Json::object(), "missing evidence fields rejected");
     changed = Evidence();
     changed.at("units").at(1).at("arguments") = Json::array({42});

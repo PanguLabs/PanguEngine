@@ -8,7 +8,7 @@
       "name": "macos",
       "displayName": "macOS MacPorts Clang 23 / Ninja",
       "inherits": "pangu-ninja",
-      "binaryDir": "${sourceDir}/Build/macOS",
+      "binaryDir": "$env{HOME}/PanguEngineBuild/macOS",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",

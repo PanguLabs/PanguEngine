@@ -8,7 +8,7 @@
       "name": "ios-arm64",
       "displayName": "iOS arm64 / MacPorts Clang 23",
       "inherits": "pangu-ninja",
-      "binaryDir": "${sourceDir}/Build/iOS",
+      "binaryDir": "$env{HOME}/PanguEngineBuild/iOS",
       "condition": {
         "type": "equals",
         "lhs": "${hostSystemName}",

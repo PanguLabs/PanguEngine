@@ -25,13 +25,18 @@
 | O3DE | `../o3de` |
 | FlaxEngine | `../FlaxEngine` |
 
+## 开发原则
+
+- **构建产物名称不得包含平台名**；构建目录按宿主文件系统隔离，产物名称在各平台保持一致，文件前缀与扩展名遵循平台惯例。
+- **构建系统逻辑优先使用 C++ 实现**；CMake 负责接线与集成，包括目标声明、依赖连接和构建工具调用。
+
 ## Agent 工作方式
 
 - 本项目可通过 **Codex** 或 **ChatGPT Web + Desktop Commander** 进入。
 - 从 **Codex** 进入时，使用当前 Agent 提供的本地文件和终端工具。
 - 从 **ChatGPT Web** 进入时，**不要调用 Codex**；优先使用 ChatGPT Web 中已安装的插件，通过 **Desktop Commander** 访问和操作本地仓库。
 - 优先在本地仓库 `D:\Git\PanguEngine` 检查与修改代码。需要核对远程版本时，使用 GitHub 仓库。
-- 执行 Linux 命令时使用 WSL Ubuntu；执行 macOS 命令时使用 `ssh -o BatchMode=yes moozen-macos`。**macOS 通过已挂载的 `/Users/moozen/WindowsGit/PanguEngine` 直接访问同一份源码，禁止将源码复制到 macOS 临时目录再构建**。正式构建优先使用根目录 `CMakePresets.json` 和各平台 `Build/<Platform>/` 输出。macOS/iOS 的编译器与 SDK 细节见 [`wiki/foundation/apple-toolchain.md`](wiki/foundation/apple-toolchain.md)；Android 以只读参考项目 `D:\AllProject\AndroidStudio\CppDemo` 的构建流程为参照，具体配置见 [`wiki/foundation/android-toolchain.md`](wiki/foundation/android-toolchain.md)。不要将 Windows 路径、Shell 或平台库行为直接视为可跨平台复用。
+- 执行 Linux 命令时使用 WSL Ubuntu，通过 SMB3/CIFS 挂载的 `/home/moozen/WindowsGit/PanguEngine` 运行正式 CMake preset、构建和 CTest，Linux 使用 WSL ext4 本地构建目录 `$HOME/PanguEngineBuild/Linux`，不在 CIFS 共享源码树下生成正式构建产物；不要通过 `/mnt/d/Git/PanguEngine` 混用同一构建树的绝对路径。执行 macOS 命令时使用 `ssh -o BatchMode=yes moozen-macos`。**macOS 通过已挂载的 `/Users/moozen/WindowsGit/PanguEngine` 直接访问同一份源码，禁止将源码复制到 macOS 临时目录再构建**。正式构建统一使用根目录 `CMakePresets.json`：Windows/Android 输出到源码仓库的 `Build/Windows`、`Build/Android`（NTFS），Linux 输出到 `$HOME/PanguEngineBuild/Linux`（ext4），macOS/iOS 输出到 Mac 的 `$HOME/PanguEngineBuild/macOS`、`$HOME/PanguEngineBuild/iOS`（APFS）。各平台 BuildRoot 必须隔离，旧 SMB 构建树不得与新构建树混用。macOS/iOS 的编译器与 SDK 细节见 [`wiki/foundation/apple-toolchain.md`](wiki/foundation/apple-toolchain.md)；Android 以只读参考项目 `D:\AllProject\AndroidStudio\CppDemo` 的构建流程为参照，具体配置见 [`wiki/foundation/android-toolchain.md`](wiki/foundation/android-toolchain.md)。不要将 Windows 路径、Shell 或平台库行为直接视为可跨平台复用。
 - 共享 Agent Skills 的唯一规范目录为 `.agents/skills/`。
 - 新工作区可从仓库根目录执行 `python Scripts/setup-agent-links.py`，为 Claude Code 生成本地 Skills 映射：Windows 使用 Junction，Linux/macOS 使用 Symlink。
 - `.claude/skills` 是本地生成的目录映射，不应提交到 Git；Codex 可以直接使用 `.agents/skills/`。

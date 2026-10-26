@@ -11,6 +11,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(cmake/Platform/Common/BuildOptions.cmake)
 include(cmake/PanguPlatform.cmake)
 include(cmake/Platform/Common/Module.cmake)
+set(PANGU_ABI_SOURCE_ROOT "${PROJECT_SOURCE_DIR}")
+include(cmake/AbiProfile/AbiProfile.cmake)
 
 add_subdirectory(Source/ThirdParty/NlohmannJson)
 add_subdirectory(Source/Runtime/Foundation)
@@ -21,8 +23,9 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_subdirectory(Tools/AbiProfile)
 endif()
 
-include(cmake/AbiProfile/Windows.cmake)
-pangu_enable_windows_abi_profiles(PanguFoundation PanguModule)
+# Finalize the resolved current-configuration C++ dependency graph after all
+# Module libraries have registered their own Guard / Compile / Collect hooks.
+pangu_finalize_abi_profiles(TARGETS PanguFoundation PanguModule PanguBuildOptions)
 
 include(CTest)
 if(BUILD_TESTING)

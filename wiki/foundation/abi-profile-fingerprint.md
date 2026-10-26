@@ -1,7 +1,7 @@
 # Pangu ABI Profile / Fingerprint v1
 
-> 设计状态：Frozen（Schema v1、Canonical Serialization、SHA-256 Fingerprint、严格兼容判定与装载校验顺序）；实际构建集成和公开二进制入口布局未完成
-> 更新：2026-10-21
+> 设计状态：Frozen（Schema v1、Canonical Serialization、SHA-256 Fingerprint、严格兼容判定与装载校验顺序）；五平台 STATIC 构建集成已完成，最终 EXE/SHARED Loader 与公开二进制入口布局待实现
+> 更新：2026-10-27
 > 决策：[ADR-0009：ABI Profile 与 Fingerprint v1](../decisions/0009-abi-profile-fingerprint.md)
 > 基线：[ABI](abi.md)、[工具链](toolchain.md)、[构建系统](build-system.md)、[Module 注册与生命周期](../core/module-registration-lifetime.md)、[内存管理](../core/memory-management.md)
 
@@ -142,7 +142,19 @@ CMake Target -> Compiler / Runtime Probe -> Canonical Profile + SHA-256
 4. 只有兼容性和 Module Interface Contract 检查通过，才可以进行 C++ 注册、使用 STL/Result 或发布 Service/Registry 能力；失败报告应保留可读字段差异，并按 Module v1 事务回滚。
 5. 预检/二次校验不替代最后的 ModuleCodePin、Borrow、Allocator/GPU 安全卸载契约。
 
-## 当前 Build-Time 编码工具的实现进展（2026-10-22）
+## ABI Profile v1 的最新构建期实施状态（2026-10-27）
+
+冻结 v1 **JSON Schema、RFC 8785 Canonical 和 SHA-256 Fingerprint 算法保持不变**。在这一协议之上，五平台 STATIC ABI Collection 的 Task 1—12 已全部完成，覆盖 Host Guard → 真实 C++ Compiler Launcher/编译收据 → 原生 Library Target 归档 → C++ Collect/完成记录流程。原 R1—10 及提交 `9561fe6` 的追加评审问题均已修复并独立复审通过，无剩余 Critical/Important。
+
+- 生产 Root 使用 `pangu_register_abi_module(Target)`、`pangu_register_abi_static(Target)` 和 `pangu_finalize_abi_profiles(TARGETS ...)`；一个受管 Module 只有一个原生 STATIC Library Target，不另创 Profile Library。旧 `Windows.cmake`、`CollectWindows.cmake`、`WindowsRuntime.cmake`、`Prepare.cmake` 及 `--collect-windows` 已从生产入口移除。
+- CMake 负责真实当前配置的 Target/Generator Expression/INTERFACE 传递依赖排序；C++ 负责依赖闭包、技术 STATIC SCC 批次采集、组 `group-complete.json` 封口、ABI 字段逐项相容和严格对象来源验证。未知关键 ABI 输入或无匹配收据对象 Fail Closed。
+- 完成的受管 Target 产出 `<BuildRoot>/Abi/<Config>/<Target>/{profile.json,canonical.json,fingerprint.sha256,evidence.json,complete.json}` 等私有构建状态。最近一次完整 CTest 为 Windows **36/36**、Linux **34/34**、macOS **34/34**，合计 **104/104**；Android/iOS ARM64 由 Host 完成实际目标对象、STATIC 归档、Profile 采集、增量 Guard 和完成引用摘要校验，不执行目标程序。
+- Windows Release MD/Debug MD/Release MT 的受管 Module 构建、采集及增量验证通过；Foundation/Module 同配置指纹一致，跨 CRT 配置指纹不同。七种配置的构建前后源码摘要一致。CMake 验证使用 Windows/macOS 4.4.3、Linux 4.4.2；保持最低 CMake 4.0 的声明并核对所用属性的最低版本，未单独运行 4.0.x 二进制，该项不作为本轮未关闭门禁。
+- **绝不扩大保证范围**：`complete.json` 表示当前构建内的受控 STATIC 证据，不表示实际最终消费者 EXE/SHARED、OS Load 前后身份、签名/可信发布、TOCTOU、跨编译器不受控 C++ 产物或 Loader API/ODR 已验收。下方按日期记录的 2026-10-22～24 部分为**历史阶段快照**，不代表最新 Root 接线状态。
+
+完整 CLI 与文件布局见 [ABI 工具说明](../../Tools/AbiProfile/README.md)，当前验收状态与历史记录见 [Implementation Plan](../../docs/superpowers/plans/2026-10-23-abi-collection.md)。实现主体原提交为 `9561fe6`；追加评审修复与文档已按用户授权通过 amend 合入同一提交，未推送。以下带日期的阶段记录保留当时结论，不作为当前待办。
+
+## Build-Time 编码工具的历史阶段实现进展（2026-10-22）
 
 已新增正式 C++23 `Tools/AbiProfile`（构建宿主上的 `PanguAbiProfileTool` 可执行程序，**非** Pangu Runtime Module）与 `Tests/AbiProfile`（`AbiProfileVectors`、`AbiProfileCli`、`JsonExtras`、`AbiProfileIo` 四组 CTest）。之前被忽略的 `.probe/abi-profile` 只作为设计验证历史保留，正式回归已经进入版本化 `Tests/`。工具通过受控的 header-only nlohmann/json v3.12.0 正式发布版（`Source/ThirdParty/NlohmannJson/Repo` Git submodule，许可证保留在上游仓库，外层使用 INTERFACE Target；ABI 工具及测试共用仅宿主侧的 `PanguAbiProfile` STATIC 库，不新增 Runtime Module）读取 JSON。
 
@@ -193,3 +205,29 @@ Schema/测试向量的临时 **C++23 验证探针**位于本地 `.probe/abi-prof
 `Tests/Toolchain/` 与 `Tests/Toolchain/AuditCompilerMacros.cmake` 已落地首批**从真实 CMake 编译命令得到的 Clang 宏证据**：两个正式 Pangu Module 源文件 + 一项普通 ThirdParty 源文件 + 一项 Pangu Module 策略探针。证据包含编译命令 SHA-256、宏文本 SHA-256、STL/CRT/RTTI/异常/CPU 等事实，输出 `Build/<Platform>/Abi/compile-evidence.json`，且明确标记 `trusted: false`。五平台均完成编译阶段审计；三个桌面平台新增成功与 RTTI/Exception 两组冲突拒绝测试。
 
 **冻结的 JSON Schema、Canonical Serialization、Fingerprint 算法和兼容协议均未修改。** 当前宏证据尚不能证明 SDK/NDK/CRT 等实际链接来源，不能完整构造有效 v1 Profile、不能代表所有 TU，更不能证明 Profile 与实际产物的可信绑定。后续须结合原始 Toolchain、SDK 文件和真实链接命令 Fail Closed 地补齐字段，然后才能让正式 `PanguAbiProfileTool` 从已核验材料自动生成 Fingerprint。详见 [Toolchain 编译审计](../../Tests/Toolchain/README.md)。
+
+## 2026-10-24：Windows C++ Collector（Task 5）
+
+已实现 `Tools/AbiProfile/Private/WindowsCollector.{h,cpp}` 与独立 `Tools/AbiProfile/Probe/RuntimeWitness.cpp`：真正的 Windows Clang 预处理与头文件来源、MSVC Toolset 元数据、SDK `Platform.xml` 根元素版本、真实 COFF DefaultLib 指令及 LLD Runtime 库路径均进行核验，并调用冻结的 `BuildWindowsProfile`、Schema/Canonical/Fingerprint 映射。预编译检查不要求 `.obj` 存在；最终收集要求每个实际对象及其编译收据。运行库探针绝不把所有 STATIC Module 强拼进 EXE，合法 Host 未解析符号可延迟到最终消费者。Schema v1、SHA-256 算法不变。
+
+`AbiCollectorWindows` 验证双 TU、同源其他 Target 隔离、缺失/重复对象、Windows response file 展开、无关编译开关与 ABI 关键宏冲突、无效 SDK/STL/CRT 来源等。`AbiCollectorWindowsCli` 用真实 `guard -> compile -> archive -> collect -> guard` 链路并验证 `complete.json`/receipt，额外由最终 Consumer 提供 Host 符号并仅链接、不执行。新旧 Collector Profile 与 Fingerprint 在 Release MD、Debug MD、Release MT 三种独立配置下保持完全一致。Windows 全量 CTest 30/30、macOS 全量 20/20；Linux 完整结果另见实施记录。
+
+**当前边界**：Task 5 是 C++ 后端与独立 CLI 的验收，正式 Root CMake 仍暂用 `cmake/AbiProfile/CollectWindows.cmake` 采集。按照计划 Task 11，在依赖闭包、Host Tool Bootstrap 和 Module Target 强保证完毕后才切换正式构建并删除旧脚本。仅此阶段的 Profile 不能声明最终消费者 ABI/ODR 验证、签名、真实产物可信绑定或 SHARED Loader 放行。
+## 2026-10-24：Linux C++ Collector（Task 6）
+
+统一 C++ 工具的 Linux 后端已接通 WSL Ubuntu 24.04（`x86_64-unknown-linux-gnu`、glibc 2.39）与 LLVM 23.1.0/libc++ 23.1.0 的实际原生采集。`LinuxCollector.cpp` 对每个真实 TU 执行 Clang 宏/布局/Triple 与 libc++ `__config_site` 检查，确认 ABI namespace `__1`、ABI version 1、STL hardening/layout 宏、RTTI、Exception、指针/字符宽度与 CPU 基线一致。对象存在后通过 `llvm-readobj` 核对 ELF 格式，最小独立 witness 使用真实宿主链接器并由 `llvm-readobj --needed-libs` 非执行式核验 libc++/libc++abi/glibc 的动态依赖与实际链接库路径；不会强拼 STATIC Module、不会执行 witness。SDK 身份来自已核验的目标原生 Sysroot（`/etc/os-release` + glibc Header/Runtime），**拒绝外部未知 Sysroot、musl 与未明确支持的分发版**，未将 Host `uname` 当目标身份。
+
+Linux 专项 CTest 包含真实双 TU 正常采集、libc++ ABI/版本/hardening 与 glibc 身份变异、SDK/Runtime Provider 篡改拒绝、编译选项拒绝及生成文件硬链接保护。统一 CLI 集成回归执行实际 `guard → compile → llvm-ar → collect → guard`，验证两个编译收据及 `complete.json` 和指纹一致性，并模拟缺失收据后的撤销。本阶段**只表示 Build 内受控采集**；Loader 的二进制可信绑定、最终消费者与 API/ODR 校验，以及 Module 依赖闭包和 Root Target 强保证尚属于 Tasks 9–11。更广的发行版/CPU/交叉 Sysroot 未测试，不声称覆盖。
+## 2026-10-24：Apple C++ Collector（Task 7）
+
+已新增 `AppleCollector.{h,cpp}` 和 `Probe/AppleLibcxx.cpp`，仅在 macOS Host 采集 macOS x86_64 或 iOS ARM64：真实 TU 编译命令 `-isysroot` 与 `-###` Triple、MacPorts libc++ Headers/`__config_site`、SDKSettings.json/Plist、Apple SDK 的 libc++/libc++abi/libSystem `.tbd` 和实编译 Mach-O 对象互相核对。独立 witness 实际链接 Apple 运行库，并用 `llvm-readobj --needed-libs` 和 `otool -l` 非执行式校验架构、SDK 和 Deployment Target；禁止在 Host 上执行 iOS 二进制。MacPorts C++ Header 23.1.2 与 Apple 系统 dylib Current Version 1800.105 是不同来源，不以版本号相等作兼容断言。
+
+`AbiCollectorApple`/`AbiCollectorAppleIOS` 测试非法 SDK、Target/ABI 参数、修改的 Runtime/Mach-O 证据及 APFS 符号链接和硬链接路径攻击。`AbiCollectorAppleCli`/`AbiCollectorAppleIOSCli` 验证两份真实收据、STATIC 归档、Profile/Canonical/Fingerprint/complete.json 完成与失效撤销；`AbiCollectorAppleProfilesDiffer` 要求 macOS SDK15.2 与 iPhoneOS SDK18.2 的 Profile/指纹确实不同。macOS 25/25 CTest 与 clang-tidy/clang-format 通过；iOS ARM64 STATIC 构建与 Mach-O 检查通过，**未执行 iOS 目标程序**。
+
+这仅证明受限工具链的 Build/Compiler Profile，尚未满足 Task 9/11 的完整依赖闭包、最终产物可信绑定与 Loader 放行。
+
+## 2026-10-24：Android C++ Collector（Task 8）
+
+Windows Host 已接入 `AndroidCollector.{h,cpp}` 和 `Probe/AndroidLibcxx.cpp`，仅支持当前核验过的 NDK r30 / Clang 21.0.0 / ARM64 / API 29。以真实 `compile_commands.json` 和 `source.properties` (`Pkg.ReleaseName=r30`, Revision `30.0.16248370`) 为准，校验 NDK libc++ 21 的 ABI Namespace `__ndk1`、Bionic SDK/Runtime 文件、Target Triple、实际编译选项及 `llvm-readobj` ELF `EM_AARCH64`；原生 Android 默认 `-fno-signed-char`，Profile 必须保留 `char_signedness=unsigned`。Header 通过真实 Clang `-H` 采集进入输入快照，完整 NDK Revision 与绝对路径只留在证据中，冻结 Schema/Canonical/Fingerprint v1 不变。
+
+独立 witness 由 Windows Host 的 NDK Clang 21 实际链接、静态读取 ELF `libc++_shared.so`/Bionic `libc.so` 动态依赖，**不会在 Windows 执行 Android 程序**。`AbiCollectorAndroid` 验证缺失/篡改 NDK、SDK、Runtime/ELF、API、ABI Macro、未知布局开关和硬链接路径；`AbiCollectorAndroidCli` 用真实 Windows quoting 走通 `guard→compile×2→llvm-ar→collect→guard`，校验两份编译收据、Profile/Canonical/Fingerprint/complete.json，再删除一份收据验证撤销。Windows CTest 32/32、Linux 22/22、macOS 25/25 通过，Android ARM64 STATIC 构建和 ELF 目标验证通过。当前仅为受控 Build Profile 的阶段验收；完整依赖闭包、Host Tool Bootstrap、Root Module 构建强保证及 Loader 二进制可信绑定仍在 Tasks 9–12。
