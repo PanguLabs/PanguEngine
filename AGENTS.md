@@ -42,15 +42,16 @@
 - `.claude/skills` 是本地生成的目录映射，不应提交到 Git；Codex 可以直接使用 `.agents/skills/`。
 - 新建或修改的 `CMakeLists.txt` 使用 `cmake_minimum_required(VERSION 4.0)`，并按目标平台校验编译器；具体规则以 [`wiki/foundation/toolchain.md`](wiki/foundation/toolchain.md) 和 [`wiki/foundation/build-system.md`](wiki/foundation/build-system.md) 为准。
 - 修改完成后尽可能执行针对性的构建、测试或静态检查，并明确说明未验证的部分。
-- 临时验证探针（Probe/PoC）统一放在仓库根目录 `.probe/`，不要放入正式 `Tests/`；正式、长期维护的回归测试仍使用 `Tests/`。
+- 执行 plan 时产生的临时文件（包括验证探针、脚本和日志）统一放在仓库根目录 `.superpowers/sdd/<plan>/`，其中 `<plan>` 为对应计划名称，不放入 `.probe/`。
+- 非 plan 执行过程中产生的临时验证探针（Probe/PoC）放在仓库根目录 `.probe/`；正式、长期维护的回归测试仍使用 `Tests/`。
 - 未经明确要求，不提交或推送 Git 变更。
 
 ## C++ 编程规范
 
 - 编写、修改、重构或评审 C++ 代码前，阅读并遵守 [`wiki/foundation/cpp-guidelines.md`](wiki/foundation/cpp-guidelines.md) 中的开发原则与最佳实践；具体领域的契约以对应子系统规范为准。
 - 代码格式以根目录 [`.clang-format`](.clang-format) 为准；命名与静态检查以根目录 [`.clang-tidy`](.clang-tidy) 为准，使用仓库配置执行检查。
-- 以上规范适用于引擎源码、工具、测试、`.probe/` 探针及 `wiki/` 中的 C++ 示例；修改示例中的标识符时，同步相关正文与跨文档引用。第三方代码按独立的依赖与检查边界处理。
-- 修改后运行针对性的 `clang-format`、`clang-tidy` 及构建/测试。`clang-tidy` 优先使用实际目标的编译数据库；文档代码片段可在 `.probe/` 中补齐最小依赖上下文验证，并说明验证限制。
+- 以上规范适用于引擎源码、工具、测试、临时验证探针及 `wiki/` 中的 C++ 示例；修改示例中的标识符时，同步相关正文与跨文档引用。第三方代码按独立的依赖与检查边界处理。
+- 修改后运行针对性的 `clang-format`、`clang-tidy` 及构建/测试。`clang-tidy` 优先使用实际目标的编译数据库；文档代码片段可在上述规则指定的临时文件目录中补齐最小依赖上下文验证，并说明验证限制。
 - 确有必要的诊断豁免应限定到具体检查和最小代码范围，并就近说明原因。
 
 ## 设计文档
