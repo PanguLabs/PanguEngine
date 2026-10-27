@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 4.0)
 
-# Native host tool, not a Pangu Module or runtime library.
+# Native build tool, not a Pangu Module or runtime library.
 add_library(PanguAbiProfile STATIC
     Private/AbiProfile.cpp
     Private/CollectionRequest.cpp

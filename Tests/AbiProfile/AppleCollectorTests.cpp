@@ -1,10 +1,10 @@
-#include "../../Tools/AbiProfile/Private/AppleCollector.h"
-#include "../../Tools/AbiProfile/Private/CollectionRequest.h"
-#include "../../Tools/AbiProfile/Private/CompileCommands.h"
-#include "../../Tools/AbiProfile/Private/HeaderTrace.h"
-#include "../../Tools/AbiProfile/Private/Process.h"
-#include "../../Tools/AbiProfile/Private/ToolIo.h"
-#include "../../Tools/AbiProfile/Private/ToolReport.h"
+#include "../../BuildTools/AbiProfile/Private/AppleCollector.h"
+#include "../../BuildTools/AbiProfile/Private/CollectionRequest.h"
+#include "../../BuildTools/AbiProfile/Private/CompileCommands.h"
+#include "../../BuildTools/AbiProfile/Private/HeaderTrace.h"
+#include "../../BuildTools/AbiProfile/Private/Process.h"
+#include "../../BuildTools/AbiProfile/Private/ToolIo.h"
+#include "../../BuildTools/AbiProfile/Private/ToolReport.h"
 
 #include <algorithm>
 #include <cstddef>

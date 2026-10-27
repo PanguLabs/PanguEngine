@@ -314,8 +314,8 @@ Result<CompileObservation> InspectAppleCompileInputs(const CollectionRequest& re
     {
         return std::unexpected(report.Add(ToolError::kInvalidProfile, "apple_compiler_resources"));
     }
-    const auto probe = request.SourceRoot / "Tools/AbiProfile/Probe/AppleLibcxx.cpp";
-    const auto witness = request.SourceRoot / "Tools/AbiProfile/Probe/PosixRuntimeWitness.cpp";
+    const auto probe = request.SourceRoot / "BuildTools/AbiProfile/Probe/AppleLibcxx.cpp";
+    const auto witness = request.SourceRoot / "BuildTools/AbiProfile/Probe/PosixRuntimeWitness.cpp";
     if (!Required(probe, report) || !Required(witness, report))
     {
         return std::unexpected(report.Add(ToolError::kInvalidProfile, "apple_probe_files"));

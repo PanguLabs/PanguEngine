@@ -336,8 +336,8 @@ Result<CompileObservation> InspectWindowsCompileInputs(const CollectionRequest& 
     {
         return std::unexpected(resourceDir.error());
     }
-    const auto probe = request.SourceRoot / "Tools/AbiProfile/Probe/Windows.cpp";
-    const auto witness = request.SourceRoot / "Tools/AbiProfile/Probe/RuntimeWitness.cpp";
+    const auto probe = request.SourceRoot / "BuildTools/AbiProfile/Probe/Windows.cpp";
+    const auto witness = request.SourceRoot / "BuildTools/AbiProfile/Probe/RuntimeWitness.cpp";
     const std::array knownInputs{probe, witness};
     const auto ownership = ObservationWork::Acquire(request, units, knownInputs, "windows_probe_failed", report);
     if (!ownership)

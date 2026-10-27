@@ -21,7 +21,7 @@
 - [x] **A：R1/R2，状态与输入保护。** 修改 CollectionState/CollectionRequest 及状态、请求、组测试；核验真实 archive；统一辅助输出别名；保留请求文件身份。同时完成环境基线 null 的 C++ 读取/比较支持，供 D 的 Root 回归使用。
 - [x] **B：R3/R4/R8，libc++ 后端。** 修改 Linux/Apple/Android Collector、HeaderTrace/Probe 及对应测试；覆盖源内 ABI 控制宏、未支持的 ABI 参数和实际关键 Header 路径。先核验 R8 的实际 overlay 行为再确定拒绝测试。不要修改 Windows Collector 或各后端 Execute 的诊断职责。
 - [x] **C：R6/R7，Windows。** 分别传播 banner/resource 查询失败，拒绝实际 COFF 对象中冲突 CRT 指令；补真实资源查询失败和 CRT pragma 回归。不得改变合法最终 Host 未定义符号行为。
-- [x] **D：R9/R10，生产环境与 Host 自举。** Root 请求捕获相关环境及 unset 状态；Host 清理目标 toolchain 环境并处理受污染缓存；补真实 Root/Host 回归，验证只改环境也能使完成状态失效。
+- [x] **D：R9/R10，生产环境与 构建工具 Bootstrap。** Root 请求捕获相关环境及 unset 状态；Host 清理目标 toolchain 环境并处理受污染缓存；补真实 Root/Host 回归，验证只改环境也能使完成状态失效。
 - [x] **E：R5，失败诊断。** 等 B/C Collector 编辑结束后实现统一的工具私有有界探针诊断，保留失败阶段、真实退出码及输出；stdout 仍保留正式失败报告 JSON 的接口。以实际 compile wrapper 的 #error 回归验证四后端。
 - [x] **F：macOS 进程测试。** 查明 1000ms 断言包含哪些调度/启动阶段；采用能验证取消、清理及有限上界的确定性同步，不能直接以盲目重跑或放宽阈值掩盖问题。
 - [x] **G：复审与验收。** 每组独立复审，处理有效阻断项；最终三桌面完整 CTest、Android/iOS 宿主采集及目标归档验证；针对改动执行 format/tidy、diff 检查并更新原报告/计划。仅在实际通过后关闭 Task12。
@@ -31,7 +31,7 @@
 1. 真实重编译后跳过归档、首次使用不匹配归档、重复成员名和技术 SCC 仍不能错误发布。
 2. 请求文件与辅助状态文件/保留目录、SignatureHeader 与源文件的别名都在写入前拒绝。
 3. 源内 libc++ 宏、位域/ABI 模式及 Header overlay 不得同默认 Profile 混同，普通业务宏仍允许。
-4. 环境 unset/空值/新值、Host toolchain 环境与旧缓存都需要真实生产接线覆盖。
+4. 环境 unset/空值/新值、Build toolchain 环境与旧缓存都需要真实生产接线覆盖。
 5. 编译错误诊断不污染 stdout JSON；进程取消回归必须证明子进程已启动和被清理，避免调度时序假失败。
 
 ## 执行记录

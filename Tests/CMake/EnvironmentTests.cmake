@@ -1,4 +1,4 @@
-# Verify that missing host toolchain environment is rejected before compiler probing.
+# Verify that missing build toolchain environment is rejected before compiler probing.
 if(NOT DEFINED PANGU_SOURCE_ROOT)
     message(FATAL_ERROR "PANGU_SOURCE_ROOT must be supplied to the test.")
 endif()

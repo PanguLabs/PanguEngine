@@ -1,13 +1,15 @@
 # PanguAbiProfileTool — ABI Profile v1 采集与编码工具（Build-Time）
 
-> 实现状态：五平台受管 STATIC Module 的 ABI Collection 已完成（2026-10-27），Task 1—12 和追加评审修复均已独立复审通过。最近一次完整 CTest 为 Windows **36/36**、Linux **34/34**、macOS **34/34**，合计 **104/104**；Android/iOS ARM64 及 Windows Debug MD/Release MT 的构建、Host 采集和增量验证通过。详见[计划与验收状态](../../docs/superpowers/plans/2026-10-23-abi-collection.md)。追加修复与文档已按用户授权通过 amend 合入同一提交，未推送；最终 EXE/SHARED Loader 不在本轮范围。
+> 实现状态：五平台受管 STATIC Module 的 ABI Collection 已完成（2026-10-27），Task 1—12 和追加评审修复均已独立复审通过。该阶段验收的完整 CTest 为 Windows **36/36**、Linux **34/34**、macOS **34/34**，合计 **104/104**；Android/iOS ARM64 及 Windows Debug MD/Release MT 的构建、宿主采集和增量验证通过。详见[计划与验收状态](../../docs/superpowers/plans/2026-10-23-abi-collection.md)。该阶段修复与文档已按用户授权通过 amend 合入同一提交，未推送；最终 EXE/SHARED Loader 不在该阶段范围。
 
-本工具由 CMake 在当前宿主的独立 Host BuildRoot 编译并发布，通过 `cmake/HostTools.cmake` 获得可执行程序路径（目标平台构建目录不直接执行 Host 工具）。依赖固定于 `Source/ThirdParty/NlohmannJson/Repo` submodule 的 nlohmann/json v3.12.0 正式发布版，构建前需初始化 submodule；仅包含工具代码和测试，不构成新的 Pangu Runtime Module。
+2026-10-27 的 Tools/BuildTools 分类迁移另行完成了三桌面平台构建与 CTest，以及 Android/iOS ARM64 构建验证；包括权限重跑、macOS 单项首轮失败及重跑情况的完整记录见[目录迁移计划](../../docs/superpowers/plans/2026-10-27-build-tools-layout.md)。
+
+本工具属于根目录 `BuildTools/` 下的构建工具，与 `Tools/` 中的普通开发工具区分。CMake 通过 `cmake/BuildTools.cmake` 和 `Bootstrap/CMakeLists.txt`，在当前宿主的独立构建树中编译并发布工具，随后取得已发布的可执行程序路径。Windows 工具根目录为 `Build/BuildTools/Windows/`，Linux/macOS 为 `$HOME/PanguEngineBuild/BuildTools/<HostPlatform>/`；详见 [BuildTools 说明](../README.md)。依赖固定于 `Source/ThirdParty/NlohmannJson/Repo` submodule 的 nlohmann/json v3.12.0 正式发布版，构建前需初始化 submodule；工具不构成新的 Pangu Runtime Module。
 
 原有四参数编码模式保持兼容。输入可使用正式 C++ 采集生成的 `profile.json`；手工 JSON 仅用于算法诊断，不能冒充真实构建配置：
 
 ```sh
-<HostToolPath>/PanguAbiProfileTool[.exe] \
+<BuildToolPath>/PanguAbiProfileTool[.exe] \
   wiki/foundation/abi-profile-v1.schema.json \
   <validated-input-profile.json> \
   <BuildRoot>/AbiProfile.canonical.json \
@@ -24,7 +26,7 @@
 
 **四参数编码模式的边界**：仅核验声明的 Profile JSON 内容格式和 Digest，不独立证明声明来源。正式五平台 C++ 构建流程另外核验当前构建的编译收据、对象归档和依赖闭包；仍不能证明最终 EXE/SHARED Loader 的可信绑定、TOCTOU 防护或动态加载后的复核，不得据此放行生产 SHARED Loader。
 
-此工具刻意作为 Host 原生程序而非 Android/iOS 目标程序构建运行；交叉编译情形由 Windows/macOS Host 工具读取目标编译产物并采集受控 Profile。
+此工具刻意作为 Host 原生程序而非 Android/iOS 目标程序构建运行；交叉编译情形由 Windows/macOS 构建工具读取目标编译产物并采集受控 Profile。
 
 ## 统一五平台 ABI Collection
 
@@ -34,7 +36,7 @@
 - CMake 导出每配置的实际 Target 及链接事实，利用 `TRANSITIVE_LINK_PROPERTIES` 安排经 `INTERFACE`、条件 Generator Expression 选中的技术库先完成。依赖分类、严格传递闭包、ABI 比较、SCC 分组和组封口由 C++ `DependencyGraph` 与 `CollectionState` 负责，不在 CMake 中重新实现。
 - 统一 CLI：`PanguAbiProfileTool guard --request <request.json>`、`compile --request <request.json> -- <compiler args...>`、`collect --request <request.json>`、`invalidate --request <request.json>`；另有内部 `guard-technical` / `collect-technical` 命令。原有四参数纯编码模式兼容，但不会发布可信构建完成记录。
 - 所有受管 Target 的 ABI 输出统一为 `<BuildRoot>/Abi/<Config>/<Target>/`。CMake 生成 `request.json`、`objects.txt`、`inputs.h`，编译器 Launcher 发布 TU 实际编译收据；采集成功后发布 `evidence.json`、`profile.json`、`canonical.json`、`fingerprint.sha256`，最终发布 `complete.json`。技术 STATIC SCC 在组首成员目录额外发布 `group-complete.json`。
-- Host 工具由 `cmake/HostTools.cmake` 在对应宿主环境单独构建与运行。Android 使用 Windows Host 工具，iOS 使用 macOS Host 工具；不在交叉目标上执行 Host 采集工具。
+- 构建工具由 `cmake/BuildTools.cmake` 在对应宿主环境单独构建与运行。Android 使用 Windows 构建工具，iOS 使用 macOS 构建工具；不在交叉目标上执行 Host 采集工具。
 - 既有对象如果缺少完整且匹配的真实编译收据，Guard 会 Fail Closed。不要伪造或覆盖收据，需使用新的独立 BuildRoot 重新构建。
 - 观测通过 VFS 将 Probe 附加到真实顶层 Source，保留 `__INCLUDE_LEVEL__`、`__BASE_FILE__`、相对包含及源文件时间语义；Windows 同时检查源/头内 STL ABI 控制和实际 COFF iterator/CRT 指令。
 - 每次观测使用原子新建的私有 `work/.observation-*` 输出区，完成后清理；证据只规范化实际生成路径，真实 Header/运行库等输入保持原始路径及身份。目标观测锁不覆盖真实编译过程，多 TU 可以并行编译。
@@ -105,4 +107,4 @@ CMake 导出的只有 Target 类型、IMPORTED/受管身份、当前配置求值
 
 **生产构建接线（已完成）**：CMake 为每个成员生成现有 schema 2 请求、精确对象清单和编译数据库，在共享依赖图中导出完整成员的 `request_file` / `PANGU_ABI_REQUEST_FILE`。编译经过现有 `compile --request ... -- <compiler argv>` 生成真实收据；所有成员归档完成后，对该 SCC 任一成员调用一次 `collect --request`。组外依赖按 `CollectionGroups` 先完成，普通 Module 的 Guard 顺序由生产 CMake 接线保证。私有 C++ `BeginCollectionTransaction` / `CollectionTransaction::Publish` 覆盖采集全程持锁；`PublishCollectionGroup` 支持已准备好的组输入，仍核验来源与相容性。`AbiCollectionGroup` 用真实 Clang 和归档覆盖首次采集、缓存、部分发布/封口失败、跨成员输入/收据漂移、取消与实际不兼容编译参数。
 
-**安全边界**：Host 自举和 Root 自动请求/Launcher/Guard/Collect 已接入生产 STATIC Module；Android/iOS 验证的是目标对象和归档及 Host 采集，不执行目标端 witness。最终消费者 EXE/SHARED Loader、跨进程加载及可信发布仍未验收；`GuardCollection` 只代表当前构建内有效性，不是签名或 Loader 信任。
+**安全边界**：构建工具 Bootstrap 和 Root 自动请求/Launcher/Guard/Collect 已接入生产 STATIC Module；Android/iOS 验证的是目标对象和归档及宿主端采集，不执行目标端 witness。最终消费者 EXE/SHARED Loader、跨进程加载及可信发布仍未验收；`GuardCollection` 只代表当前构建内有效性，不是签名或 Loader 信任。

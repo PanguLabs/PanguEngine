@@ -37,13 +37,13 @@ if(NOT CMAKE_CROSSCOMPILING)
         "${CMAKE_CURRENT_BINARY_DIR}" completion-recovery)
     set_tests_properties(AbiCollectionBuildContractRecovery PROPERTIES TIMEOUT 600)
 
-    add_executable(PanguHostToolsTests HostToolsTests.cpp)
-    target_link_libraries(PanguHostToolsTests PRIVATE PanguBuildOptions PanguAbiProfile)
-    add_test(NAME AbiCollectionHostTools COMMAND PanguHostToolsTests
+    add_executable(PanguBuildToolsTests BuildToolsTests.cpp)
+    target_link_libraries(PanguBuildToolsTests PRIVATE PanguBuildOptions PanguAbiProfile)
+    add_test(NAME AbiCollectionBuildTools COMMAND PanguBuildToolsTests
         "${CMAKE_COMMAND}" "${PROJECT_SOURCE_DIR}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/HostToolsSmoke.cmake"
+        "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolsSmoke.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_CXX_COMPILER}")
-    set_tests_properties(AbiCollectionHostTools PROPERTIES TIMEOUT 600)
+    set_tests_properties(AbiCollectionBuildTools PROPERTIES TIMEOUT 600)
 endif()
 
 if(NOT CMAKE_CROSSCOMPILING)
@@ -92,7 +92,7 @@ add_executable(PanguAbiProfileTests
 
 target_link_libraries(PanguAbiProfileTests PRIVATE PanguBuildOptions PanguAbiProfile)
 target_include_directories(PanguAbiProfileTests PRIVATE
-    "${PROJECT_SOURCE_DIR}/Tools/AbiProfile/Private"
+    "${PROJECT_SOURCE_DIR}/BuildTools/AbiProfile/Private"
 )
 set_target_properties(PanguAbiProfileTests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin"
@@ -115,13 +115,13 @@ add_test(NAME JsonExtras COMMAND PanguJsonExtrasTests)
 
 add_executable(PanguAbiProfileIoTests IoTests.cpp)
 target_link_libraries(PanguAbiProfileIoTests PRIVATE PanguBuildOptions PanguAbiProfile)
-target_include_directories(PanguAbiProfileIoTests PRIVATE "${PROJECT_SOURCE_DIR}/Tools/AbiProfile/Private")
+target_include_directories(PanguAbiProfileIoTests PRIVATE "${PROJECT_SOURCE_DIR}/BuildTools/AbiProfile/Private")
 set_target_properties(PanguAbiProfileIoTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")
 add_test(NAME AbiProfileIo COMMAND PanguAbiProfileIoTests "${CMAKE_CURRENT_BINARY_DIR}")
 
 add_executable(PanguWindowsProfileTests WindowsProfileTests.cpp)
 target_link_libraries(PanguWindowsProfileTests PRIVATE PanguBuildOptions PanguAbiProfile)
-target_include_directories(PanguWindowsProfileTests PRIVATE "${PROJECT_SOURCE_DIR}/Tools/AbiProfile/Private")
+target_include_directories(PanguWindowsProfileTests PRIVATE "${PROJECT_SOURCE_DIR}/BuildTools/AbiProfile/Private")
 set_target_properties(PanguWindowsProfileTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")
 add_test(NAME AbiWindowsProfileMapping COMMAND PanguWindowsProfileTests
     "${PROJECT_SOURCE_DIR}/wiki/foundation/abi-profile-v1.schema.json")

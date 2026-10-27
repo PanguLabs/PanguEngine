@@ -19,7 +19,7 @@ Windows 是 PanguEngine 唯一源码工作区；WSL Ubuntu 和 macOS 通过 SMB 
 
 ## Alternatives
 
-- 全平台继续使用 Windows SMB：方便在 Windows 集中查看，但 Host 工具、Ninja、CTest 和 ABI 事务需要处理非原生文件身份与元数据语义。
+- 全平台继续使用 Windows SMB：方便在 Windows 集中查看，但 构建工具、Ninja、CTest 和 ABI 事务需要处理非原生文件身份与元数据语义。
 - Linux/macOS 各自复制一份源码：构建 I/O 可以全部本地化，但产生多个需要同步的工作区，违背单一源码原则。
 - 将 ext4/APFS 反向挂载为仓库下的 `Build/<Platform>`：会使不同 Host 对相同路径观察到不同文件，故不采用。
 

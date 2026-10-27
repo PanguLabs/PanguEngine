@@ -1,7 +1,7 @@
-#include "../../Tools/AbiProfile/Private/CollectionRequest.h"
-#include "../../Tools/AbiProfile/Private/CompileCommands.h"
-#include "../../Tools/AbiProfile/Private/Process.h"
-#include "../../Tools/AbiProfile/Private/ToolReport.h"
+#include "../../BuildTools/AbiProfile/Private/CollectionRequest.h"
+#include "../../BuildTools/AbiProfile/Private/CompileCommands.h"
+#include "../../BuildTools/AbiProfile/Private/Process.h"
+#include "../../BuildTools/AbiProfile/Private/ToolReport.h"
 
 #include <nlohmann/json.hpp>
 

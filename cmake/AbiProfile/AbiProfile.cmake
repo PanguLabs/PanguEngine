@@ -123,9 +123,9 @@ function(pangu_register_abi_module target)
 
     # TARGET POST_BUILD must be registered in its owning CMake directory.
     # This also preserves direct cmake --build --target <Module> semantics.
-    include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../HostTools.cmake")
-    set(PANGU_HOST_SOURCE_ROOT "${PANGU_ABI_SOURCE_ROOT}")
-    pangu_prepare_host_tools(_nativeTool)
+    include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../BuildTools.cmake")
+    set(PANGU_BUILD_TOOLS_SOURCE_ROOT "${PANGU_ABI_SOURCE_ROOT}")
+    pangu_prepare_build_tools(_nativeTool)
     set(_guard "${target}AbiGuard")
     add_custom_target("${_guard}"
         COMMAND "${_nativeTool}" guard --request "${_request}"
@@ -162,9 +162,9 @@ function(pangu_register_abi_static target)
     set_property(TARGET "${target}" PROPERTY CXX_SCAN_FOR_MODULES OFF)
     set_property(GLOBAL APPEND PROPERTY PANGU_ABI_TECH_TARGETS "${target}")
     set_property(TARGET "${target}" PROPERTY INTERFACE_PANGU_ABI_TECH_TARGETS "${target}")
-    include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../HostTools.cmake")
-    set(PANGU_HOST_SOURCE_ROOT "${PANGU_ABI_SOURCE_ROOT}")
-    pangu_prepare_host_tools(_nativeTool)
+    include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../BuildTools.cmake")
+    set(PANGU_BUILD_TOOLS_SOURCE_ROOT "${PANGU_ABI_SOURCE_ROOT}")
+    pangu_prepare_build_tools(_nativeTool)
     set_property(TARGET "${target}" PROPERTY
         CXX_COMPILER_LAUNCHER "${_nativeTool};compile;--request;${_request};--")
     target_compile_options("${target}" PRIVATE "-include" "${_output}/inputs.h")
@@ -310,9 +310,9 @@ function(pangu_finalize_abi_profiles)
     if(_technical)
         # One shared technical Guard prevents circular per-member Guard edges.
         # Each technical library remains an ordinary STATIC CMake target.
-        include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../HostTools.cmake")
-        set(PANGU_HOST_SOURCE_ROOT "${PANGU_ABI_SOURCE_ROOT}")
-        pangu_prepare_host_tools(_nativeTool)
+        include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../BuildTools.cmake")
+        set(PANGU_BUILD_TOOLS_SOURCE_ROOT "${PANGU_ABI_SOURCE_ROOT}")
+        pangu_prepare_build_tools(_nativeTool)
         set(_guardCommands)
         set(_signaturePaths)
         foreach(_module IN LISTS _managed)

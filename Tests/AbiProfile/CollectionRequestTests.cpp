@@ -1,7 +1,7 @@
-#include "../../Tools/AbiProfile/Private/CollectionRequest.h"
-#include "../../Tools/AbiProfile/Private/CollectionState.h"
-#include "../../Tools/AbiProfile/Private/ToolIo.h"
-#include "../../Tools/AbiProfile/Private/ToolReport.h"
+#include "../../BuildTools/AbiProfile/Private/CollectionRequest.h"
+#include "../../BuildTools/AbiProfile/Private/CollectionState.h"
+#include "../../BuildTools/AbiProfile/Private/ToolIo.h"
+#include "../../BuildTools/AbiProfile/Private/ToolReport.h"
 #include <nlohmann/json.hpp>
 
 #include <array>

@@ -1,11 +1,11 @@
-#include "../../Tools/AbiProfile/Private/CollectionRequest.h"
-#include "../../Tools/AbiProfile/Private/CollectionState.h"
-#include "../../Tools/AbiProfile/Private/CompileCommands.h"
-#include "../../Tools/AbiProfile/Private/HeaderTrace.h"
-#include "../../Tools/AbiProfile/Private/LinuxCollector.h"
-#include "../../Tools/AbiProfile/Private/Process.h"
-#include "../../Tools/AbiProfile/Private/ToolIo.h"
-#include "../../Tools/AbiProfile/Private/ToolReport.h"
+#include "../../BuildTools/AbiProfile/Private/CollectionRequest.h"
+#include "../../BuildTools/AbiProfile/Private/CollectionState.h"
+#include "../../BuildTools/AbiProfile/Private/CompileCommands.h"
+#include "../../BuildTools/AbiProfile/Private/HeaderTrace.h"
+#include "../../BuildTools/AbiProfile/Private/LinuxCollector.h"
+#include "../../BuildTools/AbiProfile/Private/Process.h"
+#include "../../BuildTools/AbiProfile/Private/ToolIo.h"
+#include "../../BuildTools/AbiProfile/Private/ToolReport.h"
 
 #include <nlohmann/json.hpp>
 
@@ -102,9 +102,9 @@ int main(int argc, char* const argv[])
     // Known probe inputs and headers used only by the runtime witness must
     // be protected before any observation output is written. The aliases live
     // outside work; the target files inside work are ordinary single-link files.
-    const auto probeText = pg::abi::ReadFile(root / "Tools/AbiProfile/Probe/Libcxx.cpp", "boundary_probe", report);
+    const auto probeText = pg::abi::ReadFile(root / "BuildTools/AbiProfile/Probe/Libcxx.cpp", "boundary_probe", report);
     const auto witnessText =
-        pg::abi::ReadFile(root / "Tools/AbiProfile/Probe/PosixRuntimeWitness.cpp", "boundary_witness", report);
+        pg::abi::ReadFile(root / "BuildTools/AbiProfile/Probe/PosixRuntimeWitness.cpp", "boundary_witness", report);
     if (!probeText || !witnessText)
     {
         return 1;
@@ -117,7 +117,7 @@ int main(int argc, char* const argv[])
         guarded.SourceRoot = fixture / "Sources";
         guarded.OutputDirectory = fixture / "Abi";
         guarded.SignatureHeader = guarded.OutputDirectory / "inputs.h";
-        const auto probes = guarded.SourceRoot / "Tools/AbiProfile/Probe";
+        const auto probes = guarded.SourceRoot / "BuildTools/AbiProfile/Probe";
         const auto work = guarded.OutputDirectory / "work";
         std::filesystem::create_directories(probes, error);
         std::filesystem::create_directories(work, error);

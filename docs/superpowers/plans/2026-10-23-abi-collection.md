@@ -7,7 +7,7 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 普通 STATIC Module Target 构建成功时，目标库、完整 v1 Profile 和构建内完成记录同时有效；五个平台使用同一 C++ 采集流程。
-**Architecture:** 独立 Host bootstrap 提供只读版本化工具；CMake 导出真实对象、配置与链接依赖，仅负责构建接线。C++ 工具拥有编译记录、采集、Guard、依赖检查和发布。平台后端解释实际编译器/STL/SDK/运行库证据。
+**Architecture:** 独立 Build tool bootstrap 提供只读版本化工具；CMake 导出真实对象、配置与链接依赖，仅负责构建接线。C++ 工具拥有编译记录、采集、Guard、依赖检查和发布。平台后端解释实际编译器/STL/SDK/运行库证据。
 **Tech Stack:** C++23、Clang（Android 使用所选 NDK Clang）、CMake 4.0+、Ninja、现有 nlohmann/json、CTest、各平台 SDK/LLVM 二进制检查工具。
 **Spec:** [已批准设计](../specs/2026-10-23-abi-collection.md)，实现基线 `dbfe7aa`；冻结协议以 `wiki/foundation/abi-profile-fingerprint.md` 为准。
 
@@ -36,7 +36,7 @@
 ### 修复前独立补审：Needs fixes（历史记录）
 
 - 使用 `superpowers:requesting-code-review` 派发三个独立上下文的只读审查者，已补齐 **Task 4—8、10—12** 的独立评审；Task 1—3、9 保留已有独立评审记录。
-- **Spec: Issues；Quality: Needs fixes；没有累计 Approval。** 共 10 项 Important，其中 8 项已由隔离探针复现，另外 2 项为静态审查结论。包括旧归档与新对象收据错配、辅助输出覆盖请求、libc++ ABI 宏和位域参数漏检、诊断丢失、冲突 CRT、环境基线缺失及 Host toolchain 环境污染。逐 Task 结论与复现证据保留在本地审查记录中。
+- **Spec: Issues；Quality: Needs fixes；没有累计 Approval。** 共 10 项 Important，其中 8 项已由隔离探针复现，另外 2 项为静态审查结论。包括旧归档与新对象收据错配、辅助输出覆盖请求、libc++ ABI 宏和位域参数漏检、诊断丢失、冲突 CRT、环境基线缺失及 Build toolchain 环境污染。逐 Task 结论与复现证据保留在本地审查记录中。
 - 本轮新验证：Windows 全量 29/31（Android 两项受沙箱启动限制），允许 NDK 执行后原范围 2/2 通过；Linux 全量 29/29；macOS 全量 28/29（取消耗时断言），该项单独连续三次通过。**不能将本轮写成新的 89/89 全量通过。**
 - 本轮仅补审及更新记录，未修复生产源码；Task 4—8、10—11 的实施记录保留，但当前评审结论为待修复。**Task 12 仍未完成，剩余门禁已从缺少 Reviewer 转为解决审查阻断项并获复审批准。** 未提交、未推送、未操作 index。
 
@@ -69,7 +69,7 @@
 - 允许 STATIC 中仅由最终宿主提供的符号；最小运行库探针不强制链接全部 Module 对象，不运行 Android/iOS 目标程序。
 - 每次执行轻量 Guard；ABI 输入变化后完成必要重建，或明确失败，禁止给旧对象套用新 Profile。
 - 构建内内容关联不等于 Loader 信任；不实施签名、TOCTOU、防不可信 SDK 或生产 SHARED 装载。
-- Host 工具自动准备、独立 Release 配置；并发构建同代单写，发布后只读；不复制引擎源码到 Mac 临时目录。
+- 构建工具自动准备、独立 Release 配置；并发构建同代单写，发布后只读；不复制引擎源码到 Mac 临时目录。
 - 修改 C++ 前遵守仓库 C++ 规范；新改 CMakeLists 使用 `cmake_minimum_required(VERSION 4.0)`。临时探针放 `.probe/`，正式回归放 `Tests/`。
 - Git 提交/推送仅在用户明确授权后执行，不为技能中的提交步骤自行操作 index 或创建提交。本次用户已授权提交并 amend 至原 `9561fe6`，未授权推送。
 
@@ -98,7 +98,7 @@
 | `Private/AppleCollector.h/.cpp` | 共享 Apple 采集，区分 macOS 与 iOS Target |
 | `Private/AndroidCollector.h/.cpp` | NDK/目标 API/Android libc++/ELF 证据 |
 | `Private/DependencyGraph.h/.cpp` | 真实链接闭包、分类、SCC、严格相容与导入库拒绝 |
-| `Tools/AbiProfile/Host/CMakeLists.txt`、`cmake/HostTools.cmake` | 最小 Host bootstrap 与版本化工具发布接线 |
+| `BuildTools/AbiProfile/Bootstrap/CMakeLists.txt`、`cmake/BuildTools.cmake` | 最小 Build tool bootstrap 与版本化工具发布接线 |
 | `cmake/AbiProfile/AbiProfile.cmake` | 注册、元数据导出、Guard/编译记录/完成规则；取代原四份执行脚本 |
 
 ### 共同数据与签名
@@ -131,7 +131,7 @@ CompileDigest 只描述影响对象生成的实际 argv、源/Header、编译器
 
 ## 任务依赖
 
-1 → 2/3 → 4 → 5 → 6/7/8；9 消费 1/3/4/5；10 消费已能独立运行的 Host 工具；11 消费 5—10；12 验收全部。
+1 → 2/3 → 4 → 5 → 6/7/8；9 消费 1/3/4/5；10 消费已能独立运行的 构建工具；11 消费 5—10；12 验收全部。
 后端可以交给独立实现者，但共享 Dispatcher/CMake 修改按任务交接，不能同时编辑同一文件。
 
 ### Task 1：私有协议与编码边界
@@ -226,22 +226,22 @@ CompileDigest 只描述影响对象生成的实际 argv、源/Header、编译器
 **Files:** 新建 DependencyGraph 两文件、`Tests/AbiProfile/DependencyGraphTests.cpp`、`Tests/AbiProfile/Fixtures/CMakeLists.txt` 和最小 Sources；新增 `cmake/AbiProfile/AbiProfile.cmake` 的元数据导出部分，暂不切换根接线。
 **Interfaces:** `Result<DependencyGraph> ReadDependencyGraph(const CollectionRequest&, FailureReport&)`、`Result<DependencyPlan> PlanDependencies(const DependencyGraph&, std::string_view rootTarget, FailureReport&)`；DependencyPlan 保留选择后的直接关系、遍历目标、技术 SCC、原始链接项次序。
 
-- [x] **RED**：注册 `AbiCollectionDependencyGraph`。覆盖 Alias、PRIVATE/PUBLIC/INTERFACE、`LINK_ONLY`、当前配置条件、菱形链、技术 A↔B 环、包含 managed Module 的环、普通 IMPORTED 即使附 Profile/SHA 也拒绝；Host 工具执行依赖不误作 Target C++ 链接依赖。
+- [x] **RED**：注册 `AbiCollectionDependencyGraph`。覆盖 Alias、PRIVATE/PUBLIC/INTERFACE、`LINK_ONLY`、当前配置条件、菱形链、技术 A↔B 环、包含 managed Module 的环、普通 IMPORTED 即使附 Profile/SHA 也拒绝；构建工具执行依赖不误作 Target C++ 链接依赖。
 - [x] CMake 4.0 兼容导出夹具验证真实链接关系。File API 的 dependencies 是 build graph，不能用它恢复全部 link graph；旧版本也不完整列出 INTERFACE/IMPORTED。CMake 导出原始/按配置求值的链接项、Target 类别、Alias/作用域及生成源事实，C++ 做分类/遍历/检查。
 - [x] 不依赖 CMake4.1 起 LINK_LIBRARIES 自动传递的新行为；支持的表达式交由 CMake 求值，不能由 C++ 猜测。无法导出的表达式/外部裸库明确拒绝，不忽略后继续成功。
 - [x] **GREEN**：技术 SCC 只分组采集，不为各技术库添加互等 Profile Targets；严格检查所有可达 C++ STATIC，平台 CRT/SDK 后端单列，未知 C/SHARED/外部 C++ 边界拒绝。
 - [x] Runtime witness 不强拼所有归档或改变真实链接顺序；数据中仍保存必要重复项。使用各目标已验证 Profile 逐字段报告差异，不能只报两个 digest 不同。
 - [x] 图单测及真实 CMake 夹具通过，明确证明相反配置下条件依赖不会被错误合并成环。
 
-### Task 10：Host bootstrap 与并发只读发布
+### Task 10：Build tool bootstrap 与并发只读发布
 
-**Files:** 新建 `Tools/AbiProfile/Host/CMakeLists.txt`、`cmake/HostTools.cmake`、`Tests/AbiProfile/HostToolsTests.cpp`；按需要调整工具 CMake 以复用 Source 列表。
-**Interfaces:** `pangu_prepare_host_tools(outExecutable)` 返回已完成且不可变的 native 工具路径；Host 阶段无 Target Profile 完成规则。
+**Files:** 新建 `BuildTools/AbiProfile/Bootstrap/CMakeLists.txt`、`cmake/BuildTools.cmake`、`Tests/AbiProfile/BuildToolsTests.cpp`；按需要调整工具 CMake 以复用 Source 列表。
+**Interfaces:** `pangu_prepare_build_tools(outExecutable)` 返回已完成且不可变的 native 工具路径；Host 阶段无 Target Profile 完成规则。
 
-- [x] **RED**：注册 `AbiCollectionHostTools`。从无工具目录开始准备；Root Target Debug/MT、Android NDK 或 iOS Sysroot 不泄漏到 Host Release；两个配置进程并行准备同代只构建一次；旧工具正在使用时新版本发布不覆盖它。
-- [x] **GREEN**：使用同份 Source、独立 CMake 项目和 `Build/Host/<HostPlatform>/`。允许在根配置阶段完成增量 Host 准备并返回固定路径；为源/头文件/配置/Host 工具链登记正确的重新配置依赖。这属于构建自举，不在 CMake 实现 ABI 判断。
-- [x] 锁保护构建区；验证成功后按身份/内容发布独立工具版本，之后只读。可以复制生成的工具二进制，不能复制引擎源码。Host 工具由 Host Foundation 支持，不链接 Target Foundation。
-- [x] Root native 的既有编码工具/辅助实现库可继续服务四参数 CLI 与 native 单测；正式采集统一使用发布的 Host 工具，不因此形成 Root Foundation→Root Tool→Root Foundation 环。
+- [x] **RED**：注册 `AbiCollectionBuildTools`。从无工具目录开始准备；Root Target Debug/MT、Android NDK 或 iOS Sysroot 不泄漏到 Host Release；两个配置进程并行准备同代只构建一次；旧工具正在使用时新版本发布不覆盖它。
+- [x] **GREEN**：使用同份 Source 和独立 CMake 项目；Windows 工具根目录为 `${sourceDir}/Build/BuildTools/Windows/`，Linux/macOS 使用宿主本地 `$HOME/PanguEngineBuild/BuildTools/<HostPlatform>/`。允许在根配置阶段完成增量构建工具准备并返回固定路径；为源/头文件/配置/宿主工具链登记正确的重新配置依赖。这属于构建自举，不在 CMake 实现 ABI 判断。
+- [x] 锁保护构建区；验证成功后按身份/内容发布独立工具版本，之后只读。可以复制生成的工具二进制，不能复制引擎源码。构建工具由 Host Foundation 支持，不链接 Target Foundation。
+- [x] Root native 的既有编码工具/辅助实现库可继续服务四参数 CLI 与 native 单测；正式采集统一使用发布的 构建工具，不因此形成 Root Foundation→Root Tool→Root Foundation 环。
 - [x] Windows 验证 Windows/Android 并行场景；macOS 验证 macOS/iOS；缺少 Host 环境、构建失败、发布失败均明确诊断，没有可误用的新 ready 版本。
 
 ### Task 11：普通 Module Target 强保证与删除旧脚本
@@ -251,7 +251,7 @@ CompileDigest 只描述影响对象生成的实际 argv、源/Header、编译器
 
 - [x] **RED**：注册 `AbiCollectionBuildContract`。只执行 `cmake --build <fixture> --target FixtureModule`；断言库、完成记录及所引用 Profile 同代有效。复现基线单 Target 只失效不采集的问题，再观察 GREEN。
 - [x] 增加真实 DAG `FixtureModule→BaseModule`：Base 改动后，Fixture 未重新归档也必须检查新依赖状态；不相容时失败，不能因 Fixture 的 POST_BUILD 没运行而漏检。
-- [x] **GREEN**：Host 工具先就绪；每 Module 的轻量 Guard 在必要代码生成与选定依赖完成后运行，再允许本目标编译。依赖顺序使用 CMake 当前配置实际选择的 Target；不对可变 JSON 做 CMake ABI 判定。
+- [x] **GREEN**：构建工具先就绪；每 Module 的轻量 Guard 在必要代码生成与选定依赖完成后运行，再允许本目标编译。依赖顺序使用 CMake 当前配置实际选择的 Target；不对可变 JSON 做 CMake ABI 判定。
 - [x] Guard 对选定依赖的完成有真实的构建顺序保证，不能先读取旧的依赖记录再让依赖重建；条件依赖只选当前配置，不能把 Debug/Release 的边合并成伪环。技术库无独立互等 Guard，由消费 Module 分组验证。
 - [x] 将 per-Target `inputs.h` 作为 PRIVATE 强制包含的纯注释依赖，不用全局 Source OBJECT_DEPENDS 造成同源多 Target 串扰；实际 compiler launcher 提交对象来源记录。输入变更时更新该依赖以触发重编译，collect 核对来源记录与实际对象；无法可靠重建则失败并提示 clean/reconfigure。
 - [x] 每次真正编译须绑定当前编译代际，即使新旧 object 字节相同也以本次成功收据确认来源；不可由 object mtime 或 digest 变化单独推断“编译过”。异常替换/缺失收据可要求干净重建，不能暗中在采集步骤重编译或修补归档来绕过 CMake。
@@ -271,7 +271,7 @@ CompileDigest 只描述影响对象生成的实际 argv、源/Header、编译器
 - [x] 对本轮 C++ 使用仓库 clang-format/clang-tidy，优先实际编译数据库；非独立 Probe 记录最小上下文检查限制；必要时选择支持的 ASan/UBSan 做本工具内存/解析检查，不扩展为全引擎验收。
 - [x] 同路径内容替换、环境漂移、并发 Host 发布、最终 Host 未解析符号和技术环的结果逐项记录；说明 Profile 完整与 Loader 未完成的界限。
 - [x] 旧 `cmake/AbiProfile/`、Windows 专用根入口和执行脚本引用均不存在；工具/普通库 Target 命名遵守既有边界，正式测试数量以本轮实际输出报告。
-- [x] 同步稳定结论到 wiki，将已实施的 STATIC ABI Collection 与未实现的最终 Loader 范围分开；`git diff --check` 与 `git diff --cached --check` 均通过。复审补齐 Host 工具 Probe 输入 SHA 跟踪，三宿主 HostTools CTest 与五平台 fresh Module 构建已验证。没有新授权不提交或推送。
+- [x] 同步稳定结论到 wiki，将已实施的 STATIC ABI Collection 与未实现的最终 Loader 范围分开；`git diff --check` 与 `git diff --cached --check` 均通过。复审补齐 构建工具 Probe 输入 SHA 跟踪，三宿主 BuildTools CTest 与五平台 fresh Module 构建已验证。没有新授权不提交或推送。
 - [x] 累积变更集的**独立 Reviewer** 完成 Spec 与 Code Quality 双轴审查后交付最终 Approval；2026-10-26 R1—10 修复及独立复审通过，2026-10-27 追加修复及独立复审通过，最近一次完整三桌面 CTest 为 **104/104**，移动端/CRT 矩阵通过，Task 12 完成。最终验收汇总见本计划最新执行进度。
 
 ## 自审与交接

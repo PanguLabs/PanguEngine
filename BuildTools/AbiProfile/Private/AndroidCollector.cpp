@@ -298,8 +298,8 @@ Result<CompileObservation> InspectAndroidCompileInputs(const CollectionRequest& 
     {
         return std::unexpected(report.Add(ToolError::kInvalidProfile, "android_unverified_clang_version"));
     }
-    const auto probe = request.SourceRoot / "Tools/AbiProfile/Probe/AndroidLibcxx.cpp";
-    const auto witness = request.SourceRoot / "Tools/AbiProfile/Probe/PosixRuntimeWitness.cpp";
+    const auto probe = request.SourceRoot / "BuildTools/AbiProfile/Probe/AndroidLibcxx.cpp";
+    const auto witness = request.SourceRoot / "BuildTools/AbiProfile/Probe/PosixRuntimeWitness.cpp";
     if (!Required(probe, report) || !Required(witness, report))
     {
         return std::unexpected(report.Add(ToolError::kInvalidProfile, "android_missing_probes"));

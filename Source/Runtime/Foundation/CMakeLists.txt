@@ -4,7 +4,7 @@ add_library(PanguFoundation STATIC
 
 add_library(Pangu::Foundation ALIAS PanguFoundation)
 pangu_configure_module(PanguFoundation)
-# Host bootstrap reuses this Foundation implementation without Target ABI hooks.
+# Build tool bootstrap reuses this Foundation implementation without Target ABI hooks.
 if(COMMAND pangu_register_abi_module)
     pangu_register_abi_module(PanguFoundation)
 endif()

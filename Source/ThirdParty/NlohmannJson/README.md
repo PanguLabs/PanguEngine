@@ -32,7 +32,7 @@ git submodule update --init --recursive
 
 - 声明层头文件只引用 JSON 类型时使用 `<nlohmann/json_fwd.hpp>`；
   实际解析/访问 JSON 的 `.cpp` 包含 `<nlohmann/json.hpp>`。
-  `Tools/AbiProfile/Private/AbiProfile.h` 已这样处理，核心算法放在 `.cpp`。
+  [BuildTools/AbiProfile/Private/AbiProfile.h](../../../BuildTools/AbiProfile/Private/AbiProfile.h) 已这样处理，核心算法放在 `.cpp`。
 - CMake 定义 `JSON_USE_GLOBAL_UDLS=0`，禁止把 JSON 字面量操作符引入全局命名空间。
   v3.12.0 的字面量定义由 `<nlohmann/json.hpp>` 提供，仅在需要的局部作用域中
   `using namespace nlohmann::literals;`。

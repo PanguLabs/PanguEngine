@@ -20,7 +20,7 @@ add_subdirectory(Source/Runtime/Module)
 
 # AbiProfile is a host-side tool; mobile cross builds do not execute it.
 if(NOT CMAKE_CROSSCOMPILING)
-    add_subdirectory(Tools/AbiProfile)
+    add_subdirectory(BuildTools/AbiProfile)
 endif()
 
 # Finalize the resolved current-configuration C++ dependency graph after all

@@ -272,8 +272,8 @@ Result<CompileObservation> InspectLinuxCompileInputs(const CollectionRequest& re
     {
         return std::unexpected(banner.error());
     }
-    const auto probe = request.SourceRoot / "Tools/AbiProfile/Probe/Libcxx.cpp";
-    const auto witness = request.SourceRoot / "Tools/AbiProfile/Probe/PosixRuntimeWitness.cpp";
+    const auto probe = request.SourceRoot / "BuildTools/AbiProfile/Probe/Libcxx.cpp";
+    const auto witness = request.SourceRoot / "BuildTools/AbiProfile/Probe/PosixRuntimeWitness.cpp";
     const std::array knownInputs{probe, witness};
     const auto ownership = ObservationWork::Acquire(request, units, knownInputs, "linux_probe_exit", report);
     if (!ownership)

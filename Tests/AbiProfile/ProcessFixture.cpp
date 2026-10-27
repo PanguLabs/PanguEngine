@@ -1,5 +1,5 @@
-#include "../../Tools/AbiProfile/Private/Process.h"
-#include "../../Tools/AbiProfile/Private/ToolReport.h"
+#include "../../BuildTools/AbiProfile/Private/Process.h"
+#include "../../BuildTools/AbiProfile/Private/ToolReport.h"
 
 #include <atomic>
 #include <chrono>

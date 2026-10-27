@@ -48,6 +48,10 @@ add_library(ThirdParty::NlohmannJson ALIAS ThirdPartyNlohmannJson)
 
 ## 当前正式构建目录
 
+普通开发、维护和诊断工具源码位于根目录 `Tools/`；正式构建依赖的工具源码位于 `BuildTools/`，当前包含 `BuildTools/AbiProfile/`。`BuildTools` 表示构建职责，`Bootstrap` 表示准备这些工具的过程，与运行时 `EngineHost` 区分。构建关系仍由 CMake 维护，不引入新的构建内核。
+
+`cmake/BuildTools.cmake` 通过 `pangu_prepare_build_tools()` 调用 `BuildTools/AbiProfile/Bootstrap/CMakeLists.txt`，独立生成并发布宿主本机工具。Windows 使用 `${sourceDir}/Build/BuildTools/Windows/`，Linux/macOS 使用 `$HOME/PanguEngineBuild/BuildTools/<HostPlatform>/`；每个根目录包含 `build/`、`staging/` 和 `published/<输入哈希>/`。目标平台构建使用已发布工具的确定路径，工具编译配置与目标配置隔离。完整说明见 [BuildTools](../../BuildTools/README.md)。
+
 正式构建输出**按宿主文件系统隔离**：Windows/Android 使用 Windows NTFS；WSL Linux 使用 ext4；macOS/iOS 使用 macOS APFS。源码仍为 Windows 上唯一工作区，Linux 与 macOS 直接从 SMB 挂载读取同一份源码；不再要求正式构建输出都位于源码仓库内。不再借用 `.probe/` 存放正式构建结果：
 
 | 目标平台 | 构建宿主 / 文件系统 | 正式 BinaryDir（相对于宿主） |
@@ -76,7 +80,7 @@ macOS 使用 `ssh -o BatchMode=yes moozen-macos`，通过 `/Users/moozen/Windows
 
 ## ABI Profile v1 构建期工具（2026-10-27 实施状态）
 
-- CMake 通过 `cmake/HostTools.cmake` 为 Windows/Linux/macOS 原生宿主构建并版本化发布 `PanguAbiProfileTool`；Android/iOS 的交叉编译使用对应 Windows/macOS Host 工具，不在目标平台运行。它不是 Pangu Runtime Module，不改变单 Module 单 Library Target 约束。
+- CMake 通过 `cmake/BuildTools.cmake` 为 Windows/Linux/macOS 原生宿主构建并版本化发布 `PanguAbiProfileTool`；Android/iOS 的交叉编译使用对应 Windows/macOS 构建工具，不在目标平台运行。它不是 Pangu Runtime Module，不改变单 Module 单 Library Target 约束。
 - `Source/ThirdParty/NlohmannJson/Repo` 是 nlohmann/json 的 Git submodule，固定到官方 v3.12.0 正式发布版。外层 CMake 使用 `Repo/single_include` 创建 `ThirdParty::NlohmannJson` INTERFACE Target，设置 `JSON_USE_GLOBAL_UDLS=0`；许可证保留在上游仓库，仅工具和 ABI Profile Tests 引用，不配置上游工程，不在构建时下载。
 - `Tests/AbiProfile` 包含冻结 Schema/JCS/SHA256 向量、真实 CLI、依赖闭包/SCC、Host Bootstrap、Compiler Launcher/收据和五平台 Collector 测试。Windows/Linux/macOS 执行原生完整 CTest；Android/iOS 交叉目标不执行 Host 测试程序，但由宿主执行 Profile 采集并检查真实 STATIC Module 的完成记录。
 - Windows/Linux/macOS 与 Android/iOS 的正式 STATIC Module 均已接入 C++ 全 TU 编译收据、Profile 自动采集及依赖校验，细节见文末。最终消费者 EXE/SHARED Loader 的可信产物绑定与 OS Load 前后复核仍未完成。**不能将能计算 Fingerprint 或 Build-Time complete.json 误认为已完成 Loader 信任验证。** 具体进度见 [ABI Profile / Fingerprint v1](abi-profile-fingerprint.md)。
@@ -208,8 +212,8 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 
 - 构建普通 `PanguModule` Target 即应产出 `<BuildRoot>/Abi/<Config>/PanguModule/complete.json`，并以真实编译收据验证归档对象，不能让独立 Profile Target 成为可绕过的附加步骤。
 - CMake 只提供配置求值的 Target 事实和依赖顺序（`TRANSITIVE_LINK_PROPERTIES`）；C++ 按实际 `INTERFACE`、条件 Generator Expression、技术 STATIC SCC 完成严格闭包、Profile 相容校验与组封口。无法核验的 C++ 依赖保持 Fail Closed。
-- Windows 原生 MD/MT、WSL Linux 原生 libc++、macOS/macPorts libc++、Android NDK/iOS SDK 目标产物由对应 Host 工具检查。Android/iOS 只运行宿主采集工具，绝不执行设备目标 witness。
+- Windows 原生 MD/MT、WSL Linux 原生 libc++、macOS/macPorts libc++、Android NDK/iOS SDK 目标产物由对应 构建工具检查。Android/iOS 只运行宿主采集工具，绝不执行设备目标 witness。
 - 现有构建目录若保留无法绑定收据的旧对象，Guard 拒绝直接使用，应改用独立、干净的本机 BuildRoot 重新配置和编译。不能伪造、覆盖对象收据或修改旧对象绕过 CMake。
 - **范围限制**：当前完成的是受管 STATIC 构建内的对象及 ABI Profile 一致性。最终 EXE、SHARED Loader、签名/可信发布、TOCTOU 与 OS Load 前后复核尚未实现，不得将 `complete.json` 当成加载器授权证据。
 
-截至 2026-10-27，Task 1—12 及追加评审修复均已完成并独立复审通过，无剩余 Critical/Important。最近一次完整 CTest 为 Windows **36/36**、WSL Linux **34/34**、macOS **34/34**，合计 **104/104**；Android/iOS ARM64 与 Windows Debug MD/Release MT 的真实 Module 构建、Host 采集、增量 Guard 和完成引用摘要校验通过，移动端未执行目标程序。七种配置的构建前后源码摘要一致。实际 CMake 为 Windows/macOS 4.4.3、Linux 4.4.2；已核对最低 CMake 4.0 的声明与所用属性支持版本，未单独运行 4.0.x 二进制，该项不作为本轮未关闭门禁。追加评审修复与文档已按用户授权通过 amend 合入同一提交，未推送。参见[工具入口与限制](../../Tools/AbiProfile/README.md)和[计划与验收状态](../../docs/superpowers/plans/2026-10-23-abi-collection.md)。
+截至 2026-10-27，Task 1—12 及追加评审修复均已完成并独立复审通过，无剩余 Critical/Important。最近一次完整 CTest 为 Windows **36/36**、WSL Linux **34/34**、macOS **34/34**，合计 **104/104**；Android/iOS ARM64 与 Windows Debug MD/Release MT 的真实 Module 构建、Host 采集、增量 Guard 和完成引用摘要校验通过，移动端未执行目标程序。七种配置的构建前后源码摘要一致。实际 CMake 为 Windows/macOS 4.4.3、Linux 4.4.2；已核对最低 CMake 4.0 的声明与所用属性支持版本，未单独运行 4.0.x 二进制，该项不作为本轮未关闭门禁。追加评审修复与文档已按用户授权通过 amend 合入同一提交，未推送。参见[工具入口与限制](../../BuildTools/AbiProfile/README.md)和[计划与验收状态](../../docs/superpowers/plans/2026-10-23-abi-collection.md)。

@@ -41,17 +41,17 @@
 4. 关闭 `BUILD_TESTING` 不改变以上行为。测试目录仅增加回归目标和夹具。
 5. 失败时允许磁盘仍存在库或诊断文件；不存在有效成功记录时，它们不能作为本轮已验证产物。不得把部分清理说成完整回滚。
 
-为解决自举，Host 工具的私有 bootstrap 构建是明确例外：它只生成工具及其必要依赖，不向目标工程发布 Module 产物或 Profile；其 Foundation 不用于替代目标平台的 Foundation。
+为解决自举，构建工具的私有 bootstrap 构建是明确例外：它只生成工具及其必要依赖，不向目标工程发布 Module 产物或 Profile；其 Foundation 不用于替代目标平台的 Foundation。
 
 ## 4. 职责与文件归属
 
 | 层次 | 职责 |
 | --- | --- |
 | `cmake/AbiProfile/AbiProfile.cmake` | 平台无关接入入口；注册受管 Module、导出对象/依赖/配置、声明构建规则并调用工具 |
-| `cmake/HostTools.cmake` | 如有必要独立拆分，负责 Host 工具配置、构建目录和构建依赖；不承担 ABI 采集与判定 |
-| `Tools/AbiProfile/Private/` 公共采集实现 | 请求解析、命令行/响应文件处理、精确 TU 关联、进程执行、失效与清理、缓存与发布、统一失败报告 |
+| `cmake/BuildTools.cmake` | 如有必要独立拆分，负责构建工具配置、构建目录和构建依赖；不承担 ABI 采集与判定 |
+| `BuildTools/AbiProfile/Private/` 公共采集实现 | 请求解析、命令行/响应文件处理、精确 TU 关联、进程执行、失效与清理、缓存与发布、统一失败报告 |
 | 同目录中的平台后端 | 前端参数解释、对象/运行库检查、STL/SDK/Sysroot 来源核验、v1 字段映射与拒绝规则 |
-| `Tools/AbiProfile/Probe/` | 正式采集使用的编译/链接输入；不是 Runtime Module，也不是临时 PoC |
+| `BuildTools/AbiProfile/Probe/` | 正式采集使用的编译/链接输入；不是 Runtime Module，也不是临时 PoC |
 | `Tests/AbiProfile/` | 真实采集与失败路径回归；调用正式工具，保留纯映射测试与最小夹具 |
 
 根工程只使用统一入口，不再调用 `pangu_enable_windows_abi_profiles`。CMake 只描述构建关系并传递数据，不解析编译命令、运行库日志或 SDK Manifest，不进行 ABI 字段推断，不负责业务性缓存和输出提交。`cmake/AbiProfile/` 的四份旧文件迁移完成后全部撤销，不在原目录或工具目录保留另一套 `.cmake -P` 采集实现。
@@ -60,9 +60,9 @@
 
 | 现有文件 | 迁移后的职责与建议位置 |
 | --- | --- |
-| `cmake/AbiProfile/Windows.cmake` | 跨平台接线保留为 `cmake/AbiProfile/AbiProfile.cmake`；Host 自举接线按需要分入 `cmake/HostTools.cmake` |
-| `cmake/AbiProfile/CollectWindows.cmake` | 公共流程迁入 `Tools/AbiProfile/Private/Collection.h/.cpp`；编译数据库及响应文件处理归入 `CompileCommands.h/.cpp`；Windows 特有行为进入平台后端 |
-| `cmake/AbiProfile/WindowsRuntime.cmake` | 实际 SDK/CRT/STL 来源与链接证据核验归入 `Tools/AbiProfile/Private/WindowsCollector.h/.cpp`，复用现有 `WindowsProfile` 映射能力 |
+| `cmake/AbiProfile/Windows.cmake` | 跨平台接线保留为 `cmake/AbiProfile/AbiProfile.cmake`；构建工具 Bootstrap接线按需要分入 `cmake/BuildTools.cmake` |
+| `cmake/AbiProfile/CollectWindows.cmake` | 公共流程迁入 `BuildTools/AbiProfile/Private/Collection.h/.cpp`；编译数据库及响应文件处理归入 `CompileCommands.h/.cpp`；Windows 特有行为进入平台后端 |
+| `cmake/AbiProfile/WindowsRuntime.cmake` | 实际 SDK/CRT/STL 来源与链接证据核验归入 `BuildTools/AbiProfile/Private/WindowsCollector.h/.cpp`，复用现有 `WindowsProfile` 映射能力 |
 | `cmake/AbiProfile/Prepare.cmake` | 删除脚本，失效/清理由 C++ 工具的统一入口实现，归入 `Collection` 的输出生命周期职责 |
 
 以上名称表达职责，不要求机械地一文件对一文件翻译；相邻逻辑可按可维护性合并，不建立空壳适配层。
@@ -71,28 +71,28 @@
 
 ### 4.2 失效处理的先后顺序
 
-独立 Host 工具已就绪后，由 CMake 调用 C++ 失效入口，再开始目标 Module 的编译，采集与最终发布也调用同一 C++ 工具。
-Host 工具更新自身失败时，如需先撤销目标工程的旧完成标记，CMake 可使用自身内建文件命令撤销该已知标记；不解析 ABI 数据，不保留 `Prepare.cmake`，不声称工具已完成多文件清理。
+独立 构建工具已就绪后，由 CMake 调用 C++ 失效入口，再开始目标 Module 的编译，采集与最终发布也调用同一 C++ 工具。
+构建工具更新自身失败时，如需先撤销目标工程的旧完成标记，CMake 可使用自身内建文件命令撤销该已知标记；不解析 ABI 数据，不保留 `Prepare.cmake`，不声称工具已完成多文件清理。
 完整产物清理、错误报告及代际判断仍由 C++ 实现；旧标记被撤销后，即使磁盘暂留旧 JSON/摘要也不构成本次有效结果。
 
 沿用 `PanguAbiProfile` 实现库和 `PanguAbiProfileTool` 可执行程序，不增加 ABI 专用 Runtime Module、BinaryImage 层或统一 ThirdParty Wrapper。保留原有四参数编码接口；新增统一采集命令接收受版本控制的私有构建请求，内部完成采集、映射、校验与编码。旧 `--collect-windows` 映射入口可在回归迁移后移除或保留为明确的内部兼容入口，不能被描述为来源认证接口。
 
 ## 5. 宿主工具自举
 
-所有平台统一使用独立的 `Build/Host/<HostPlatform>/`，避免 native 与 cross 场景采用不同的依赖模型。
+所有平台统一使用独立的构建工具 Bootstrap，避免 native 与 cross 场景采用不同的依赖模型。Windows 工具根目录为 `${sourceDir}/Build/BuildTools/Windows/`；Linux/macOS 使用宿主本地 `$HOME/PanguEngineBuild/BuildTools/<HostPlatform>/`，不在 SMB 源码树中生成正式工具构建产物。详见 [BuildTools 目录说明](../../../BuildTools/README.md)。
 
 - Host 阶段使用同一份仓库源码和独立 CMake 缓存，只构建工具及其必需 Foundation/JSON 依赖；不复制引擎源码。
 - 默认构建 Release 宿主工具。目标平台的 Debug/Release、CRT、STL 与 ABI 配置通过请求独立传递，不能从工具自身的编译宏推断。
-- 目标工程在任何 Module 编译/采集前确保 Host 工具已就绪；工具依赖 Host Foundation，不依赖目标 Foundation，消除环路。
+- 目标工程在任何 Module 编译/采集前确保 构建工具已就绪；工具依赖 Host Foundation，不依赖目标 Foundation，消除环路。
 - 工具就绪后执行 C++ 失效命令，替代现有编译前的 `Prepare.cmake`；首次自举不会再次依赖目标 Module。
 - Host 的编译器/SDK 选择独立配置并验证，不能继承目标的 `CMAKE_TOOLCHAIN_FILE`、Sysroot、Android ABI 或 iOS SDK 参数。
 - Windows 为 Windows/Android 构建本机工具；WSL Ubuntu 为 Linux 构建本机工具；macOS 为 macOS/iOS 构建本机工具。
-- 源码、依赖版本、Host 配置或工具链发生变化时更新 Host 工具；正常增量构建复用它。先做正确的依赖跟踪，不建立远程二进制缓存或工具下载流程。
+- 源码、依赖版本、Host 配置或工具链发生变化时更新 构建工具；正常增量构建复用它。先做正确的依赖跟踪，不建立远程二进制缓存或工具下载流程。
 - 首次配置/构建自动完成自举；缺少 Host 编译环境时明确失败，不下载 SDK，不要求手工填写工具路径或 Fingerprint。
 
-Host bootstrap 的最小工程可以复用现有 Target 定义，但不会执行目标工程的 ABI 完成规则。具体 CMake 分解由实施者选择；必须通过干净目录、单 Target、交叉编译及无循环依赖测试。
+Build tool bootstrap 的最小工程可以复用现有 Target 定义，但不会执行目标工程的 ABI 完成规则。具体 CMake 分解由实施者选择；必须通过干净目录、单 Target、交叉编译及无循环依赖测试。
 
-**Grill Q7 已确认**：同一宿主上的不同目标平台可以并行构建并安全复用 Host 工具缓存，例如 Windows/Android 或 macOS/iOS。
+**Grill Q7 已确认**：同一宿主上的不同目标平台可以并行构建并安全复用 构建工具缓存，例如 Windows/Android 或 macOS/iOS。
 按源码、Host 配置和工具链身份区分工具版本；同一版本只允许一个构建者，成功发布的工具版本供使用者只读复用，不原地覆盖使用中的二进制。
 允许保留少量版本化工具产物。实现可采用受锁保护的构建区和独立版本化发布区，不要求把 CMake 缓存目录移动或重定位；具体锁和目录细分属于构建接线实现。
 
@@ -125,7 +125,7 @@ v1 无法表达的 STL ABI 配置保持拒绝策略。保留 Windows 已验证�
 | Linux | 实际目标 Triple、libc++ Header/ABI 配置、Sysroot 身份、glibc/musl 与实际 C++/ABI Runtime 选择 | 读取目标 Sysroot 元数据，不能把宿主发行版标签无条件当作目标身份 |
 | macOS | MacPorts Clang、实际 libc++ Header、SDKSettings/SDK 路径、Mach-O/链接结果及部署 Target | 直接使用共享挂载源码；区分编译器安装与 SDK Runtime 来源 |
 | Android | NDK 自带 Clang、目标 API、NDK libc++ namespace、`source.properties` 的 ReleaseName/Revision 与实际目标库 | 使用所选 NDK，禁止套用桌面 Clang23 限制；不运行 Android 程序 |
-| iOS | MacPorts Clang、iPhoneOS SDK 元数据、部署版本、SDK libc++/libSystem 及目标对象 | 由 macOS Host 工具执行采集，不运行 iOS 程序 |
+| iOS | MacPorts Clang、iPhoneOS SDK 元数据、部署版本、SDK libc++/libSystem 及目标对象 | 由 macOS 构建工具执行采集，不运行 iOS 程序 |
 
 SDK/NDK 的完整安装元数据与实际文件身份保存到证据；Profile 仍按冻结 v1 的身份格式映射。本机 NDK 提供 `Pkg.ReleaseName=r30`，无需从包修订号猜测发布名。无法无歧义映射到 v1 的来源或关键配置必须拒绝，不能截断版本、填写 `unknown` 或偷偷扩展 Schema。
 
@@ -139,7 +139,7 @@ SDK/NDK 的完整安装元数据与实际文件身份保存到证据；Profile �
 - **已确认的要求**：闭包内所有可达、源码可见的 C++ STATIC 依赖执行 v1 严格相容检查。`PRIVATE` 不构成豁免依据；CMake 可见性不能证明是否存在 C++ 对象交换。本轮不新增“仅内部使用”的推断规则或绕过开关。不兼容或无法生成 v1 Profile 时拒绝，不通过全局参数强行改变上游配置。
 - 对已核验的平台 CRT/SDK 系统库，使用平台后端的来源核验，不为其伪造 Module Profile。
 - **Grill Q9 已确认**：本轮只接入共同受管采集的源码 C++ STATIC 依赖，普通预编译/IMPORTED C++ 库明确拒绝；附带 Profile 和文件摘要也不构成来源真实性证明，不能据此开放信任入口。预编译第三方的证据接入另行设计。
-- 已核验的平台 CRT/SDK 运行库仍由平台后端单独处理；Host 工具的执行依赖不是目标平台的 C++ 链接依赖。SHARED 第三方、纯 C 库的独立 ABI 认证不在本轮验收范围，遇到未支持的边界给出具体诊断。
+- 已核验的平台 CRT/SDK 运行库仍由平台后端单独处理；构建工具的执行依赖不是目标平台的 C++ 链接依赖。SHARED 第三方、纯 C 库的独立 ABI 认证不在本轮验收范围，遇到未支持的边界给出具体诊断。
 
 **Grill Q3 已确认**：STATIC 可以合法引用只由最终 EXE/Host 提供的符号，不要求每个静态库能独立链接成 EXE。
 分别进行真实对象/归档的 ABI 与运行库引用检查、独立的最小运行库链接探针、未来最终消费者的实际链接检查。
@@ -190,7 +190,7 @@ Profile 中不加入绝对路径、时间戳或额外字段。路径、文件摘
    普通功能宏应成功并出现在证据中；包含合法最终宿主未解析符号的静态归档也应成功完成采集；同路径库内容替换会失效旧完成记录。
    影响工具链的有效环境变化即使命令字符串未变也会失效旧结果；无变化构建执行 Guard 但不重复编译器/链接器探针。
 5. 实际编译失败、采集失败、输出提交失败及清理失败不会发布假成功；旧结果不可误用。
-6. Host 工具仅在 Host 运行；Android/iOS 的采集与链接探针从不执行目标程序。
+6. 构建工具仅在 Host 运行；Android/iOS 的采集与链接探针从不执行目标程序。
    同 Host 的两个目标平台并行构建安全复用缓存，同一工具版本不会重复写入或覆盖使用中的二进制。
 7. Windows 已有 Release MD、Debug MD、Release MT 回归保持；其余平台按实际 libc++/Runtime 配置补齐成功和拒绝用例。
 8. 五平台 CMake 构建验证；三个桌面平台运行 CTest。设备运行、打包和签名另行验收。
