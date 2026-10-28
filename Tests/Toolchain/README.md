@@ -1,6 +1,6 @@
 # Toolchain / ThirdParty 编译验证（2026-10-23）
 
-本目录是 **编译验收探针**，不是正式 Runtime API，也不创建 Engine Module 身份。
+本目录是长期维护的 **Toolchain / ThirdParty 编译与链接回归测试**，遵守 [Tests 维护规范](../README.md)。测试夹具中的 `Probe` 命名表示验证角色，Plan 完成后仍保留；这些夹具不构成正式 Runtime API，也不创建新的生产 Engine Module 身份。
 本目录由 `Tests/CMakeLists.txt` 统一接入；只有 `BUILD_TESTING=ON` 时才配置测试。
 `PANGU_VALIDATE_TOOLCHAIN=ON` 是测试开启时的默认值；如需仅禁用本目录的校验，可在 Preset 上覆盖为 OFF。
 `BUILD_TESTING=OFF` 完整排除测试库、测试程序和宏审计目标，即使缓存中保留该子选项为 ON。
@@ -22,7 +22,7 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`；需要编译验证时，分别�
   Iterator Debug Level、CRT 宏、RTTI、CPU 指令集能力、Android API 宏；
   对三个 Pangu 目标另外验证异常宏全部关闭。
 - 编译时默认执行 `PanguAbiCompileAudit`（`ALL` 目标），生成
-  `Build/<Platform>/Abi/compile-evidence.json`。
+  对应 `<BuildRoot>/Abi/compile-evidence.json`（各平台 BuildRoot 见[构建系统](../../wiki/foundation/build-system.md)）。
   证据包含编译命令的 SHA-256、完整预定义宏文本 SHA-256，以及经筛选的 ABI 宏值。
   **这些是审计溯源摘要，不是最终 ABI Fingerprint。**
 - `NegativeAudit.cmake` 向 *真实* 编译命令附加与基线状态相反的 RTTI 选项

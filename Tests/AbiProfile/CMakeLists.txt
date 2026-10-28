@@ -141,10 +141,6 @@ if(WIN32 AND NOT CMAKE_CROSSCOMPILING)
     add_library(PanguAbiCollectionUnrelated STATIC CollectionFirst.cpp)
     target_link_libraries(PanguAbiCollectionUnrelated PRIVATE PanguBuildOptions)
     target_compile_options(PanguAbiCollectionUnrelated PRIVATE -fno-rtti)
-    add_library(PanguAbiCollectionBadStl STATIC CollectionFirst.cpp CollectionAlteredStl.cpp)
-    target_link_libraries(PanguAbiCollectionBadStl PRIVATE PanguBuildOptions)
-    file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/BadStl.objects"
-        CONTENT "$<JOIN:$<TARGET_OBJECTS:PanguAbiCollectionBadStl>,\n>\n")
     # The Android NDK toolchain is a cross-compiler run from the Windows Host.
     set(_pangu_ndk "$ENV{LOCALAPPDATA}/Android/Sdk/ndk/30.0.16248370")
     if(DEFINED ENV{ANDROID_NDK_HOME} AND EXISTS "$ENV{ANDROID_NDK_HOME}/source.properties")

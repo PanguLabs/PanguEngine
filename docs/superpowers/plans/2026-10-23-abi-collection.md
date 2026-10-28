@@ -2,7 +2,7 @@
 
 > 状态：Completed（批准的 STATIC 范围，2026-10-27）；Task 1—12 的 68 项检查全部完成，独立复审通过。追加评审修复与文档已按用户授权通过 amend 合入同一提交，未推送。最终 EXE/SHARED Loader 不在本计划范围。
 >
-> 阅读约定：以“最新执行进度”和已勾选的任务清单为当前结论；折叠区中的未完成项、评审阻断和测试数量仅描述当时状态。
+> 阅读约定：当前提交及问题状态见“记录核对（2026-10-28）”；阶段验收与已勾选的任务清单保留当时结论。折叠区中的未完成项、评审阻断和测试数量仅描述当时状态。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -19,17 +19,44 @@
 
 后续提交 `0a3b79d` 修复 Windows 私有探针目录清理竞态，独立复审通过；Windows 压力测试 50/50、Linux/macOS 定向测试各连续 5 次通过。该轮 Windows 完整 CTest 为 35/36，剩余失败定位为 `AbiCollectorWindowsCli` 在 `.collection-lock` 的 `output_symlink` 检查中遇到 system error 5：锁目录进入 `DeletePending` 时，等待方把短暂 `ACCESS_DENIED` 当成永久失败。
 
-后续修复让 Windows 等待路径重新执行输出校验与锁获取，只对此锁路径的 `ERROR_ACCESS_DENIED` 重试，并在截止时间到达后保留原始错误；其他路径及非该错误仍立即失败。回归使用真实暂停的编译器子进程复现 `DeletePending`，修复前在 `reserved_signature_path` 以 native code 5 失败，修复后定向及完整测试通过。Windows 完整 CTest 为 **36/36**（899.25 秒），Linux/macOS 的 `AbiCollectionState` 定向测试分别通过；`clang-format` 与 `git diff --check` 通过，`clang-tidy` 无新增用户代码诊断。该后续修复目前仍在工作区，尚未提交或推送。
+后续修复让 Windows 等待路径重新执行输出校验与锁获取，只对此锁路径的 `ERROR_ACCESS_DENIED` 重试，并在截止时间到达后保留原始错误；其他路径及非该错误仍立即失败。回归使用真实暂停的编译器子进程复现 `DeletePending`，修复前在 `reserved_signature_path` 以 native code 5 失败，修复后定向及完整测试通过。Windows 完整 CTest 为 **36/36**（899.25 秒），Linux/macOS 的 `AbiCollectionState` 定向测试分别通过；`clang-format` 与 `git diff --check` 通过，`clang-tidy` 无新增用户代码诊断。Windows 私有探针目录清理与锁目录等待修复已合入提交 `9dd4209`（2026-10-28），此前“仍在工作区，尚未提交”的状态已过期。
 
-## 最新执行进度（2026-10-27）
+## 记录核对（2026-10-28）
+
+- 核对基线为 `main` 的 `9dd4209`，本次记录更新前工作区干净。macOS 路径解析竞态与 Android CRLF 解析修复已合入 `dd846f0`；Windows 并发清理与锁目录 `DeletePending` 修复已合入 `9dd4209`。下表沿用各轮已有验收，不代表在同一源码版本上重新执行了整个平台矩阵。
+
+| 问题 | 当前记录状态 | 已归档验证 |
+| --- | --- | --- |
+| macOS 路径解析竞态导致 `collection_output_input_alias` 误报 | 已修复 | 该轮 macOS 完整 CTest 37/37、Linux 完整 CTest 34/34；原接口环回归连续 5 次通过 |
+| Android 宏及 libc++ 配置的 CRLF 解析 | 已修复 | 该轮 Windows 完整 CTest 36/36；Android ARM64 构建及宿主采集通过 |
+| Windows 私有探针目录清理与锁目录 `DeletePending` 竞态 | 已修复 | 后续 Windows 完整 CTest 36/36；Linux/macOS 的 `AbiCollectionState` 定向测试通过 |
+
+- macOS 与 Android 修复的根因、回归及验证范围见[目录迁移计划后续记录](2026-10-27-build-tools-layout.md)。本次核对未发现上述已知代码问题仍有未关闭项；未进行新的完整代码审查，不据此保证没有潜在缺陷。
+- 本地 `Build/Windows/Testing/Temporary/LastTestsFailed.log`（2026-10-28 16:23:14）仍列出 `AbiCollectorAndroidCli`、`AbiCollectorAndroid`；更晚的 `LastTest.log`（16:24:34）记录这两项均为 `Test Passed`。该失败清单为残留状态，不能单独作为当前失败依据；此次定向通过也不计作新的完整 36/36。本次保留构建日志原样。
+- 历史记录中的 `Tests/AbiProfile/CollectionStateTests.cpp.tmp0` 在本次本地检查时已不存在；保留 2026-10-24 的权限失败记录，不再将其视为当前待清理项。
+- 本次仅更新记录并检查文档差异与引用，未重新执行构建、CTest、clang-format 或 clang-tidy；未提交或推送本次文档变更。
+
+## `.probe/` 清理（2026-10-28）
+
+按用户要求清理已完成、结论已归档或已被正式 `Tests/` 替代的探针。检查 Windows、WSL Ubuntu 和 macOS 进程后，未发现依赖这些目录的运行中构建或测试；生产构建接线也未引用 `.probe/`。
+
+- 删除 43 个目录、3,831 个文件，文件逻辑大小合计约 341.70 MiB。范围包括旧 ABI 编码/采集实验、已完成评审与修复夹具、BuildTools 迁移、macOS 路径竞态、Android CRLF、Windows 并发清理/锁回归的临时日志，以及旧工具链、依赖接入和文件系统性能探针。
+- 保留 `module-api-freeze/`、`service-lifecycle/`：仍是 Module/Service 行为的参考 PoC，完整功能尚未迁入正式 Runtime 与 Tests。
+- 保留 `android-ndk-cxx23/`：仍保有四个 Android ABI 的独立编译/链接验证；当前正式移动端验收仅覆盖 ARM64 STATIC。
+- 保留 `macos-smb-automount/`、`wiki-code-style/`：分别为挂载辅助脚本和文档 C++ 示例检查脚本，仍有复用价值。
+- 保留目录的 349 个文件在清理前后 SHA-256 一致，Git index 摘要未变；未清理任何正式 BuildRoot、源码或 `Tests/`。本次未重新运行构建或 CTest。
+
+本计划及相关迁移记录中引用的 `.probe/Fix9561VerifiedEvidence/`、`.probe/macos-interface-cycle/`、`.probe/android-crlf/` 等已删除路径均为历史位置。正式设计、计划、wiki、源码与版本化测试保留，阅读验收结论不再依赖这些临时原始日志。
+
+## STATIC 范围阶段验收（2026-10-27）
 
 **Task 1—12 均已完成，无剩余计划内验收门禁。** 原 R1—10 和提交 `9561fe6` 的追加修复均已完成独立复审；最终 Spec **Compliant**、Quality **Approved**。
 
 ### 提交 9561fe6 的追加评审修复已完成
 
 - Standards / Spec 双轴评审的 8 项问题均已修复，并完成独立复审；验证中发现的输入检查并发和完成记录失效恢复问题也已修复。没有剩余 Critical/Important。
-- 当前源码的最终完整 CTest：Windows **36/36**、Linux **34/34**、macOS **34/34**，合计 **104/104 PASS**，均 exit 0。Android/iOS ARM64、Windows Debug MD/Release MT 的构建、Host 采集、增量 Guard 和完成引用摘要校验通过；移动端未执行目标程序。
-- 七种配置的构建前后源码摘要一致；Windows 三种 CRT 配置中 Foundation/Module 同配置指纹相同、跨配置指纹不同。当时的详细验收报告 `.superpowers/sdd/9561-code-review-fixes/final-verification.md` 已随临时工作区清理；上述验收摘要保留，原始审计输出位置为 `.probe/Fix9561VerifiedEvidence/audit.json`（非版本化文件，不作为正式计划的读取前提）。
+- 该阶段的最终完整 CTest：Windows **36/36**、Linux **34/34**、macOS **34/34**，合计 **104/104 PASS**，均 exit 0。Android/iOS ARM64、Windows Debug MD/Release MT 的构建、Host 采集、增量 Guard 和完成引用摘要校验通过；移动端未执行目标程序。
+- 七种配置的构建前后源码摘要一致；Windows 三种 CRT 配置中 Foundation/Module 同配置指纹相同、跨配置指纹不同。当时的详细验收报告 `.superpowers/sdd/9561-code-review-fixes/final-verification.md` 已随临时工作区清理；原始审计输出曾位于 `.probe/Fix9561VerifiedEvidence/audit.json`，也已于 2026-10-28 按用户要求清理。上述验收摘要保留，不依赖这些非版本化文件读取。
 - 最终验收时 HEAD 为 `9561fe6d443f21da1c0af02ecc87435f35e9301c`；用户随后授权将追加修复和文档通过 amend 合入该提交，提交 ID 随之改变；未推送。以下保留此前实施与验收的历史记录。
 
 <details>

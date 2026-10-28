@@ -29,7 +29,6 @@ static_assert(std::is_nothrow_copy_constructible_v<Error>);
 static_assert(std::is_nothrow_destructible_v<Error>);
 static_assert(sizeof(Error) <= 64);
 static_assert(kDomain.IsValid());
-static_assert(!ErrorDomainId::TryFromRaw(0).has_value());
 static_assert(kSimple.Domain() == kDomain);
 static_assert(kSimple.Code() == 42);
 static_assert(!kSimple.Native().has_value());

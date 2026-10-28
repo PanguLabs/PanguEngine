@@ -105,8 +105,6 @@ foreach(_source IN LISTS _sources)
             __EXCEPTIONS __cpp_exceptions _CPPUNWIND __GXX_RTTI _CPPRTTI
             _LIBCPP_VERSION _LIBCPP_ABI_VERSION _LIBCPP_ABI_NAMESPACE
             _MSVC_STL_VERSION _MSVC_STL_UPDATE _ITERATOR_DEBUG_LEVEL
-        _DLL _MT _MSC_VER _MSC_FULL_VER __ANDROID_API__
-        __SSE4_2__ __AVX__ __AVX2__ __AVX512F__ __ARM_NEON
             _DLL _MT _MSC_VER _MSC_FULL_VER __ANDROID__ __ANDROID_API__ __APPLE__ _WIN32 __linux__
             __SSE4_2__ __AVX__ __AVX2__ __AVX512F__ __ARM_NEON)
         _pangu_define(_value "${_macros}" "${_macro}")

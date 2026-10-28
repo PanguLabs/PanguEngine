@@ -1,6 +1,8 @@
 # BuildTools 目录与命名迁移计划
 
-> 执行方式：在当前共享源码工作区直接实施。用户已通过“按讨论结果修改”授权；不提交或推送。
+> 状态：Completed。目录迁移已合入 `b570415`，macOS 路径解析竞态及 Android CRLF 后续修复已合入 `dd846f0`。下文执行授权、提交状态和测试结果保留各轮历史记录；当前问题与日志状态见末尾“记录核对（2026-10-28）”。
+>
+> 当时执行方式：在当前共享源码工作区直接实施。用户已通过“按讨论结果修改”授权；不提交或推送。
 
 **Goal:** 将构建工具与普通开发工具区分，消除独立工具构建中的 Host 命名歧义。
 
@@ -73,7 +75,7 @@
 - [`ResolvePath`](../../../BuildTools/AbiProfile/Private/ToolIo.cpp) 使用 `canonical` 解析实际存在的前缀；只在 ENOENT 时剥离缺失后缀，拼回后作词法规范化。成功结果必须为绝对路径，其他文件系统错误仍失败。
 - 请求解析、编译命令解析、生命周期输出检查和 `IsSameFile` 统一使用该工具私有函数；原有 symlink、hardlink、保留工作目录及 `equivalent` 身份校验保留。未改变 ABI Schema、Fingerprint 或 Loader 保证范围。
 - 并发回归限定于 `__APPLE__`：Windows 删除中的文件可能返回 `access_denied`，应保持 Fail Closed，不能要求这种权限错误被接受。其他平台继续执行既有路径与文件身份回归。
-- 临时诊断已移除；独立只读评审及限定回归平台后的复审均无阻断项。临时探针和日志保留在本地 `.probe/macos-interface-cycle/`；正式回归不依赖该忽略目录。
+- 临时诊断已移除；独立只读评审及限定回归平台后的复审均无阻断项。临时探针和日志当时保存在本地 `.probe/macos-interface-cycle/`，已于 2026-10-28 按用户要求清理；正式回归不依赖该忽略目录。
 
 ### 验证与独立问题
 
@@ -93,4 +95,11 @@
 - [`AbiProfileTests`](../../../Tests/AbiProfile/AbiProfileTests.cpp) 新增 10 项快速共享配置解析回归，覆盖双向 LF/CRLF、混合换行、末行无终止换行、值变化、缺失空值宏及显著字节保留。修复前 **60/63**（三项换行等价失败），修复后通过。
 - 最终正式 Android ARM64 Preset 的配置、构建和两 Module 的宿主 ABI Collection 通过；Linux 的共享回归及 Collector **2/2**、macOS/iOS 的共享回归及 Collector **3/3** 通过。未执行 Android/iOS 设备程序，也未重新运行 Linux/macOS 的完整测试集。
 - 最终 Windows 正式完整 CTest **36/36 通过**（470.17 秒，无失败重跑），包含原先失败的两项 Android Collector、两组新增换行回归及既有负测；本轮 Android CRLF 解析问题已关闭。
-- 四个 C++ 文件的 clang-format、实际 Windows 编译数据库的 clang-tidy 和差异检查通过；两轮独立只读代码评审无阻断项。本轮临时证据保留在 `.probe/android-crlf/`；既有暂存内容保持原样，未提交或推送。
+- 四个 C++ 文件的 clang-format、实际 Windows 编译数据库的 clang-tidy 和差异检查通过；两轮独立只读代码评审无阻断项。本轮临时证据当时保存在 `.probe/android-crlf/`，已于 2026-10-28 按用户要求清理；修复轮结束时既有暂存内容保持原样，未提交或推送。
+
+## 记录核对（2026-10-28）
+
+- 以上迁移及 macOS/Android 后续修复均已提交；各轮“未提交或推送”描述的是当时状态，不代表当前工作区仍有这些源码变更。Windows 并发清理与锁目录 `DeletePending` 的进一步修复已合入 `9dd4209`，详见[ABI 采集计划当前记录](2026-10-23-abi-collection.md)。
+- 本地 Windows CTest 失败清单仍残留两项 Android Collector 名称，但更晚的定向日志记录两项均通过；不能将旧失败清单当成尚未修复的 bug，也不能将定向结果写成新的完整测试验收。时间与核对范围统一记录在上述 ABI 采集计划。
+- 本次仅更新文档记录，未重新运行构建或测试，保留各轮测试数量和验证限制；未提交或推送本次文档变更。
+- 后续按用户要求清理已完成探针，本文所列临时路径仅作为历史记录保留；范围、保留项和清理校验见 [ABI 采集计划的 `.probe/` 清理记录](2026-10-23-abi-collection.md)。
