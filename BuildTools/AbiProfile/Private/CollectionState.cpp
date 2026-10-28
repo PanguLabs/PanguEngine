@@ -220,11 +220,14 @@ Status CheckOutputs(const CollectionRequest& request, FailureReport& report)
     const auto outputs = CollectionOutputFiles(request);
     for (const auto& parent : CollectionOutputDirectories(request))
     {
-        std::error_code error;
-        const auto signature = std::filesystem::weakly_canonical(request.SignatureHeader, error);
-        const auto directory = std::filesystem::weakly_canonical(parent, error);
-        const auto same = IsSameFile(signature, directory, report);
-        if (error || !same || *same || Within(directory, signature))
+        const auto signature = ResolvePath(request.SignatureHeader, "reserved_signature_path", report);
+        const auto directory = ResolvePath(parent, "reserved_signature_path", report);
+        if (!signature || !directory)
+        {
+            return std::unexpected(!signature ? signature.error() : directory.error());
+        }
+        const auto same = IsSameFile(*signature, *directory, report);
+        if (!same || *same || Within(*directory, *signature))
         {
             return std::unexpected(Fail(report, "reserved_signature_path", request.SignatureHeader));
         }

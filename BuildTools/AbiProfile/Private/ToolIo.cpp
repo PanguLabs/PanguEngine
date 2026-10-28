@@ -10,10 +10,12 @@
 #include <filesystem>
 #include <ios>
 #include <optional>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <system_error>
 #include <utility>
+#include <vector>
 
 #ifdef _WIN32
 #include <corecrt_wstdio.h>
@@ -160,36 +162,66 @@ bool ClearGeneratedFiles(const std::filesystem::path& canonical, const std::file
     return cleared;
 }
 
-Result<bool> IsSameFile(const std::filesystem::path& left, const std::filesystem::path& right, FailureReport& report)
+Result<std::filesystem::path> ResolvePath(const std::filesystem::path& path, std::string_view stage,
+                                          FailureReport& report)
 {
     std::error_code error;
-    const auto absoluteLeft = std::filesystem::absolute(left, error);
-    if (error)
+    auto candidate = std::filesystem::absolute(path, error);
+    if (error || path.empty())
     {
-        return std::unexpected(report.Add(ToolError::kResolvePath, "resolve_path", left.generic_string(), error));
+        return std::unexpected(report.Add(ToolError::kResolvePath, stage, path.generic_string(),
+                                          error ? error : std::make_error_code(std::errc::invalid_argument)));
     }
-    const auto absoluteRight = std::filesystem::absolute(right, error);
-    if (error)
+    std::vector<std::filesystem::path> suffix;
+    for (;;)
     {
-        return std::unexpected(report.Add(ToolError::kResolvePath, "resolve_path", right.generic_string(), error));
+        // macOS system libc++ can return an empty weakly_canonical result with
+        // error == 0 if its status/canonical calls race a removed lock or marker.
+        // canonical reports ENOENT directly; peel only absent components and
+        // keep symlink resolution and every other failure authoritative.
+        auto resolved = std::filesystem::canonical(candidate, error);
+        if (!error)
+        {
+            if (!resolved.is_absolute())
+            {
+                return std::unexpected(report.Add(ToolError::kResolvePath, stage, path.generic_string(),
+                                                  std::make_error_code(std::errc::invalid_argument)));
+            }
+            for (const auto& component : std::views::reverse(suffix))
+            {
+                resolved /= component;
+            }
+            return resolved.lexically_normal();
+        }
+        const auto parent = candidate.parent_path();
+        if (error != std::errc::no_such_file_or_directory || parent == candidate || parent.empty())
+        {
+            return std::unexpected(report.Add(ToolError::kResolvePath, stage, path.generic_string(), error));
+        }
+        suffix.push_back(candidate.filename());
+        candidate = parent;
     }
-    // Resolve existing parent symlinks even when the final output does not exist.
-    const auto resolvedLeft = std::filesystem::weakly_canonical(absoluteLeft, error);
-    if (error)
+}
+
+Result<bool> IsSameFile(const std::filesystem::path& left, const std::filesystem::path& right, FailureReport& report)
+{
+    const auto resolvedLeft = ResolvePath(left, "resolve_path", report);
+    if (!resolvedLeft)
     {
-        return std::unexpected(report.Add(ToolError::kResolvePath, "resolve_path", left.generic_string(), error));
+        return std::unexpected(resolvedLeft.error());
     }
-    const auto resolvedRight = std::filesystem::weakly_canonical(absoluteRight, error);
-    if (error)
+    const auto resolvedRight = ResolvePath(right, "resolve_path", report);
+    if (!resolvedRight)
     {
-        return std::unexpected(report.Add(ToolError::kResolvePath, "resolve_path", right.generic_string(), error));
+        return std::unexpected(resolvedRight.error());
     }
-    if (resolvedLeft == resolvedRight)
+    if (*resolvedLeft == *resolvedRight)
     {
         return true;
     }
     // equivalent() may report operation_not_supported for absent files on some
     // filesystems. Only compare identities after confirming both files exist.
+    std::error_code error;
     for (const auto* path : {&left, &right})
     {
         const bool exists = std::filesystem::exists(*path, error);

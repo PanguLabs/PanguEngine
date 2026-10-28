@@ -1,6 +1,8 @@
 #include "AbiProfile.h"
+#include "HeaderTrace.h"
 #include "JsonSchema.h"
 #include "Sha256.h"
+#include "ToolReport.h"
 
 #include <array>
 #include <cstddef>
@@ -37,6 +39,32 @@ struct Checks
         }
     }
 };
+
+void CheckLibcxxLineEndings(Checks& checks)
+{
+    constexpr std::string_view kLf = "#define _LIBCPP_ABI_VERSION 1\n#define _LIBCPP_ABI_BOUNDED_ITERATORS\n";
+    constexpr std::string_view kCrlf = "#define _LIBCPP_ABI_VERSION 1\r\n#define _LIBCPP_ABI_BOUNDED_ITERATORS\r\n";
+    const auto check = [&](std::string_view actual, std::string_view baseline, bool accepted, std::string_view label)
+    {
+        FailureReport report;
+        checks.Expect(CheckLibcxxConfiguration(actual, baseline, report).has_value() == accepted, label);
+    };
+    check(kLf, kLf, true, "libc++ LF configuration");
+    check(kCrlf, kLf, true, "libc++ CRLF observation with LF baseline");
+    check(kLf, kCrlf, true, "libc++ LF observation with CRLF baseline");
+    check(kCrlf, kCrlf, true, "libc++ CRLF configuration");
+    check("#define _LIBCPP_ABI_VERSION 1\r\n#define _LIBCPP_ABI_BOUNDED_ITERATORS", kLf, true,
+          "libc++ mixed endings and unterminated final macro");
+    check("#define _LIBCPP_ABI_VERSION 2\r\n#define _LIBCPP_ABI_BOUNDED_ITERATORS\r\n", kLf, false,
+          "libc++ changed value with CRLF still conflicts");
+    check("#define _LIBCPP_ABI_VERSION 1\r\n", kLf, false, "libc++ missing valueless ABI macro still conflicts");
+    check("#define _LIBCPP_ABI_VERSION 1 \r\n#define _LIBCPP_ABI_BOUNDED_ITERATORS\r\n", kLf, false,
+          "libc++ significant trailing space still conflicts");
+    check("#define _LIBCPP_ABI_VERSION 1\r0\r\n#define _LIBCPP_ABI_BOUNDED_ITERATORS\r\n", kLf, false,
+          "libc++ embedded CR still conflicts");
+    check("#define _LIBCPP_ABI_VERSION 1\n#define _LIBCPP_ABI_BOUNDED_ITERATORS\r", kLf, false,
+          "libc++ unpaired final CR still conflicts");
+}
 
 void Change(Json& profile, std::string_view group, std::string_view key, std::string_view value)
 {
@@ -106,6 +134,7 @@ void ChangeOption(Json& profile, std::size_t index, std::string_view value)
 int Main(const std::filesystem::path& wiki)
 {
     Checks checks;
+    CheckLibcxxLineEndings(checks);
     const auto rawSchema = ReadFile(wiki / "abi-profile-v1.schema.json");
     const auto rawVectors = ReadFile(wiki / "abi-profile-v1.vectors.json");
     auto schema = ParseUnique(rawSchema);

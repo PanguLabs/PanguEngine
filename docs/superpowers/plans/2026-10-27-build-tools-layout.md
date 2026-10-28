@@ -49,7 +49,7 @@
 - Windows/Linux/macOS 的正式 Preset 配置和全量构建均通过；既有对象缺少当前编译收据时由 Guard 拒绝，通过正式 Preset 的 clean 重建生成物恢复，不补写或放宽证据。
 - Windows 完整 CTest 的 34 项直接通过；两项 Android Collector 因沙箱无法执行用户 SDK 目录中的 NDK 失败，在沙箱外使用 `ctest --preset windows --rerun-failed --parallel 2` 重跑后 2/2 通过，合计覆盖 36/36。
 - Linux 正式 Preset 的完整 CTest 34/34 通过。
-- macOS 正式 Preset 的完整 CTest 36/37 首轮通过；`AbiCollectionBuildContractInterfaceCycle` 首轮触发 `collection_output_input_alias`，检查对应请求和输出目录后，使用相同固定 PATH 单独重跑该项，1/1 通过（42.05 秒）。首轮失败原因尚未确认，本次没有修改相关校验逻辑；不能把此结果描述为无重跑的 37/37 全绿。
+- macOS 正式 Preset 的完整 CTest 36/37 首轮通过；`AbiCollectionBuildContractInterfaceCycle` 首轮触发 `collection_output_input_alias`，检查对应请求和输出目录后，使用相同固定 PATH 单独重跑该项，1/1 通过（42.05 秒）。当时尚未确认原因，没有修改相关校验逻辑；不能把该次结果描述为无重跑的 37/37 全绿。后续原因与修复见下文追查记录。
 - Android/iOS ARM64 正式 Preset 的配置、clean 后构建及两个 Module 的 ABI Collection 通过；Windows/Android 复用同一个已发布工具，macOS/iOS 也复用同一个已发布工具。
 - Windows 再次配置/增量构建通过，两个 Module 的 Guard 均返回 `current`，BuildTools 发布版本仍为 1；PanguModule ABI Fingerprint 与历史同配置记录相等。
 - 全部受影响 C++ 通过 clang-format 检查；Windows 实际编译数据库的六项 clang-tidy 返回成功，跨平台条件编译处存在既有未使用 include 提示；Linux Collector 使用 Linux 真实编译数据库的 clang-tidy 无诊断通过。
@@ -59,3 +59,38 @@
 - 新增说明文档的相对链接检查、旧运行路径/标识符残留检查及 `git diff --check` 通过；未提交或推送。迁移完成后，按用户明确要求清理了 WSL `/home/moozen/PanguEngineBuild/Host` 和 macOS `/Users/moozen/PanguEngineBuild/Host`；Windows `Build/Host` 检查时已不存在，三宿主的新 BuildTools 缓存均保留。
 - Android/iOS 本次验证为 ARM64 STATIC 构建和宿主 ABI Collection，没有执行设备端程序；未扩展 Debug/Release、STATIC/SHARED 策略。
 - 后续双轴 code-review：Standards 0 项，Spec 2 项文档遗漏（第三方接入说明中的旧源码路径、旧缓存清理记录），均已修正；本轮仅修改文档，执行路径/链接及差异检查，不重复运行构建和 CTest。
+
+## macOS 首轮失败追查（2026-10-27）
+
+### 根因与复现
+
+- 在 macOS 原生 APFS 目录中，另一线程反复创建、删除 `.invalid` 和 `.collection-lock`，会使实际加载的系统 `/usr/lib/libc++.1.dylib` 的 `std::filesystem::weakly_canonical` 返回**空路径且错误码为零**。独立标准库调用在 10,000 轮中观察到 639 次该结果；不依赖 SMB 源码挂载即可复现。
+- 原请求解析仅检查错误码；空输出路径进入 `Within(output, input)` 后，被当成所有非空输入的祖先，触发原始 `collection_output_input_alias`。并行 Guard、Compile 和完成状态清理使该窗口可达；误报发生在完成记录发布前。
+- 新增正式回归 [`CheckConcurrentOutputs`](../../../Tests/AbiProfile/CollectionRequestTests.cpp)：调用真实输入守卫，同时模拟上述标记和锁生命周期。修复前 `ctest --preset macos -R '^AbiCollectionRequest$' --output-on-failure` 在 4,000 轮中有 **491 次同类误报**，CTest 失败。
+
+### 修复边界
+
+- [`ResolvePath`](../../../BuildTools/AbiProfile/Private/ToolIo.cpp) 使用 `canonical` 解析实际存在的前缀；只在 ENOENT 时剥离缺失后缀，拼回后作词法规范化。成功结果必须为绝对路径，其他文件系统错误仍失败。
+- 请求解析、编译命令解析、生命周期输出检查和 `IsSameFile` 统一使用该工具私有函数；原有 symlink、hardlink、保留工作目录及 `equivalent` 身份校验保留。未改变 ABI Schema、Fingerprint 或 Loader 保证范围。
+- 并发回归限定于 `__APPLE__`：Windows 删除中的文件可能返回 `access_denied`，应保持 Fail Closed，不能要求这种权限错误被接受。其他平台继续执行既有路径与文件身份回归。
+- 临时诊断已移除；独立只读评审及限定回归平台后的复审均无阻断项。临时探针和日志保留在本地 `.probe/macos-interface-cycle/`；正式回归不依赖该忽略目录。
+
+### 验证与独立问题
+
+- 修复后的 macOS 正式完整 CTest **37/37**、Linux 正式完整 CTest **34/34** 通过，均无失败重跑；macOS 包含原始接口环测试及新增并发回归。
+- Windows 首次完整 CTest 为 **33/36**：新增并发回归因 DeletePending 权限错误失败，随后已修正为 Apple 专属；另外两项为 `AbiCollectorAndroidCli`、`AbiCollectorAndroid`。使用修复前的已发布工具对照，Android CLI 同样失败，不归因于本次路径修复。
+- Android 当时的 NDK 原始宏输出使用 CRLF，既有 `AndroidCollector::Macro` 仅按 LF 截取，保留的行末 `\r` 导致与冻结宏值比较失败。该问题未在 macOS 追查轮修改，当次不能宣称 Windows 完整测试全绿；后续修复见下节。
+- 限定回归平台并清理两条新增静态检查提示后，三桌面正式构建均通过；各自再次执行路径请求、编译命令、CLI、IO 与依赖图五项回归，均为 **5/5**。Windows 的请求回归已恢复通过，仍保留上述两项独立 Android 失败。
+- 最终 macOS 最小探针在同一轮 10,000 次校验中仍直接观察到系统标准库 860 次空路径成功，项目守卫为 **0 次误报**；证明修复没有依赖问题窗口消失。
+- 最终版本的原始 `AbiCollectionBuildContractInterfaceCycle` 使用 `--repeat until-fail:5` 连续 **5 次通过**（44.29 / 41.40 / 40.96 / 40.73 / 41.00 秒，总计 208.44 秒），无失败重跑。
+- clang-format 检查、实际 Windows/macOS 编译数据库的针对性 clang-tidy 和 `git diff --check` 均返回成功。已清理本次新增的未使用 include 与循环提示；仍有既有 MSVC STL 枚举、macOS 文件所有权/包含及条件编译处 const 等提示，未扩大修改范围或增加豁免。
+
+## Android CRLF 解析后续修复（2026-10-28）
+
+- 确认两处同类问题：[`AndroidCollector::Macro`](../../../BuildTools/AbiProfile/Private/AndroidCollector.cpp) 把 CRLF 的 CR 保留为宏值；[`LibcxxConfiguration`](../../../BuildTools/AbiProfile/Private/HeaderTrace.cpp) 也保留行末 CR，导致普通 LF 源码与 CRLF 基线的配置比较冲突。
+- 两处解析都仅移除**紧邻已找到的 LF 的一个 CR**，不作通用 trim；ABI 值中的空格、嵌入 CR、额外 CR 和未配对的 EOF CR 仍参与严格校验。原始编译器输出和 Evidence 不改写，Profile/Fingerprint 协议不变。
+- [`AndroidCollectorTests`](../../../Tests/AbiProfile/AndroidCollectorTests.cpp) 使用真实 NDK 观测构造 LF/CRLF 变体，验证生成相同 Profile、原始 Evidence 保留，以及两种格式下尾随空格和嵌入 CR 的错误 ABI 值被拒绝。修复前 LF 通过、CRLF 在 `android_abi_macros_or_triple` 失败；修复后原始 API/CLI 两项 Android 测试 **2/2 通过**，包括普通源码和既有负测。
+- [`AbiProfileTests`](../../../Tests/AbiProfile/AbiProfileTests.cpp) 新增 10 项快速共享配置解析回归，覆盖双向 LF/CRLF、混合换行、末行无终止换行、值变化、缺失空值宏及显著字节保留。修复前 **60/63**（三项换行等价失败），修复后通过。
+- 最终正式 Android ARM64 Preset 的配置、构建和两 Module 的宿主 ABI Collection 通过；Linux 的共享回归及 Collector **2/2**、macOS/iOS 的共享回归及 Collector **3/3** 通过。未执行 Android/iOS 设备程序，也未重新运行 Linux/macOS 的完整测试集。
+- 最终 Windows 正式完整 CTest **36/36 通过**（470.17 秒，无失败重跑），包含原先失败的两项 Android Collector、两组新增换行回归及既有负测；本轮 Android CRLF 解析问题已关闭。
+- 四个 C++ 文件的 clang-format、实际 Windows 编译数据库的 clang-tidy 和差异检查通过；两轮独立只读代码评审无阻断项。本轮临时证据保留在 `.probe/android-crlf/`；既有暂存内容保持原样，未提交或推送。

@@ -218,7 +218,12 @@ template <class Predicate>
     while (!text.empty())
     {
         const auto end = text.find('\n');
-        const auto line = text.substr(0, end);
+        auto line = text.substr(0, end);
+        // A CR paired with LF is a line terminator, not macro replacement text.
+        if (end != std::string_view::npos && line.ends_with('\r'))
+        {
+            line.remove_suffix(1);
+        }
         if (line.starts_with("#define _LIBCPP_"))
         {
             const auto definition = line.substr(8);

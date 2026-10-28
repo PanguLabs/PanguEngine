@@ -17,7 +17,6 @@
 #include <span>
 #include <string>
 #include <string_view>
-#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -43,13 +42,7 @@ namespace
 [[nodiscard]] Result<std::filesystem::path> Resolve(const std::filesystem::path& path,
                                                     const std::filesystem::path& directory, FailureReport& report)
 {
-    std::error_code error;
-    auto result = std::filesystem::weakly_canonical(path.is_absolute() ? path : directory / path, error);
-    if (error || !result.is_absolute())
-    {
-        return std::unexpected(report.Add(ToolError::kResolvePath, "compile_path", path.generic_string(), error));
-    }
-    return result;
+    return ResolvePath(path.is_absolute() ? path : directory / path, "compile_path", report);
 }
 
 [[nodiscard]] bool Same(const std::filesystem::path& left, const std::filesystem::path& right, Platform host)

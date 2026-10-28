@@ -76,14 +76,7 @@ namespace
 // Resolve existing parent aliases, but never require a cold-build artifact to exist.
 [[nodiscard]] Result<std::filesystem::path> Resolve(const std::filesystem::path& path, FailureReport& report)
 {
-    std::error_code error;
-    auto resolved = std::filesystem::weakly_canonical(path, error);
-    if (error)
-    {
-        return std::unexpected(
-            report.Add(ToolError::kResolvePath, "resolve_request_path", path.generic_string(), error));
-    }
-    return resolved;
+    return ResolvePath(path, "resolve_request_path", report);
 }
 
 [[nodiscard]] bool SameSpelling(const std::filesystem::path& left, const std::filesystem::path& right)

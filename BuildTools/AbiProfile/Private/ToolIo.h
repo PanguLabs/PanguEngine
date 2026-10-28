@@ -31,6 +31,10 @@ using ToolFile = std::unique_ptr<std::FILE, FileCloser>;
 [[nodiscard]] Status RemoveGeneratedFile(const std::filesystem::path& path, FailureReport& report);
 [[nodiscard]] bool ClearGeneratedFiles(const std::filesystem::path& canonical, const std::filesystem::path& fingerprint,
                                        FailureReport& report);
+// Resolve the existing prefix, retaining a lexically normalized missing suffix.
+// A concurrently removed suffix must never become a successful empty path.
+[[nodiscard]] Result<std::filesystem::path> ResolvePath(const std::filesystem::path& path, std::string_view stage,
+                                                        FailureReport& report);
 [[nodiscard]] Result<bool> IsSameFile(const std::filesystem::path& left, const std::filesystem::path& right,
                                       FailureReport& report);
 } // namespace pg::abi

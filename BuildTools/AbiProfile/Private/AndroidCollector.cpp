@@ -57,7 +57,13 @@ namespace
     }
     const auto offset = pos + marker.size();
     const auto end = definitions.find('\n', offset);
-    return definitions.substr(offset, end == std::string_view::npos ? end : end - offset);
+    auto value = definitions.substr(offset, end == std::string_view::npos ? end : end - offset);
+    // Strip only the CR in a CRLF terminator; other value bytes remain ABI-significant.
+    if (end != std::string_view::npos && value.ends_with('\r'))
+    {
+        value.remove_suffix(1);
+    }
+    return value;
 }
 
 [[nodiscard]] std::string DriverTriple(std::string_view driver)

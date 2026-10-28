@@ -110,6 +110,71 @@ int main(int argc, char* const argv[])
         report.WriteJson(std::cerr);
         return 1;
     }
+    // Compiler output may use either host line ending. Exercise the real
+    // Profile mapper without changing the observation's ABI values or origins.
+    const auto lineEndings = [](std::string_view text, std::string_view ending)
+    {
+        std::string result;
+        for (std::size_t index = 0; index < text.size(); ++index)
+        {
+            const auto character = text.at(index);
+            if (character == '\r' && index + 1 < text.size() && text.at(index + 1) == '\n')
+            {
+                continue;
+            }
+            if (character == '\n')
+            {
+                result += ending;
+            }
+            else
+            {
+                result += character;
+            }
+        }
+        return result;
+    };
+    nlohmann::json lineEndingProfile;
+    for (const auto ending : {std::string_view("\n"), std::string_view("\r\n")})
+    {
+        auto variant = *observation;
+        for (auto& unit : variant.Facts.at("units"))
+        {
+            for (const auto* key : {"macros", "libcxx_baseline"})
+            {
+                unit.at(key) = lineEndings(unit.at(key).get_ref<const std::string&>(), ending);
+            }
+        }
+        pg::abi::FailureReport lineEndingReport;
+        const auto profile = pg::abi::CollectAndroidPlatformProfile(request, *units, variant, lineEndingReport);
+        if (!profile || (!lineEndingProfile.is_null() && profile->Profile != lineEndingProfile) ||
+            profile->Evidence != variant.Facts)
+        {
+            std::cerr << "Android Profile must accept LF/CRLF equally and preserve raw evidence (CRLF="
+                      << (ending == "\r\n") << ")\n";
+            lineEndingReport.WriteJson(std::cerr);
+            return 1;
+        }
+        lineEndingProfile = profile->Profile;
+        for (const auto invalidSuffix : {std::string_view(" "), std::string_view("\r0")})
+        {
+            auto invalid = variant;
+            auto& macros = invalid.Facts.at("units").at(0).at("macros").get_ref<std::string&>();
+            constexpr std::string_view kPointerMacro = "#define __SIZEOF_POINTER__ 8";
+            const auto offset = macros.find(kPointerMacro);
+            if (offset == std::string::npos)
+            {
+                std::cerr << "Missing real pointer ABI macro in Android fixture\n";
+                return 1;
+            }
+            macros.insert(offset + kPointerMacro.size(), invalidSuffix);
+            pg::abi::FailureReport invalidReport;
+            if (pg::abi::CollectAndroidPlatformProfile(request, *units, invalid, invalidReport))
+            {
+                std::cerr << "Android macro parser discarded significant ABI value bytes\n";
+                return 1;
+            }
+        }
+    }
     const auto collected = pg::abi::CollectAndroidPlatformProfile(request, *units, *observation, report);
     if (!collected || collected->Profile.at("runtime").at("sdk_abi_id") != "android-ndk-r30-api-29" ||
         collected->Profile.at("stdlib").at("abi_namespace") != "__ndk1" ||

@@ -379,6 +379,76 @@ using Json = nlohmann::json;
     return passed;
 }
 
+// Resolving a transient completion marker or lock must not turn an unrelated
+// request into an output alias while another process finishes its lifecycle.
+#ifdef __APPLE__
+[[nodiscard]] bool CheckConcurrentOutputs(const std::filesystem::path& root)
+{
+    const auto directory = root / "build/Abi/Debug/Example";
+    std::error_code error;
+    std::filesystem::create_directories(directory, error);
+    const auto requestFile = root / "request.json";
+    if (error || !Check(requestFile, Request(root).dump(), true, "concurrent output fixture"))
+    {
+        return false;
+    }
+    pg::abi::FailureReport readReport;
+    const auto request = pg::abi::ReadCollectionRequest(requestFile, readReport);
+    if (!request)
+    {
+        return false;
+    }
+    const auto lock = directory / ".collection-lock";
+    const auto marker = directory / ".invalid";
+    std::atomic<bool> stop{false};
+    std::atomic<bool> producerFailed{false};
+    std::atomic<unsigned> completed{};
+    std::jthread producer(
+        [&]
+        {
+            while (!stop)
+            {
+                std::error_code producerError;
+                std::filesystem::create_directory(lock, producerError);
+                if (producerError)
+                {
+                    producerFailed = true;
+                    return;
+                }
+                std::ofstream file(marker, std::ios::binary);
+                file.put('x');
+                file.close();
+                if (!file || !std::filesystem::remove(marker, producerError) || producerError ||
+                    !std::filesystem::remove(lock, producerError) || producerError)
+                {
+                    producerFailed = true;
+                    return;
+                }
+                ++completed;
+            }
+        });
+    unsigned failures{};
+    for (unsigned attempt = 0; attempt != 4000; ++attempt)
+    {
+        pg::abi::FailureReport report;
+        if (!pg::abi::CheckCollectionInputPaths(*request, {}, report))
+        {
+            if (failures == 0)
+            {
+                std::cerr << "transient output raced input guard:\n";
+                report.WriteJson(std::cerr);
+            }
+            ++failures;
+        }
+    }
+    stop = true;
+    producer.join();
+    std::cerr << "transient output guard checks=4000 failures=" << failures << " lifecycle_cycles=" << completed
+              << '\n';
+    return failures == 0 && !producerFailed && completed != 0;
+}
+#endif
+
 [[nodiscard]] bool Run(const std::filesystem::path& root)
 {
     std::error_code error;
@@ -555,6 +625,11 @@ using Json = nlohmann::json;
     passed &= CheckLifecycle(root / "Lifecycle");
     passed &= CheckWorkAliases(root / "Aliases");
     passed &= CheckPrivateWork(root / "PrivateWork");
+#ifdef __APPLE__
+    // Windows may report access_denied for a delete-pending marker; that remains
+    // a legitimate fail-closed outcome, not this system libc++ regression.
+    passed &= CheckConcurrentOutputs(root / "ConcurrentOutputs");
+#endif
     return passed;
 }
 } // namespace
