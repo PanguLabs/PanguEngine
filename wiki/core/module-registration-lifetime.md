@@ -164,4 +164,4 @@ class ModuleManager;
 
 **未冻结**：具体 ModuleId/Descriptor C++ 布局、SHARED Query 的稳定符号名/平台调用约定、原生 C++ ModuleDefinition Public API/接口契约、预检产物绑定技术、PanguMeta 生成协议、CMake 包装 API、生命周期 Enum/公开函数签名、同步实现、ABI Fingerprint 的具体 C++ API/Loader 接线、Provider 匹配 API、完整 Hot Reload、Plugin Manifest/Packaging。身份/版本、依赖绑定和操作后置条件的进一步冻结见 [Module API v1 第 8 节](module-api.md#8-冻结范围与后续-apiabi-门槛)。ABI 配置字段、Canonical SHA-256 和严格相容/校验顺序见 [ABI Profile / Fingerprint v1](../foundation/abi-profile-fingerprint.md)（Frozen）；动态发现入口布局、具体 Public API 和实现仍未冻结。
 
-本文件不声称已经实现 ModuleManager、真实动态装载、静态链接 Catalog 或跨平台验收；仍须以第 9 节的验证矩阵进行实现检查。
+当前已实现同次构建 STATIC Catalog、宿主元数据快照及同步声明事务的最小切片，见 [Module API 实现状态](module-api.md#当前正式实现切片2026-10-28)。本文件不声称完整 ModuleManager、真实动态装载、Service/工作生命周期或跨平台完整矩阵已验收；仍须以第 9 节逐项检查。

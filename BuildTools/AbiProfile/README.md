@@ -55,6 +55,8 @@ Linux/macOS 分别使用本机 ext4/APFS BuildRoot（不是 SMB），Android/iOS
 
 ## 失败报告与文件状态
 
+Windows 宿主的编译路径（含 Android 交叉编译）对锁目录及明确枚举的 ABI 生成文件的 `ERROR_ACCESS_DENIED` 使用有界等待，覆盖请求读取、SCC 成员解析、Observation 输入路径校验及事务取锁。每次重新执行完整校验，输入/父目录/未知路径和其他错误不作同类重试；默认 Guard 仍不等待。工具私有 `CollectionOutputWait` 显式携带绝对截止时间，同一 SCC 请求解析与取锁共享预算，子编译器运行前后的状态转换另起等待阶段。重试过程使用独立报告，成功不耗用调用方的诊断预算；永久拒绝保留原始错误，不生成新的收据或完成记录。根因、正式回归与验收见 [并行输出校验修复计划](../../docs/superpowers/plans/2026-10-28-abi-output-concurrency.md)。
+
 原四参数编码命令继续兼容；统一 Guard / Compile / Collect / Invalidate 复用结构化失败报告。失败时以非零退出码表示结果分类，stdout 输出一行独立的 JSON 失败报告，
 stderr 提供提示及失败探针的有界 JSON 诊断（`operation=abi-probe`）；正式 stdout 失败报告的可选 `probe` 字段也独立拥有首个失败探针的阶段、程序、工作目录、参数、实际退出码和捕获输出。参数最多保留32项、每项256字节，stdout/stderr分别最多8/32 KiB，截断时标记 `truncated=true`；后续失败不替换首现场。调用方即使不保存stderr，也可从操作报告取得必要诊断。
 

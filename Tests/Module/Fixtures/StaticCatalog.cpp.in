@@ -1,0 +1,15 @@
+#include "FixtureModules.h"
+
+#include <ModuleDescriptor.h>
+
+#include <array>
+
+namespace pg::module::fixture
+{
+StaticModuleCatalog GeneratedCatalog() noexcept
+{
+    // Deliberately dependent-first input; Host must resolve Provider-first order.
+    static constexpr std::array kEntries{StaticCatalogEntry{QueryFirst}, StaticCatalogEntry{QuerySecond}};
+    return {kEntries};
+}
+} // namespace pg::module::fixture

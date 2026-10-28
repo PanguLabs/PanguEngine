@@ -5,6 +5,8 @@
 #include "TechnicalClosure.h"
 #include "ToolReport.h"
 
+#include <Result.h>
+
 #include <cstddef>
 #include <filesystem>
 #include <iostream>
@@ -36,7 +38,8 @@ int RunMain(int argc, char* const* argv)
         {
             const std::string requestText(arguments.subspan<2>().front());
             const auto request = pg::abi::ReadCollectionRequest(
-                std::filesystem::path(std::u8string(requestText.begin(), requestText.end())), report);
+                std::filesystem::path(std::u8string(requestText.begin(), requestText.end())), report,
+                pg::abi::CollectionOutputWait::Waiting());
             if (request)
             {
                 std::vector<std::string> invocation;

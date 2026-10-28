@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <concepts>
 #include <cstddef>
 #include <expected>
 #include <filesystem>
@@ -15,6 +17,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -23,6 +26,7 @@
 #include <Windows.h> // IWYU pragma: keep - supplies Windows SDK prerequisites.
 #include <minwindef.h>
 #include <stringapiset.h>
+#include <winerror.h>
 #include <winnls.h>
 #endif
 
@@ -30,6 +34,52 @@ namespace pg::abi
 {
 namespace
 {
+void AppendAttempt(FailureReport& report, const FailureReport& attempt)
+{
+    for (std::size_t index = 0; index < attempt.Count; ++index)
+    {
+        if (report.Count == FailureReport::kCapacity)
+        {
+            report.Truncated = true;
+            break;
+        }
+        report.Entries.at(report.Count++) = attempt.Entries.at(index);
+    }
+    report.Truncated |= attempt.Truncated;
+    report.CleanupIncomplete |= attempt.CleanupIncomplete;
+    if (attempt.Probe && attempt.Probe->Present && report.Probe && !report.Probe->Present)
+    {
+        *report.Probe = *attempt.Probe;
+    }
+}
+
+template <std::invocable<FailureReport&> Check>
+[[nodiscard]] Status CheckWithOutputWait(const CollectionRequest& request, CollectionOutputWait wait,
+                                         FailureReport& report, Check check)
+{
+    if (!wait.Deadline)
+    {
+        return check(report);
+    }
+    FailureReport attempt;
+    while (true)
+    {
+        attempt.Count = 0;
+        attempt.Truncated = false;
+        attempt.CleanupIncomplete = false;
+        attempt.Probe->Present = false;
+        const auto result = check(attempt);
+        if (result || !IsDeniedCollectionOutput(request, attempt, true) ||
+            std::chrono::steady_clock::now() >= *wait.Deadline)
+        {
+            AppendAttempt(report, attempt);
+            return result;
+        }
+        // Read-only checks restart in full. An inaccessible path is never accepted.
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+}
+
 [[nodiscard]] Status Reject(const std::filesystem::path& path, FailureReport& report, std::string_view field)
 {
     return std::unexpected(
@@ -355,8 +405,38 @@ std::vector<std::filesystem::path> CollectionOutputDirectories(const CollectionR
     }
     return directories;
 }
-Status CheckCollectionInputPaths(const CollectionRequest& request, std::span<const std::filesystem::path> inputs,
-                                 FailureReport& report)
+bool IsDeniedCollectionOutput(const CollectionRequest& request, const FailureReport& report, bool includeLock)
+{
+#ifdef _WIN32
+    if (report.Count == 0 || report.CleanupIncomplete)
+    {
+        return false;
+    }
+    const auto& failure = report.Entries.at(report.Count - 1);
+    const auto native = failure.Value.Native();
+    if (!native || native->Source != kSystemSource || native->Value != ERROR_ACCESS_DENIED)
+    {
+        return false;
+    }
+    const auto matches = [&](const std::filesystem::path& path)
+    {
+        const auto text = path.generic_u8string();
+        return failure.Path.View() == std::string(text.begin(), text.end());
+    };
+    return (includeLock && matches(request.OutputDirectory / ".collection-lock")) ||
+           std::ranges::any_of(CollectionOutputFiles(request), matches);
+#else
+    (void)request;
+    (void)report;
+    (void)includeLock;
+    return false;
+#endif
+}
+
+namespace
+{
+Status CheckInputPathsOnce(const CollectionRequest& request, std::span<const std::filesystem::path> inputs,
+                           FailureReport& report)
 {
     if (const auto checked = CheckWorkTree(request, report); !checked)
     {
@@ -449,8 +529,17 @@ Status CheckCollectionInputPaths(const CollectionRequest& request, std::span<con
     }
     return {};
 }
+} // namespace
 
-Result<CollectionRequest> ReadCollectionRequest(const std::filesystem::path& path, FailureReport& report)
+Status CheckCollectionInputPaths(const CollectionRequest& request, std::span<const std::filesystem::path> inputs,
+                                 FailureReport& report, CollectionOutputWait wait)
+{
+    return CheckWithOutputWait(request, wait, report,
+                               [&](FailureReport& attempt) { return CheckInputPathsOnce(request, inputs, attempt); });
+}
+
+Result<CollectionRequest> ReadCollectionRequest(const std::filesystem::path& path, FailureReport& report,
+                                                CollectionOutputWait wait)
 {
     const auto contents = ReadFile(path, "read_request", report);
     if (!contents)
@@ -558,7 +647,8 @@ Result<CollectionRequest> ReadCollectionRequest(const std::filesystem::path& pat
         }
         request.EnvironmentBaseline.emplace(key, value.is_null() ? std::nullopt : std::optional{Text(value)});
     }
-    const auto checked = CheckPaths(request, path, report);
+    const auto checked = CheckWithOutputWait(request, wait, report, [&](FailureReport& attempt)
+                                             { return CheckPaths(request, path, attempt); });
     return checked ? Result<CollectionRequest>{std::move(request)} : std::unexpected(checked.error());
 }
 } // namespace pg::abi

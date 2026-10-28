@@ -723,7 +723,8 @@ Status CompareDependencyProfiles(const DependencyGraph& graph, const DependencyP
 }
 
 Result<std::vector<CollectionRequest>> ResolveCollectionGroup(const DependencyGraph& graph, const DependencyPlan& plan,
-                                                              const CollectionRequest& root, FailureReport& report)
+                                                              const CollectionRequest& root, FailureReport& report,
+                                                              CollectionOutputWait wait)
 {
     for (const auto& cycle : plan.TechnicalCycles)
     {
@@ -735,7 +736,7 @@ Result<std::vector<CollectionRequest>> ResolveCollectionGroup(const DependencyGr
         for (const auto& name : cycle)
         {
             const auto& target = graph.Targets.at(name);
-            const auto request = ReadCollectionRequest(target.RequestFile, report);
+            const auto request = ReadCollectionRequest(target.RequestFile, report, wait);
             if (!request)
             {
                 return std::unexpected(request.error());

@@ -66,10 +66,9 @@ struct DependencyPlan
                                                       FailureReport& report);
 // The root's SCC only, deterministically ordered for lock acquisition. Acyclic
 // roots return a singleton. All SCC members must name the same exported graph.
-[[nodiscard]] Result<std::vector<CollectionRequest>> ResolveCollectionGroup(const DependencyGraph& graph,
-                                                                            const DependencyPlan& plan,
-                                                                            const CollectionRequest& root,
-                                                                            FailureReport& report);
+[[nodiscard]] Result<std::vector<CollectionRequest>>
+ResolveCollectionGroup(const DependencyGraph& graph, const DependencyPlan& plan, const CollectionRequest& root,
+                       FailureReport& report, CollectionOutputWait wait = {});
 // Inputs must already have been verified against the frozen v1 schema and
 // their individual build-completion records; comparison does not attest provenance.
 [[nodiscard]] Status CompareDependencyProfiles(const DependencyGraph& graph, const DependencyPlan& plan,

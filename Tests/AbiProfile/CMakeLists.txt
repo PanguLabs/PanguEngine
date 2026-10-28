@@ -78,6 +78,14 @@ add_test(NAME AbiCollectionState COMMAND PanguCollectionStateTests "${CMAKE_CURR
     "${CMAKE_CXX_COMPILER}" "${PROJECT_SOURCE_DIR}/wiki/foundation" "$<TARGET_FILE:PanguProcessFixture>")
 set_tests_properties(AbiCollectionState PROPERTIES TIMEOUT 600)
 
+if(WIN32)
+    add_executable(PanguCollectionOutputWaitTests CollectionOutputWaitTests.cpp)
+    target_link_libraries(PanguCollectionOutputWaitTests PRIVATE PanguBuildOptions PanguAbiProfile)
+    set_target_properties(PanguCollectionOutputWaitTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")
+    add_test(NAME AbiCollectionOutputWait COMMAND PanguCollectionOutputWaitTests "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(AbiCollectionOutputWait PROPERTIES TIMEOUT 60)
+endif()
+
 add_executable(PanguCompileCommandsTests CompileCommandsTests.cpp)
 target_link_libraries(PanguCompileCommandsTests PRIVATE PanguBuildOptions PanguAbiProfile)
 set_target_properties(PanguCompileCommandsTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")

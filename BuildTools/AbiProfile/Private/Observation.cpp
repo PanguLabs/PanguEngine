@@ -228,7 +228,8 @@ Result<std::unique_ptr<ObservationWork>> ObservationWork::Acquire(const Collecti
         inputs.push_back(unit.Object);
         inputs.insert(inputs.end(), unit.ResponseFiles.begin(), unit.ResponseFiles.end());
     }
-    if (const auto checked = CheckCollectionInputPaths(request, inputs, report); !checked)
+    if (const auto checked = CheckCollectionInputPaths(request, inputs, report, CollectionOutputWait::Waiting());
+        !checked)
     {
         return std::unexpected(checked.error());
     }
@@ -255,7 +256,7 @@ Result<std::unique_ptr<ObservationWork>> ObservationWork::Acquire(const Collecti
                 {
                     return std::unexpected(headers.error());
                 }
-                return CheckCollectionInputPaths(request, *headers, report);
+                return CheckCollectionInputPaths(request, *headers, report, CollectionOutputWait::Waiting());
             }
             return {};
         };
@@ -391,7 +392,8 @@ Result<CompileObservation> ObservationWork::Finish(CompileObservation observatio
 {
     auto inputs = observation.ObservedInputs;
     inputs.insert(inputs.end(), observation.Headers.begin(), observation.Headers.end());
-    if (const auto checked = CheckCollectionInputPaths(*Request, inputs, *Report); !checked)
+    if (const auto checked = CheckCollectionInputPaths(*Request, inputs, *Report, CollectionOutputWait::Waiting());
+        !checked)
     {
         return std::unexpected(checked.error());
     }
@@ -477,7 +479,8 @@ Result<TranslationUnitObservation> ObserveTranslationUnit(const CollectionReques
     {
         return std::unexpected(headers.error());
     }
-    if (const auto checked = CheckCollectionInputPaths(request, *headers, report); !checked)
+    if (const auto checked = CheckCollectionInputPaths(request, *headers, report, CollectionOutputWait::Waiting());
+        !checked)
     {
         return std::unexpected(checked.error());
     }

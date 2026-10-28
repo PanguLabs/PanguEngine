@@ -1,7 +1,7 @@
 # Pangu ModuleDescriptor & Registration API v1
 
 > 状态：**Partially Frozen**。第 8 节列出的行为契约已冻结；C++ 代码块仍为 API 提案，**Public Header、具体签名/布局、导出名、ABI 与生产 Loader 实现未冻结**。
-> 更新：2026-10-22
+> 更新：2026-10-28
 > 前置已冻结：[Module Registration & Lifetime v1](module-registration-lifetime.md)、[Service v1](service.md)、[ABI Profile / Fingerprint v1](../foundation/abi-profile-fingerprint.md)、[Memory](memory-management.md)、[Build System](../foundation/build-system.md)
 > 决策：[ADR-0010：统一 C++23 Module 入口](../decisions/0010-unified-cpp-module-entry.md)、[ADR-0011：Module API v1 行为契约](../decisions/0011-module-api-behavior-contract.md)。冻结行为不代表实现或跨平台 ABI 已验收，现有证据见第 9 节。
 
@@ -339,6 +339,20 @@ public:
 冻结 Public API/ABI 前还必须完成：可独立编译的公共头文件及上述依赖类型；同一契约的 STATIC/SHARED 接线；所有借用数据与报告预算/上限；无异常分配策略；五平台目标布局和调用约定验证；装载前真实产物绑定与装载后二次核对；并发线性化、失败注入和卸载回归。不得因本轮行为冻结跳过任何一项，也不要求恢复独立 C POD Discovery。
 
 ## 9. 本轮验证证据与限制
+
+### 当前正式实现切片（2026-10-28）
+
+在原 `PanguModule` STATIC Target 内新增 Descriptor、`StaticModuleHost` 与声明注册事务，规格见 [STATIC Catalog 实施规格](../../docs/superpowers/specs/2026-10-28-module-static-catalog.md)，验收见[实施计划](../../docs/superpowers/plans/2026-10-28-module-static-catalog.md)。具体签名及布局仍未冻结。
+
+- `ModuleDescriptor.h` 定义借用描述、Required/Optional 依赖、原生注册/Query 与扁平 Catalog。Host 在 Create 期间查询一次并深复制字符串和依赖，校验零/重复身份、协议版本、入口、精确依赖版本、显式 Optional 选择及有效图中的环，生成依赖优先顺序。
+- `StaticModuleHost` 只接受同一受控二进制的 STATIC Catalog；`ModuleOperationReport` 为无借用的定长值快照。前置拒绝保留状态；回调失败后同步撤回本次声明并保留原始 Error 和不同进度，不允许原记录直接重试。
+- `RegistrationContext` 暂存强类型 `DeclarationId`、Owner 和诊断名；`RegistrationScope` 表示一个具体 Owner，持有全部成功声明。同一 Scope 原子发布，声明冲突为粘性失败，同一 Scope 的跨 Host 重入拒绝。它尚不是第 5 节 Service Provider/Contribution/Work 工厂 API。
+- 显式限制：256 个 Module、每个 64 个依赖、描述字符串 256 字节、每次 256 条声明、每 Scope 4096 条声明。冷路径使用拥有型标准容器，OOM 不承诺可恢复；操作由调用方外部串行化。
+- 正式 [Module 测试](../../Tests/Module/README.md) 覆盖上述行为；两个真实受管 STATIC 夹具经最终 EXE 生成的根引用进行裁剪链接与注册验收。测试源码长期保留，不依赖历史 PoC。
+
+**当前边界**：Descriptor 暂不暴露可手填的 ABI Profile/Fingerprint 字段。现有 STATIC 采集继续核验真实目标库；最终 EXE 的完整 ABI 一致性、Profile 嵌入、Public C++ Contract、完整 ModuleManager/EngineHost、Service 装配/激活、CodePin、工作排空及 SHARED Loader 尚未实现。本 API 不能用作外部候选放行或动态装载的替代路径；以下早期证据保留其当时范围。
+
+### 早期 Identity 与 PoC 验证（2026-10-22）
 
 ### 9.1 正式 Module Identity 代码起步（2026-10-22）
 

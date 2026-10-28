@@ -823,7 +823,8 @@ int main(int argc, char* const* argv)
     {
         return 1;
     }
-    const auto checkPendingLock = [&](bool releaseBeforeDeadline, bool fullReport)
+    const auto checkPendingOutput =
+        [&](std::string_view name, bool directory, bool releaseBeforeDeadline, bool fullReport)
     {
         const auto resume = std::filesystem::path(object.string() + ".resume");
         std::filesystem::remove(resume);
@@ -851,10 +852,18 @@ int main(int argc, char* const* argv)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
-        const auto lock = request.OutputDirectory / ".collection-lock";
+        const auto lock = request.OutputDirectory / name;
         std::error_code pendingError;
-        const bool lockCreated = !finished && Get(object.string() + ".invoked") != beforePause &&
-                                 std::filesystem::create_directory(lock, pendingError);
+        bool lockCreated = !finished && Get(object.string() + ".invoked") != beforePause;
+        if (lockCreated && directory)
+        {
+            lockCreated = std::filesystem::create_directory(lock, pendingError);
+        }
+        else if (lockCreated)
+        {
+            Put(lock, "old generated output\n");
+            lockCreated = std::filesystem::is_regular_file(lock, pendingError) && !pendingError;
+        }
         auto* const pendingHandle = lockCreated
                                         ? ::CreateFileW(lock.c_str(), DELETE | FILE_READ_ATTRIBUTES,
                                                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
@@ -864,14 +873,14 @@ int main(int argc, char* const* argv)
         const bool marked =
             pendingHandle != INVALID_HANDLE_VALUE &&
             ::SetFileInformationByHandle(pendingHandle, FileDispositionInfo, &disposition, sizeof(disposition)) != 0;
-        check(marked, "hold native DeletePending lock while real compiler is paused");
+        check(marked, "hold native DeletePending generated path while real compiler is paused");
         if (marked)
         {
             (void)std::filesystem::symlink_status(lock, pendingError);
             check(pendingError == std::errc::permission_denied, "DeletePending reproduces access denied");
             pg::abi::FailureReport noWait;
             check(!pg::abi::GuardCollection(request, noWait) && noWait.Count > 0,
-                  "nonwaiting guard still rejects inaccessible lock");
+                  "nonwaiting guard still rejects inaccessible generated path");
         }
         Put(resume, "resume\n");
         const auto pendingDeadline = std::chrono::steady_clock::now() +
@@ -883,10 +892,10 @@ int main(int argc, char* const* argv)
         const bool completedWhileDenied = finished;
         check(marked && completedWhileDenied != releaseBeforeDeadline &&
                   !std::filesystem::exists(pg::abi::CompileReceiptPath(request, pausedUnits->front())),
-              "pending lock blocks publication and persistent denial reaches bounded failure");
+              "pending generated path blocks publication and persistent denial reaches bounded failure");
         if (pendingHandle != INVALID_HANDLE_VALUE)
         {
-            check(::CloseHandle(pendingHandle) != 0, "release DeletePending lock handle");
+            check(::CloseHandle(pendingHandle) != 0, "release DeletePending generated path handle");
         }
         pausedCompiler.join();
         if (releaseBeforeDeadline && pendingExit != 0)
@@ -899,7 +908,7 @@ int main(int argc, char* const* argv)
             check(pendingExit == 0 && pendingReport.Count == expectedCount && !pendingReport.Truncated &&
                       (!fullReport || pendingReport.Entries.front().Stage.View() == "retained_before_lock") &&
                       std::filesystem::is_regular_file(pg::abi::CompileReceiptPath(request, pausedUnits->front())),
-                  "compiler publishes receipt after DeletePending lock disappears");
+                  "compiler publishes receipt after DeletePending generated path disappears");
         }
         else
         {
@@ -909,13 +918,16 @@ int main(int argc, char* const* argv)
                       pendingReport.Entries.front().Path.View() == lock.generic_string() &&
                       !std::filesystem::exists(pg::abi::CompileReceiptPath(request, pausedUnits->front())) &&
                       !std::filesystem::exists(request.OutputDirectory / "complete.json"),
-                  "persistent denied lock retains native error and publishes no receipt or completion");
+                  "persistent denied generated path retains native error and publishes no receipt or completion");
         }
         std::filesystem::remove(resume);
     };
-    checkPendingLock(true, false);
-    checkPendingLock(true, true);
-    checkPendingLock(false, false);
+    checkPendingOutput(".collection-lock", true, true, false);
+    checkPendingOutput(".collection-lock", true, true, true);
+    checkPendingOutput(".collection-lock", true, false, false);
+    checkPendingOutput("canonical.json", false, true, false);
+    checkPendingOutput("canonical.json", false, true, true);
+    checkPendingOutput("canonical.json", false, false, false);
     fixtureCommand.at(1) = "compile-fixture";
     writeCommand(fixtureCommand);
     check(pg::abi::RunObservedCompilerInvocation(request, fixtureUnits->front(), observation, report) == 0,

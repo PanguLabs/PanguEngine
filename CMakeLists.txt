@@ -23,11 +23,11 @@ if(NOT CMAKE_CROSSCOMPILING)
     add_subdirectory(BuildTools/AbiProfile)
 endif()
 
-# Finalize the resolved current-configuration C++ dependency graph after all
-# Module libraries have registered their own Guard / Compile / Collect hooks.
-pangu_finalize_abi_profiles(TARGETS PanguFoundation PanguModule PanguBuildOptions)
-
 include(CTest)
 if(BUILD_TESTING)
     add_subdirectory(Tests)
 endif()
+
+# Include real fixture Modules when testing, after all library hooks have registered.
+get_property(_panguAbiModules GLOBAL PROPERTY PANGU_ABI_MODULE_TARGETS)
+pangu_finalize_abi_profiles(TARGETS ${_panguAbiModules} PanguBuildOptions)

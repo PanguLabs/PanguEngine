@@ -340,9 +340,9 @@ public:
     Transaction& operator=(const Transaction&) = delete;
     Transaction(Transaction&&) = delete;
     Transaction& operator=(Transaction&&) = delete;
-    Status Begin(bool wait = false)
+    Status Begin(bool wait = false, CollectionOutputWait outputWait = {})
     {
-        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        const auto deadline = outputWait.Deadline.value_or(std::chrono::steady_clock::now() + std::chrono::seconds(30));
         FailureReport attemptReport;
         while (true)
         {
@@ -357,10 +357,7 @@ public:
 #ifdef _WIN32
             if (!attempted && wait && attemptReport.Count > 0)
             {
-                const auto& failure = attemptReport.Entries.at(attemptReport.Count - 1);
-                const auto native = failure.Value.Native();
-                retryDenied = failure.Path.View() == PathText(Directory) && native && native->Source == kSystemSource &&
-                              native->Value == ERROR_ACCESS_DENIED;
+                retryDenied = IsDeniedCollectionOutput(Request, attemptReport, true);
             }
 #endif
             if (!attempted && !retryDenied)
@@ -380,8 +377,8 @@ public:
                 }
                 return std::unexpected(Fail(Report, "collection_busy", Directory));
             }
-            // A prior owner may be deleting the lock directory. Retry the
-            // entire validation/acquisition without accepting the path or
+            // A prior owner may be deleting the lock or a generated output.
+            // Retry the entire validation/acquisition without accepting the path or
             // retaining transient diagnostics. Persistent denial still
             // fails at the deadline; errors on other paths are immediate.
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -1446,7 +1443,8 @@ Status PublishPrepared(const CollectionRequest& request, Transaction& transactio
     return {};
 }
 
-Result<std::vector<CollectionRequest>> StateGroup(const CollectionRequest& request, FailureReport& report)
+Result<std::vector<CollectionRequest>> StateGroup(const CollectionRequest& request, FailureReport& report,
+                                                  CollectionOutputWait wait = {})
 {
     // State primitives also serve cold compiler receipts before graph export;
     // Collect remains the strict graph gate. Existing snapshots bind graph bytes.
@@ -1461,7 +1459,7 @@ Result<std::vector<CollectionRequest>> StateGroup(const CollectionRequest& reque
     {
         return std::unexpected(plan.error());
     }
-    return ResolveCollectionGroup(*graph, *plan, request, report);
+    return ResolveCollectionGroup(*graph, *plan, request, report, wait);
 }
 
 class LockedGroup
@@ -1484,14 +1482,18 @@ public:
     LockedGroup& operator=(const LockedGroup&) = delete;
     LockedGroup(LockedGroup&&) = delete;
     LockedGroup& operator=(LockedGroup&&) = delete;
-    Status Begin(bool wait = false)
+    Status Begin(bool wait = false, CollectionOutputWait outputWait = {})
     {
+        if (wait && !outputWait.Deadline)
+        {
+            outputWait = CollectionOutputWait::Waiting();
+        }
         // ResolveCollectionGroup sorts by target name. Compiler transitions
         // may wait briefly; all operations acquire the same member lock order.
         for (const auto& request : Requests)
         {
             auto transaction = std::make_unique<Transaction>(request, Report, Io);
-            if (const auto begun = transaction->Begin(wait); !begun)
+            if (const auto begun = transaction->Begin(wait, outputWait); !begun)
             {
                 return begun;
             }
@@ -1576,14 +1578,15 @@ void RevokeUnresolved(const CollectionRequest& request, FailureReport& report)
 
 Status InvalidateCollection(const CollectionRequest& request, FailureReport& report)
 {
-    const auto requests = StateGroup(request, report);
+    const auto wait = CollectionOutputWait::Waiting();
+    const auto requests = StateGroup(request, report, wait);
     if (!requests)
     {
         RevokeUnresolved(request, report);
         return std::unexpected(requests.error());
     }
     LockedGroup group(*requests, report);
-    if (const auto begun = group.Begin(true); !begun)
+    if (const auto begun = group.Begin(true, wait); !begun)
     {
         return begun;
     }
@@ -1860,7 +1863,8 @@ int RunObservedCompilerInvocation(const CollectionRequest& request, const Compil
         return removed.has_value();
     };
     {
-        const auto requests = StateGroup(request, report);
+        const auto wait = CollectionOutputWait::Waiting();
+        const auto requests = StateGroup(request, report, wait);
         if (!requests)
         {
             RevokeUnresolved(request, report);
@@ -1868,7 +1872,7 @@ int RunObservedCompilerInvocation(const CollectionRequest& request, const Compil
             return 3;
         }
         LockedGroup group(*requests, report);
-        if (!group.Begin(true) || !group.Revoke() || !SafeOutput(request, receiptPath, report) ||
+        if (!group.Begin(true, wait) || !group.Revoke() || !SafeOutput(request, receiptPath, report) ||
             !RemoveGeneratedFile(receiptPath, report) || !group.Close())
         {
             (void)cleanup();

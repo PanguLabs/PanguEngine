@@ -110,7 +110,7 @@ cmake/
 - `pangu_configure_module(<existing-target>)` 仅为现有 `add_library(... STATIC|SHARED ...)` Target **PRIVATE** 应用 Pangu 编译策略，并设置 PIC 和输出目录；必须**先创建**真实 Module Target，不隐式生成 Library、Manifest、Catalog 或 ModuleId。当前 `PanguModule` 通过 `add_library(PanguModule STATIC ...)` 建立，`Pangu::Module` 仅是 Alias。
 - 平台 Settings 负责目标特殊规则：Windows 使用 Clang + MSVC STL（Windows ARM 不在 v1）；Linux Toolchain 在 `project()` 前选择并核对匹配 LLVM 的 libc++ 头文件、`__config_site`、运行库及 RPATH；缺失时拒绝，不退回 `libstdc++`，不同安装布局可用 `PANGU_LIBCXX_ROOT` 显式覆盖；macOS Toolchain 统一选择 MacPorts Clang 23 与 libc++；Android 采用 NDK Clang；iOS 采用 MacPorts Clang 23 + 独立 iPhoneOS SDK。
 - `cmake/` 不写死本机工具链安装路径。Windows、Linux、macOS、iOS 从 `LLVM_ROOT` 派生编译器和 `clang-scan-deps` 路径，并校验编译器位于该安装目录内；Android 从 `ANDROID_HOME` 读取 SDK 目录、从 `ANDROID_NDK_HOME` 选择官方 NDK Toolchain，并校验实际使用的 NDK 与环境变量一致。
-- `Lib/` 存放 STATIC Library（以及平台归档产物）；`Bin/` 存放动态库/可执行程序。当前只有 Module Identity 正式代码与测试，不意味着完整 Plugin、ModuleManager 或 Shader/Asset Pipeline 已实现。
+- `Lib/` 存放 STATIC Library（以及平台归档产物）；`Bin/` 存放动态库/可执行程序。当前 Runtime 含 Foundation 错误值、Module Identity/Descriptor、STATIC Catalog 与声明事务切片，不意味着完整 Plugin、ModuleManager 或 Shader/Asset Pipeline 已实现。
 - CMake Preset 默认 Ninja + Release，配置并导出 `compile_commands.json`；根目录仅通过 `BUILD_TESTING` 控制 `Tests/` 总入口，测试子目录及本机/交叉编译分支统一由 `Tests/CMakeLists.txt` 组织。`BUILD_TESTING=OFF` 完整排除测试库、测试程序及测试宏审计目标；交叉编译开启测试时保留编译型 Toolchain 验证，暂不创建无法直接运行的测试程序。Android 预设以 NDK r30 已验证的 ARM64/API29 为默认验收切片，iOS 预设以本地 iPhoneOS18.2/arm64/iOS18.0 为验证参数；它们**不是永久支持下限**，未来可按目标更换。
 
 先在启动 CMake 的环境中设置下列变量；目录值由本机配置提供，不写入共享 Preset：

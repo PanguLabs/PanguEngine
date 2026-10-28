@@ -4,6 +4,7 @@
 #include <Result.h>
 #include <nlohmann/json.hpp>
 
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 #include <map>
@@ -56,9 +57,23 @@ struct CollectionRequest
     bool operator==(const CollectionRequest&) const = default;
 };
 
-[[nodiscard]] Result<CollectionRequest> ReadCollectionRequest(const std::filesystem::path& path, FailureReport& report);
+// A read-only validation phase may share one absolute deadline. Default is no wait.
+struct CollectionOutputWait
+{
+    std::optional<std::chrono::steady_clock::time_point> Deadline;
+    [[nodiscard]] static CollectionOutputWait Waiting()
+    {
+        return {.Deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30)};
+    }
+};
+
+[[nodiscard]] Result<CollectionRequest> ReadCollectionRequest(const std::filesystem::path& path, FailureReport& report,
+                                                              CollectionOutputWait wait = {});
 [[nodiscard]] std::vector<std::filesystem::path> CollectionOutputFiles(const CollectionRequest& request);
 [[nodiscard]] std::vector<std::filesystem::path> CollectionOutputDirectories(const CollectionRequest& request);
+[[nodiscard]] bool IsDeniedCollectionOutput(const CollectionRequest& request, const FailureReport& report,
+                                            bool includeLock = false);
 [[nodiscard]] Status CheckCollectionInputPaths(const CollectionRequest& request,
-                                               std::span<const std::filesystem::path> inputs, FailureReport& report);
+                                               std::span<const std::filesystem::path> inputs, FailureReport& report,
+                                               CollectionOutputWait wait = {});
 } // namespace pg::abi
