@@ -36,4 +36,4 @@
 
 ## 执行记录
 
-本计划的进度与逐组 RED/GREEN、命令及独立复审写入 `.superpowers/sdd/2026-10-23-abi-collection/repair-progress.md`。用户已授权修复，无须重新请求例行实施许可。
+执行期间的进度、逐组 RED/GREEN、命令及独立复审曾记录于 `.superpowers/sdd/2026-10-23-abi-collection/repair-progress.md`。计划完成并独立复审、验收通过后，必要结论已归档到本计划和[原计划验收摘要](2026-10-23-abi-collection.md)；临时工作区已于 2026-10-28 按用户要求清理，不再依赖该历史路径读取结论。

@@ -22,8 +22,15 @@
 #ifdef _WIN32
 #define NOMINMAX
 #include <Windows.h> // IWYU pragma: keep - native environment tests.
+#include <fileapi.h>
+#include <handleapi.h>
+#include <minwinbase.h>
+#include <minwindef.h>
 #include <processenv.h>
 #include <stdlib.h> // NOLINT(modernize-deprecated-headers) - Windows _putenv_s declaration.
+#include <winbase.h>
+#include <winerror.h>
+#include <winnt.h>
 #endif
 #include <string>
 #include <string_view>
@@ -806,6 +813,114 @@ int main(int argc, char* const* argv)
     check(fixtureUnits &&
               pg::abi::RunObservedCompilerInvocation(request, fixtureUnits->front(), observation, report) == 0,
           "controlled real process receipt");
+#ifdef _WIN32
+    // Pause the real child after the initial state transition. Its parent must
+    // subsequently reacquire the same target lock to publish the receipt.
+    fixtureCommand.at(1) = "pause-fixture";
+    writeCommand(fixtureCommand);
+    const auto pausedUnits = pg::abi::LoadCompileUnits(request, report);
+    if (!pausedUnits)
+    {
+        return 1;
+    }
+    const auto checkPendingLock = [&](bool releaseBeforeDeadline, bool fullReport)
+    {
+        const auto resume = std::filesystem::path(object.string() + ".resume");
+        std::filesystem::remove(resume);
+        const auto beforePause = Get(object.string() + ".invoked");
+        pg::abi::FailureReport pendingReport;
+        if (fullReport)
+        {
+            for (std::size_t index = 0; index < pg::abi::FailureReport::kCapacity; ++index)
+            {
+                (void)pendingReport.Add(pg::abi::ToolError::kInvalidRequest, "retained_before_lock");
+            }
+        }
+        std::atomic<bool> finished{false};
+        int pendingExit = -1;
+        std::jthread pausedCompiler(
+            [&]
+            {
+                pendingExit =
+                    pg::abi::RunObservedCompilerInvocation(request, pausedUnits->front(), observation, pendingReport);
+                finished = true;
+            });
+        const auto pauseDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+        while (!finished && Get(object.string() + ".invoked") == beforePause &&
+               std::chrono::steady_clock::now() < pauseDeadline)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        const auto lock = request.OutputDirectory / ".collection-lock";
+        std::error_code pendingError;
+        const bool lockCreated = !finished && Get(object.string() + ".invoked") != beforePause &&
+                                 std::filesystem::create_directory(lock, pendingError);
+        auto* const pendingHandle = lockCreated
+                                        ? ::CreateFileW(lock.c_str(), DELETE | FILE_READ_ATTRIBUTES,
+                                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                                                        OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr)
+                                        : INVALID_HANDLE_VALUE;
+        FILE_DISPOSITION_INFO disposition{TRUE};
+        const bool marked =
+            pendingHandle != INVALID_HANDLE_VALUE &&
+            ::SetFileInformationByHandle(pendingHandle, FileDispositionInfo, &disposition, sizeof(disposition)) != 0;
+        check(marked, "hold native DeletePending lock while real compiler is paused");
+        if (marked)
+        {
+            (void)std::filesystem::symlink_status(lock, pendingError);
+            check(pendingError == std::errc::permission_denied, "DeletePending reproduces access denied");
+            pg::abi::FailureReport noWait;
+            check(!pg::abi::GuardCollection(request, noWait) && noWait.Count > 0,
+                  "nonwaiting guard still rejects inaccessible lock");
+        }
+        Put(resume, "resume\n");
+        const auto pendingDeadline = std::chrono::steady_clock::now() +
+                                     (releaseBeforeDeadline ? std::chrono::seconds(1) : std::chrono::seconds(35));
+        while (!finished && std::chrono::steady_clock::now() < pendingDeadline)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        const bool completedWhileDenied = finished;
+        check(marked && completedWhileDenied != releaseBeforeDeadline &&
+                  !std::filesystem::exists(pg::abi::CompileReceiptPath(request, pausedUnits->front())),
+              "pending lock blocks publication and persistent denial reaches bounded failure");
+        if (pendingHandle != INVALID_HANDLE_VALUE)
+        {
+            check(::CloseHandle(pendingHandle) != 0, "release DeletePending lock handle");
+        }
+        pausedCompiler.join();
+        if (releaseBeforeDeadline && pendingExit != 0)
+        {
+            pendingReport.WriteJson(std::cerr);
+        }
+        if (releaseBeforeDeadline)
+        {
+            const auto expectedCount = fullReport ? pg::abi::FailureReport::kCapacity : 0;
+            check(pendingExit == 0 && pendingReport.Count == expectedCount && !pendingReport.Truncated &&
+                      (!fullReport || pendingReport.Entries.front().Stage.View() == "retained_before_lock") &&
+                      std::filesystem::is_regular_file(pg::abi::CompileReceiptPath(request, pausedUnits->front())),
+                  "compiler publishes receipt after DeletePending lock disappears");
+        }
+        else
+        {
+            const auto native = pendingReport.Count == 1 ? pendingReport.Entries.front().Value.Native() : std::nullopt;
+            check(completedWhileDenied && pendingExit != 0 && native && native->Source == pg::abi::kSystemSource &&
+                      native->Value == ERROR_ACCESS_DENIED &&
+                      pendingReport.Entries.front().Path.View() == lock.generic_string() &&
+                      !std::filesystem::exists(pg::abi::CompileReceiptPath(request, pausedUnits->front())) &&
+                      !std::filesystem::exists(request.OutputDirectory / "complete.json"),
+                  "persistent denied lock retains native error and publishes no receipt or completion");
+        }
+        std::filesystem::remove(resume);
+    };
+    checkPendingLock(true, false);
+    checkPendingLock(true, true);
+    checkPendingLock(false, false);
+    fixtureCommand.at(1) = "compile-fixture";
+    writeCommand(fixtureCommand);
+    check(pg::abi::RunObservedCompilerInvocation(request, fixtureUnits->front(), observation, report) == 0,
+          "restore controlled compiler after lock regression");
+#endif
     // The controlled child writes a fixture object; a standard archive still
     // contains exactly its bytes, exercising the production association gate.
     check(Archive(archiveRequest, object), "archive controlled process object");

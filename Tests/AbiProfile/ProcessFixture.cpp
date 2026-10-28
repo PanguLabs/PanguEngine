@@ -11,6 +11,7 @@
 #include <span>
 #include <stop_token>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <vector>
 
@@ -130,7 +131,7 @@ int Run(std::span<const std::string> args)
         return !result ? 23 : 24;
     }
     if (args.front() == "compile-fixture" || args.front() == "mutate-fixture" ||
-        args.front() == "mutate-header-fixture" || args.front() == "cancel-fixture")
+        args.front() == "mutate-header-fixture" || args.front() == "cancel-fixture" || args.front() == "pause-fixture")
     {
         std::filesystem::path output;
         std::filesystem::path source;
@@ -152,6 +153,20 @@ int Run(std::span<const std::string> args)
         {
             std::ofstream marker(output.string() + ".invoked", std::ios::app);
             marker << "invoked\n";
+        }
+        if (args.front() == "pause-fixture")
+        {
+            const auto resume = output.string() + ".resume";
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+            std::error_code error;
+            while (!std::filesystem::exists(resume, error))
+            {
+                if (error || std::chrono::steady_clock::now() >= deadline)
+                {
+                    return 3;
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
         }
         if (args.front() == "cancel-fixture")
         {

@@ -11,6 +11,16 @@
 **Tech Stack:** C++23、Clang（Android 使用所选 NDK Clang）、CMake 4.0+、Ninja、现有 nlohmann/json、CTest、各平台 SDK/LLVM 二进制检查工具。
 **Spec:** [已批准设计](../specs/2026-10-23-abi-collection.md)，实现基线 `dbfe7aa`；冻结协议以 `wiki/foundation/abi-profile-fingerprint.md` 为准。
 
+## 临时工作区清理（2026-10-28）
+
+计划与独立评审修复均已完成，必要结论已归档到本计划、[评审修复计划](2026-10-26-abi-collection-review-fixes.md)及相关 wiki。确认无运行任务依赖后，按用户要求删除了 `.superpowers/sdd/2026-10-23-abi-collection/` 和 `.superpowers/sdd/9561-code-review-fixes/`，保留 `.superpowers/sdd/.gitignore`。
+
+下文提及上述目录的详细命令、临时 Diff、阶段报告和评审文件均为历史路径，已随临时工作区清理，不再作为当前可访问的证据入口。正式设计、计划、源码、`Tests/` 和各平台 BuildRoot 保留；历史验收摘要不代表之后每个提交的测试结果。
+
+后续提交 `0a3b79d` 修复 Windows 私有探针目录清理竞态，独立复审通过；Windows 压力测试 50/50、Linux/macOS 定向测试各连续 5 次通过。该轮 Windows 完整 CTest 为 35/36，剩余失败定位为 `AbiCollectorWindowsCli` 在 `.collection-lock` 的 `output_symlink` 检查中遇到 system error 5：锁目录进入 `DeletePending` 时，等待方把短暂 `ACCESS_DENIED` 当成永久失败。
+
+后续修复让 Windows 等待路径重新执行输出校验与锁获取，只对此锁路径的 `ERROR_ACCESS_DENIED` 重试，并在截止时间到达后保留原始错误；其他路径及非该错误仍立即失败。回归使用真实暂停的编译器子进程复现 `DeletePending`，修复前在 `reserved_signature_path` 以 native code 5 失败，修复后定向及完整测试通过。Windows 完整 CTest 为 **36/36**（899.25 秒），Linux/macOS 的 `AbiCollectionState` 定向测试分别通过；`clang-format` 与 `git diff --check` 通过，`clang-tidy` 无新增用户代码诊断。该后续修复目前仍在工作区，尚未提交或推送。
+
 ## 最新执行进度（2026-10-27）
 
 **Task 1—12 均已完成，无剩余计划内验收门禁。** 原 R1—10 和提交 `9561fe6` 的追加修复均已完成独立复审；最终 Spec **Compliant**、Quality **Approved**。
@@ -19,7 +29,7 @@
 
 - Standards / Spec 双轴评审的 8 项问题均已修复，并完成独立复审；验证中发现的输入检查并发和完成记录失效恢复问题也已修复。没有剩余 Critical/Important。
 - 当前源码的最终完整 CTest：Windows **36/36**、Linux **34/34**、macOS **34/34**，合计 **104/104 PASS**，均 exit 0。Android/iOS ARM64、Windows Debug MD/Release MT 的构建、Host 采集、增量 Guard 和完成引用摘要校验通过；移动端未执行目标程序。
-- 七种配置的构建前后源码摘要一致；Windows 三种 CRT 配置中 Foundation/Module 同配置指纹相同、跨配置指纹不同。详细证据保留在本地 `.superpowers/sdd/9561-code-review-fixes/final-verification.md` 和 `.probe/Fix9561VerifiedEvidence/audit.json`。
+- 七种配置的构建前后源码摘要一致；Windows 三种 CRT 配置中 Foundation/Module 同配置指纹相同、跨配置指纹不同。当时的详细验收报告 `.superpowers/sdd/9561-code-review-fixes/final-verification.md` 已随临时工作区清理；上述验收摘要保留，原始审计输出位置为 `.probe/Fix9561VerifiedEvidence/audit.json`（非版本化文件，不作为正式计划的读取前提）。
 - 最终验收时 HEAD 为 `9561fe6d443f21da1c0af02ecc87435f35e9301c`；用户随后授权将追加修复和文档通过 amend 合入该提交，提交 ID 随之改变；未推送。以下保留此前实施与验收的历史记录。
 
 <details>

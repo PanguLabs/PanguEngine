@@ -16,7 +16,16 @@
 #include <vector>
 
 #ifdef _WIN32
+#define NOMINMAX
+#include <Windows.h> // IWYU pragma: keep - supplies Windows SDK prerequisites.
+#include <errhandlingapi.h>
+#include <fileapi.h>
+#include <handleapi.h>
+#include <minwinbase.h>
+#include <minwindef.h>
+#include <winbase.h>
 #include <winerror.h>
+#include <winnt.h>
 #endif
 
 #ifdef __APPLE__
@@ -267,6 +276,58 @@ using Json = nlohmann::json;
     std::filesystem::remove(outsideLink, error);
     return passed;
 }
+
+#ifdef _WIN32
+// Keep the deletion window open deterministically: re-opening this directory
+// fails with access denied even though enumeration still describes its type.
+[[nodiscard]] bool CheckDeletePendingWork(const std::filesystem::path& root, bool privateTree)
+{
+    const auto work = root / "build/Abi/Debug/Example/work";
+    const auto owned = work / (privateTree ? ".observation-delete-pending" : "ordinary-delete-pending");
+    std::error_code error;
+    std::filesystem::create_directories(owned, error);
+    const auto requestFile = root / "request.json";
+    if (error || !Check(requestFile, Request(root).dump(), true, "delete-pending fixture"))
+    {
+        return false;
+    }
+    pg::abi::FailureReport readReport;
+    const auto request = pg::abi::ReadCollectionRequest(requestFile, readReport);
+    if (!request)
+    {
+        return false;
+    }
+    auto* const handle = ::CreateFileW(owned.c_str(), DELETE | FILE_READ_ATTRIBUTES,
+                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
+                                       FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    if (handle == INVALID_HANDLE_VALUE)
+    {
+        std::cerr << "delete-pending directory open failed: " << ::GetLastError() << '\n';
+        return false;
+    }
+    FILE_DISPOSITION_INFO disposition{TRUE};
+    bool passed = ::SetFileInformationByHandle(handle, FileDispositionInfo, &disposition, sizeof(disposition)) != 0;
+    if (passed)
+    {
+        (void)std::filesystem::symlink_status(owned, error);
+        passed &= error == std::errc::permission_denied;
+        pg::abi::FailureReport report;
+        const auto checked = pg::abi::CheckCollectionInputPaths(*request, {}, report);
+        if (checked.has_value() != privateTree)
+        {
+            std::cerr << "delete-pending guard result differs; private=" << privateTree << '\n';
+            report.WriteJson(std::cerr);
+            passed = false;
+        }
+    }
+    else
+    {
+        std::cerr << "delete-pending disposition failed: " << ::GetLastError() << '\n';
+    }
+    passed &= ::CloseHandle(handle) != 0;
+    return passed;
+}
+#endif
 
 [[nodiscard]] bool CheckPrivateWork(const std::filesystem::path& root)
 {
@@ -625,6 +686,10 @@ using Json = nlohmann::json;
     passed &= CheckLifecycle(root / "Lifecycle");
     passed &= CheckWorkAliases(root / "Aliases");
     passed &= CheckPrivateWork(root / "PrivateWork");
+#ifdef _WIN32
+    passed &= CheckDeletePendingWork(root / "DeletePendingPrivateWork", true);
+    passed &= CheckDeletePendingWork(root / "DeletePendingOrdinaryWork", false);
+#endif
 #ifdef __APPLE__
     // Windows may report access_denied for a delete-pending marker; that remains
     // a legitimate fail-closed outcome, not this system libc++ regression.

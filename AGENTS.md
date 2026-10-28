@@ -42,9 +42,17 @@
 - `.claude/skills` 是本地生成的目录映射，不应提交到 Git；Codex 可以直接使用 `.agents/skills/`。
 - 新建或修改的 `CMakeLists.txt` 使用 `cmake_minimum_required(VERSION 4.0)`，并按目标平台校验编译器；具体规则以 [`wiki/foundation/toolchain.md`](wiki/foundation/toolchain.md) 和 [`wiki/foundation/build-system.md`](wiki/foundation/build-system.md) 为准。
 - 修改完成后尽可能执行针对性的构建、测试或静态检查，并明确说明未验证的部分。
-- 执行 plan 时产生的临时文件（包括验证探针、脚本和日志）统一放在仓库根目录 `.superpowers/sdd/<plan>/`，其中 `<plan>` 为对应计划名称，不放入 `.probe/`。
-- 非 plan 执行过程中产生的临时验证探针（Probe/PoC）放在仓库根目录 `.probe/`；正式、长期维护的回归测试仍使用 `Tests/`。
 - 未经明确要求，不提交或推送 Git 变更。
+
+## 目录维护与生命周期
+
+- `wiki/`：长期架构规范的权威来源，纳入 Git；设计变更同步相关规范与 ADR，并区分设计状态与实现状态。
+- `docs/superpowers/specs/`：正式设计规格纳入 Git，完成后保留；被替代的规格标明 Superseded。
+- `docs/superpowers/plans/`：正式实施计划纳入 Git；完成后保留任务状态、验收摘要、关键提交与遗留问题，不存放大量执行日志或临时 Diff。
+- `Tests/`：长期维护的正式测试纳入 Git，Plan 完成后不自动清理；仅在功能移除、契约废弃、测试重复或已被等效测试替代且不降低有效覆盖时删除或合并。
+- `.superpowers/sdd/<plan>/`：Plan 执行期间的临时上下文、探针、脚本、日志和评审产物统一放在对应工作区，不纳入 Git，不放入 `.probe/`。Plan 完成并通过 Review 与验收、必要结论已归档且无运行任务依赖后，方可清理对应目录；未完成、暂停或验收失败的 Plan 保留。
+- `.probe/`：非 Plan 执行产生的临时 Probe/PoC，不纳入 Git，按需清理；有长期价值的测试迁入 `Tests/`，设计结论同步 `wiki/`。正式验收不得依赖未版本化的 Probe。
+- 各平台 BuildRoot：构建产物与缓存不纳入 Git，按需清理；不得擅自删除其他任务或平台正在使用的构建状态，不混用不同宿主的构建树。
 
 ## C++ 编程规范
 

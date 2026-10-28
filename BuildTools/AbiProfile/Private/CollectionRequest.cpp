@@ -123,10 +123,9 @@ namespace
 [[nodiscard]] Status CheckWorkTree(const CollectionRequest& request, FailureReport& report)
 {
     const auto work = request.OutputDirectory / "work";
-    const auto check = [&](const std::filesystem::path& path) -> Status
+    const auto check = [&](const std::filesystem::path& path, std::filesystem::file_status status,
+                           std::error_code error) -> Status
     {
-        std::error_code error;
-        const auto status = std::filesystem::symlink_status(path, error);
         if (error == std::errc::no_such_file_or_directory)
         {
             return {};
@@ -149,11 +148,12 @@ namespace
         }
         return {};
     };
-    if (const auto checked = check(work); !checked)
+    std::error_code error;
+    const auto workStatus = std::filesystem::symlink_status(work, error);
+    if (const auto checked = check(work, workStatus, error); !checked)
     {
         return checked;
     }
-    std::error_code error;
     // Never follow generated-tree links: a nested symlink or an output hard
     // link can redirect a later truncate to an input outside the reserved tree.
     std::filesystem::recursive_directory_iterator entry(work, error);
@@ -167,11 +167,19 @@ namespace
         // Probe owners atomically create fresh direct children and remove them
         // on completion. Never inspect or descend into another owner's tree:
         // its children may disappear while this pre-lock validation runs.
-        if (entry.depth() == 0 && entry->path().filename().generic_string().starts_with(".observation-"))
+        const bool privateTree =
+            entry.depth() == 0 && entry->path().filename().generic_string().starts_with(".observation-");
+        if (privateTree)
         {
             entry.disable_recursion_pending();
         }
-        if (const auto checked = check(entry->path()); !checked)
+        // Windows enumeration caches the non-following type and reparse tag.
+        // Re-opening a private root during its owner's deletion can instead
+        // return access denied (DeletePending). It is never reused or traversed.
+        std::error_code statusError;
+        const auto status = privateTree ? entry->symlink_status(statusError)
+                                        : std::filesystem::symlink_status(entry->path(), statusError);
+        if (const auto checked = check(entry->path(), status, statusError); !checked)
         {
             return checked;
         }

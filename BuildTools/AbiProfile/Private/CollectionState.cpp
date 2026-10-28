@@ -342,51 +342,52 @@ public:
     Transaction& operator=(Transaction&&) = delete;
     Status Begin(bool wait = false)
     {
-        if (const auto safe = CheckOutputs(Request, Report); !safe)
-        {
-            return safe;
-        }
-        if (const auto safe = SafeOutput(Request, Directory, Report); !safe)
-        {
-            return safe;
-        }
-        if (const auto made = MakeDirectory(Request.OutputDirectory, Report); !made)
-        {
-            return made;
-        }
-        std::error_code error;
         const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+        FailureReport attemptReport;
         while (true)
         {
-            Locked = std::filesystem::create_directory(Directory, error);
-            // Some filesystems report an already-created directory as
-            // file_exists during competing short compiler transitions.
-            // Preserve real I/O errors and never treat a non-directory as a lock.
-            if (!Locked && wait && error == std::errc::file_exists)
+            attemptReport.Count = 0;
+            attemptReport.Truncated = false;
+            const auto attempted = TryBegin(wait, attemptReport);
+            if (attempted && Locked)
             {
-                std::error_code kindError;
-                if (std::filesystem::is_directory(Directory, kindError) && !kindError)
+                return {};
+            }
+            bool retryDenied = false;
+#ifdef _WIN32
+            if (!attempted && wait && attemptReport.Count > 0)
+            {
+                const auto& failure = attemptReport.Entries.at(attemptReport.Count - 1);
+                const auto native = failure.Value.Native();
+                retryDenied = failure.Path.View() == PathText(Directory) && native && native->Source == kSystemSource &&
+                              native->Value == ERROR_ACCESS_DENIED;
+            }
+#endif
+            if (!attempted && !retryDenied)
+            {
+                return RejectAttempt(attemptReport, attempted.error());
+            }
+            if (!wait || std::chrono::steady_clock::now() >= deadline)
+            {
+                if (!attempted)
                 {
-                    error.clear();
+                    return RejectAttempt(attemptReport, attempted.error());
                 }
+                // A competing transaction cannot silently leave a winner's complete record.
+                if (!wait)
+                {
+                    Report.CleanupIncomplete |= !WriteFile(Directory / "conflict", "concurrent writer", Report);
+                }
+                return std::unexpected(Fail(Report, "collection_busy", Directory));
             }
-            if (Locked || error || !wait || std::chrono::steady_clock::now() >= deadline)
-            {
-                break;
-            }
+            // A prior owner may be deleting the lock directory. Retry the
+            // entire validation/acquisition without accepting the path or
+            // retaining transient diagnostics. Persistent denial still
+            // fails at the deadline; errors on other paths are immediate.
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
-        if (!Locked)
-        {
-            // A competing transaction cannot silently leave a winner's complete record.
-            if (!error && !wait)
-            {
-                Report.CleanupIncomplete |= !WriteFile(Directory / "conflict", "concurrent writer", Report);
-            }
-            return std::unexpected(Fail(Report, "collection_busy", Directory, error));
-        }
-        return {};
     }
+
     Status Revoke()
     {
         // A retained tombstone prevents an unreadable/unremovable old complete from
@@ -471,6 +472,56 @@ public:
     }
 
 private:
+    Status RejectAttempt(const FailureReport& attempt, Error error)
+    {
+        for (std::size_t index = 0; index < attempt.Count; ++index)
+        {
+            if (Report.Count == FailureReport::kCapacity)
+            {
+                Report.Truncated = true;
+                break;
+            }
+            Report.Entries.at(Report.Count++) = attempt.Entries.at(index);
+        }
+        Report.Truncated |= attempt.Truncated;
+        Report.CleanupIncomplete |= attempt.CleanupIncomplete;
+        if (attempt.Probe->Present && !Report.Probe->Present)
+        {
+            *Report.Probe = *attempt.Probe;
+        }
+        return std::unexpected(error);
+    }
+
+    Status TryBegin(bool wait, FailureReport& attempt)
+    {
+        if (const auto safe = CheckOutputs(Request, attempt); !safe)
+        {
+            return safe;
+        }
+        if (const auto safe = SafeOutput(Request, Directory, attempt); !safe)
+        {
+            return safe;
+        }
+        if (const auto made = MakeDirectory(Request.OutputDirectory, attempt); !made)
+        {
+            return made;
+        }
+        std::error_code error;
+        Locked = std::filesystem::create_directory(Directory, error);
+        // Some filesystems report an already-created directory as
+        // file_exists during competing short compiler transitions.
+        // Preserve real I/O errors and never treat a non-directory as a lock.
+        if (!Locked && wait && error == std::errc::file_exists)
+        {
+            std::error_code kindError;
+            if (std::filesystem::is_directory(Directory, kindError) && !kindError)
+            {
+                error.clear();
+            }
+        }
+        return error ? Status{std::unexpected(Fail(attempt, "collection_busy", Directory, error))} : Status{};
+    }
+
     const CollectionRequest& Request;
     FailureReport& Report;
     CollectionIo Io;
