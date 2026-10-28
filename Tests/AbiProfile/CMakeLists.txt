@@ -44,6 +44,20 @@ if(NOT CMAKE_CROSSCOMPILING)
         "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolsSmoke.cmake"
         "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_CXX_COMPILER}")
     set_tests_properties(AbiCollectionBuildTools PROPERTIES TIMEOUT 600)
+
+    if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Windows")
+        set(_pangu_build_tools_root "${PROJECT_SOURCE_DIR}/Build/BuildTools/Windows")
+    elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+        set(_pangu_build_tools_root "$ENV{HOME}/PanguEngineBuild/BuildTools/macOS")
+    else()
+        set(_pangu_build_tools_root "$ENV{HOME}/PanguEngineBuild/BuildTools/${CMAKE_HOST_SYSTEM_NAME}")
+    endif()
+    add_test(NAME AbiCollectionBuildToolsConfigure
+        COMMAND "${CMAKE_COMMAND}"
+            "-DPANGU_SOURCE=${PROJECT_SOURCE_DIR}" "-DPANGU_BINARY=${CMAKE_CURRENT_BINARY_DIR}"
+            "-DPANGU_COMPILER=${CMAKE_CXX_COMPILER}" "-DPANGU_TOOLS_ROOT=${_pangu_build_tools_root}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolsConfigureTests.cmake")
+    set_tests_properties(AbiCollectionBuildToolsConfigure PROPERTIES TIMEOUT 600)
 endif()
 
 if(NOT CMAKE_CROSSCOMPILING)
