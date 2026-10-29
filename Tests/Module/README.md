@@ -10,7 +10,7 @@
 | `StaticModuleCatalog` | 两个真实受管 STATIC 夹具、最终 EXE 的生成根引用、链接裁剪后的入口可达与实际注册 |
 | `ScopeAccess` | 原子闸门获取/关闭、借用释放、仅移动工厂与稳定控制块 |
 | `ScopeBuild` | 实例先追踪后 Start、匹配销毁、类型核验与粘性错误 |
-| `ScopeLifecycle` | 多 Scope 局部失败、激活/卸载/Shutdown、Busy 排空、隐式 Module 与显式资源依赖顺序、错误/进度、句柄代际及重入 |
+| `ScopeLifecycle` | 多 Scope 局部失败、激活/卸载/Shutdown、Busy 排空、直接/传递 Module 与显式资源依赖顺序、错误/进度、句柄代际及重入；失败注册事务的工厂析构共用报告时仍保留外层原错 |
 | `ScopeDestructor` | 子进程确认错误析构 Busy Host 始终终止，未提前 Destroy 被借用对象 |
 
 桌面宿主使用根 Preset 的正式 BuildRoot。例如 Windows：

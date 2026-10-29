@@ -348,7 +348,7 @@ public:
 
 API/布局仍未冻结。当前库的 `std::move_only_function` 可用性不一致，统一使用内部拥有型仅移动 callable 适配；OOM 仍为终止政策。具体合并图门槛、预算、报告、析构契约、实际验收与未验证部分见 [设计](../../docs/superpowers/specs/2026-10-28-module-scope-lifecycle-design.md) 和[计划](../../docs/superpowers/plans/2026-10-28-module-scope-lifecycle.md)。不据此声称完整 Service Registry、动态 CodePin、SHARED 预检、最终 EXE ABI 或五平台设备运行已经验收。
 
-### 当前正式实现切片（2026-10-28）
+### 历史 STATIC Descriptor/Catalog 切片（2026-10-28）
 
 在原 `PanguModule` STATIC Target 内新增 Descriptor、`StaticModuleHost` 与声明注册事务，规格见 [STATIC Catalog 实施规格](../../docs/superpowers/specs/2026-10-28-module-static-catalog.md)，验收见[实施计划](../../docs/superpowers/plans/2026-10-28-module-static-catalog.md)。具体签名及布局仍未冻结。
 
@@ -358,7 +358,7 @@ API/布局仍未冻结。当前库的 `std::move_only_function` 可用性不一�
 - 显式限制：256 个 Module、每个 64 个依赖、描述字符串 256 字节、每次 256 条声明、每 Scope 4096 条声明。冷路径使用拥有型标准容器，OOM 不承诺可恢复；操作由调用方外部串行化。
 - 正式 [Module 测试](../../Tests/Module/README.md) 覆盖上述行为；两个真实受管 STATIC 夹具经最终 EXE 生成的根引用进行裁剪链接与注册验收。测试源码长期保留，不依赖历史 PoC。
 
-**当前边界**：Descriptor 暂不暴露可手填的 ABI Profile/Fingerprint 字段。现有 STATIC 采集继续核验真实目标库；最终 EXE 的完整 ABI 一致性、Profile 嵌入、Public C++ Contract、完整 ModuleManager/EngineHost、Service 装配/激活、CodePin、工作排空及 SHARED Loader 尚未实现。本 API 不能用作外部候选放行或动态装载的替代路径；以下早期证据保留其当时范围。
+**该阶段边界**：Descriptor 暂不暴露可手填的 ABI Profile/Fingerprint 字段。现有 STATIC 采集核验真实目标库；当时尚未实现的 STATIC Scope 装配、激活与 Borrow/Busy 排空已由上方 2026-10-29 切片补齐。最终 EXE 的完整 ABI 一致性、Profile 嵌入、Public C++ Contract、完整 ModuleManager/EngineHost、业务 Service Registry、动态 CodePin、TaskScheduler/GPU 排空及 SHARED Loader 仍待实现。本 API 不能用作外部候选放行或动态装载的替代路径；以下早期证据保留其当时范围。
 
 ### 早期 Identity 与 PoC 验证（2026-10-22）
 

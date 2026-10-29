@@ -1,7 +1,7 @@
 # Windows 宿主并行 ABI 输出校验修复计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-> 状态：Completed。Android 并行采集遗留已关闭，最终验收见文末；沿用 `feature/module-static-catalog`，基线 `4392b2e` 加此前 STATIC 切片。不提交、推送或改写既有 index。
+> 状态：Completed。代码已进入 `main` 的 `c518990`，Android 并行采集遗留已关闭。原实施沿用 `feature/module-static-catalog`，基线 `4392b2e` 加此前 STATIC 切片；下文“未提交”与 index 约束保留当时状态。最新核对见文末。
 
 **Goal:** Windows 宿主的正式并行编译等待受管输出删除结束，保留全部路径校验、有限等待和原始错误，不因瞬时 DeletePending 失败。
 
@@ -88,3 +88,11 @@
 - 没有执行 Android/iOS 设备程序；本轮未重建 iOS，未重跑 Linux/macOS 完整 CTest。Schema、Canonical/Fingerprint、最终 EXE/SHARED Loader 信任范围没有变化。
 - 无法仅从 native 5 区分 DeletePending 和永久输出 ACL 拒绝；采用有限等待后保留错误。代价是受管输出的永久拒绝可能消耗等待预算，输入错误仍立即失败。
 - 原工作区和既有 index 保持，未提交/推送。临时日志和 ledger 保留在本计划 `.superpowers/sdd/` 下；正式回归不依赖该目录。
+
+## 收尾核对（2026-10-29）
+
+- 已核对本修复包含在 `c518990`，当前 `main` 为 `a224cad` 加本轮独立复核发现的 Scope 报告修复；本轮未修改 ABI 工具实现或冻结协议。
+- 新的独立只读复核确认请求读取、Observation、SCC 解析和事务等待均保留精确输出路径/native 5 分类、完整重验、独立 attempt 报告及截止时间，原 Important 已关闭。
+- 首次在受限沙箱运行 `AbiCollectionState` / `AbiCollectionOutputWait`，分别在普通夹具输入 `inputs.h` / `request.json` 的路径解析立即得到 native 5；同一源码及命令改用沙箱外正式环境后 **2/2 PASS**（122.01 秒）。失败记录属于本轮实际发生的执行权限限制，不能写成沙箱内首轮通过，也未据此放宽生产校验。
+- 累积代码复核的最终 **Spec Pass / Quality Pass**、后续完整 Windows 验收和三项临时目录的处理统一见[Scope 计划收尾记录](2026-10-28-module-scope-lifecycle.md)。原 Android 两轮 parallel 8 的验收保留其 2026-10-28 范围，不声称本轮重新执行移动端。
+- 本计划临时 SDD 已在完整验收及运行依赖核对后清理，原始日志路径保留为历史位置。

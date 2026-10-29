@@ -318,6 +318,9 @@ pg::Status StaticModuleHost::Register(ModuleId id, ModuleOperationReport& report
     {
         const auto error = transaction.Failure ? *transaction.Failure : result.error();
         Runtime->RegistrationFailed(id, error);
+        // Factory captures can reenter with the same report during rollback.
+        // Retire them under the guards before publishing the final snapshot.
+        transaction.PendingRecipes.clear();
         report = {
             .Progress = ModuleOperationProgress::kCleanupPending,
             .PrimaryError = error,

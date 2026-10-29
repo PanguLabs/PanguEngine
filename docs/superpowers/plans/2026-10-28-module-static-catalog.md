@@ -1,7 +1,7 @@
 # Module STATIC Catalog Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-> 状态：Completed（本轮 STATIC 描述、Catalog 与同步声明事务范围）。分支 `feature/module-static-catalog`，基线 `4392b2e`；用户授权直接实施，不提交或推送。Android 并行采集遗留已由[后续独立修复](2026-10-28-abi-output-concurrency.md)关闭；下表保留本阶段验收。
+> 状态：Completed（STATIC 描述、Catalog 与同步声明事务范围）。代码已进入 `main` 的 `c518990`；原分支 `feature/module-static-catalog`，基线 `4392b2e`。Android 并行采集遗留已由[后续独立修复](2026-10-28-abi-output-concurrency.md)关闭。下文“未提交”和分支约束保留实施当时的状态；最新核对见文末。
 
 **Goal:** 正式实现 STATIC 描述数据、显式依赖 Catalog 与同步声明注册闭环。
 
@@ -83,3 +83,10 @@
 - Android/iOS 没有设备执行；Linux/macOS 没有本轮完整 CTest。最终 EXE ABI 一致性、Profile 嵌入、外部 Loader、Service 工厂/激活、CodePin 与排空仍属后续切片。
 - 本切片以每个 StaticModuleHost 为身份域，以具体 RegistrationScope 协调声明发布；跨 Host 的共同身份域留给完整 ModuleManager。调用方负责外部串行化和 Scope/Host/回调的生命周期，OOM 沿用无异常终止政策。
 - 共享源码直接在原目录使用新分支，未复制到 Mac 或新建 worktree。临时执行记录位于对应 `.superpowers/sdd/`；因代码未提交且存在上述遗留，保留该目录，不依赖它运行正式 Tests。
+
+## 收尾核对（2026-10-29）
+
+- 已核对 `main` 的 `c518990` 包含本切片及并行输出修复，`a224cad` 在其上实现 STATIC Scope 生命周期。旧执行记录中的“未提交”、Service 工厂/激活尚未实现及 Android 并行遗留均只描述当时阶段；当前 Scope 能力见[后续计划](2026-10-28-module-scope-lifecycle.md)。
+- 独立只读复核覆盖 `4392b2e..a224cad` 及本轮收尾修复。Catalog/回调体/Query 报告别名的原问题已关闭；复核发现的失败注册事务工厂析构报告别名已修复，并经同一独立 Reviewer 复审，最终 **Spec Pass / Quality Pass**。该新增问题的 RED/GREEN、验收与临时目录处理统一归档在后续 Scope 计划，避免重复拼接测试矩阵。
+- 正式规格、计划、源码及 Tests 长期保留；临时 SDD 的历史分支/日志路径不作为正式验收依赖。
+- 本计划临时 SDD 已在本轮完整验收及运行依赖核对后清理，具体范围和校验见上述 Scope 计划的“记录与临时目录”。

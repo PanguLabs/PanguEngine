@@ -581,13 +581,15 @@ bool ScopeBudgetIsCheckedBeforeCallbacksAndSlotsCanBeReused()
            !host->BeginCloseScope(contexts.front(), report);
 }
 
-bool ModuleDependencyKeepsProviderWorkAliveDuringBusyCleanup()
+bool ProviderWorkSurvivesBusyCleanup(bool indirect)
 {
     RegistrationScope declarations;
     ModuleOperationReport report;
     const auto state = std::make_shared<Counters>();
     Fixture::gState = state;
-    constexpr std::array kDependencies{ModuleDependency{.Id = kProviderModule}};
+    constexpr ModuleId kBridgeModule{.Bytes = {std::byte{3}}};
+    const std::array dependencies{ModuleDependency{.Id = indirect ? kBridgeModule : kProviderModule}};
+    constexpr std::array kProviderDependencies{ModuleDependency{.Id = kProviderModule}};
     const auto registration = [](RegistrationContext& context) noexcept -> pg::Status
     {
         return context.DeclareFactory(
@@ -601,15 +603,30 @@ bool ModuleDependencyKeepsProviderWorkAliveDuringBusyCleanup()
                     return access ? pg::Status{} : std::unexpected(access.error());
                 }));
     };
-    const auto first = Definition(kModule, registration, kDependencies);
+    const auto first = Definition(kModule, registration, dependencies);
     const auto second = Definition(kProviderModule, Fixture::RegisterProvider);
+    const auto bridge = Definition(
+        kBridgeModule, [](RegistrationContext&) noexcept -> pg::Status { return {}; }, kProviderDependencies);
     Fixture::gFirst = &first;
     Fixture::gSecond = &second;
-    auto host = StaticModuleHost::Create({kEntries}, declarations, {}, report);
-    if (!host || !host->Register(kProviderModule, report) || !host->Register(kModule, report) ||
-        !host->Activate(kProviderModule, report) || !host->Activate(kModule, report))
+    Fixture::gThird = &bridge;
+    const std::array entries{
+        StaticCatalogEntry{Fixture::QueryFirst},
+        StaticCatalogEntry{Fixture::QuerySecond},
+        StaticCatalogEntry{Fixture::QueryThird},
+    };
+    const std::span<const StaticCatalogEntry> selected = indirect ? std::span(entries) : std::span(entries).first(2);
+    auto host = StaticModuleHost::Create({selected}, declarations, {}, report);
+    if (!host)
     {
         return false;
+    }
+    for (const auto id : host->RegistrationOrder())
+    {
+        if (!host->Register(id, report) || !host->Activate(id, report))
+        {
+            return false;
+        }
     }
     state->Finished = false;
     state->BusyValue = 2;
@@ -624,6 +641,11 @@ bool ModuleDependencyKeepsProviderWorkAliveDuringBusyCleanup()
     state->Finished = true;
     const auto finished = host->TryFinishShutdown(report);
     return retained && finished && !state->BrokenOrder && state->DestroyOrder == std::vector<int>{2, 1};
+}
+
+bool ModuleDependencyKeepsProviderWorkAliveDuringBusyCleanup()
+{
+    return ProviderWorkSurvivesBusyCleanup(false) && ProviderWorkSurvivesBusyCleanup(true);
 }
 
 bool ShutdownRetainsUnreturnedScopeFailure()
@@ -671,27 +693,28 @@ struct RetireCallback
     RetireCallback& operator=(RetireCallback&&) = delete;
 };
 
+[[nodiscard]] pg::Status DeclareRetiringFactory(RegistrationContext& context) noexcept
+{
+    return context.DeclareFactory(
+        kObject, Scope::kContext,
+        ScopeFactory(
+            [guard = std::make_unique<RetireCallback>(Fixture::gState)](ScopeBuildContext& build) noexcept -> pg::Status
+            {
+                [[maybe_unused]] const auto* retained = guard.get();
+                const auto object = build.Own(std::make_unique<int>(1));
+                return object ? pg::Status{} : std::unexpected(object.error());
+            }));
+}
+
 bool FactoryRetirementBlocksSharedDeclarationReentry()
 {
     RegistrationScope declarations;
     ModuleOperationReport report;
     const auto state = std::make_shared<Counters>();
     Fixture::gState = state;
-    const auto callback = [](RegistrationContext& context) noexcept -> pg::Status
-    {
-        return context.DeclareFactory(kObject, Scope::kContext,
-                                      ScopeFactory(
-                                          [guard = std::make_unique<RetireCallback>(Fixture::gState)](
-                                              ScopeBuildContext& build) noexcept -> pg::Status
-                                          {
-                                              [[maybe_unused]] const auto* retained = guard.get();
-                                              const auto object = build.Own(std::make_unique<int>(1));
-                                              return object ? pg::Status{} : std::unexpected(object.error());
-                                          }));
-    };
     const auto metadata = [](RegistrationContext& context) noexcept -> pg::Status
     { return context.Declare(kProvider, "nested metadata"); };
-    const auto first = Definition(kModule, callback);
+    const auto first = Definition(kModule, DeclareRetiringFactory);
     Fixture::gFirst = &first;
     auto host = StaticModuleHost::Create({std::span(kEntries).first<1>()}, declarations, {}, report);
     const auto second = Definition(kProviderModule, metadata);
@@ -710,6 +733,63 @@ bool FactoryRetirementBlocksSharedDeclarationReentry()
     }
     return state->SawBusy && other->Modules().front().State == StaticModuleState::kLoaded &&
            declarations.Declarations().empty() && report.Module == kModule;
+}
+
+bool FailedRegistrationRetiresFactoriesBeforeReporting()
+{
+    const std::array cases{
+        std::pair{+[](RegistrationContext& context) noexcept -> pg::Status
+                  {
+                      if (const auto declared = DeclareRetiringFactory(context); !declared)
+                      {
+                          return declared;
+                      }
+                      return std::unexpected(kFailure);
+                  },
+                  kFailure},
+        std::pair{+[](RegistrationContext& context) noexcept -> pg::Status
+                  {
+                      if (const auto declared = DeclareRetiringFactory(context); !declared)
+                      {
+                          return declared;
+                      }
+                      [[maybe_unused]] const auto ignored = context.Declare(kObject, "duplicate");
+                      return {};
+                  },
+                  MakeModuleError(ModuleError::kDeclarationConflict)},
+    };
+    for (const auto& [callback, expected] : cases)
+    {
+        RegistrationScope declarations;
+        ModuleOperationReport report;
+        const auto state = std::make_shared<Counters>();
+        Fixture::gState = state;
+        const auto first = Definition(kModule, callback);
+        Fixture::gFirst = &first;
+        auto host = StaticModuleHost::Create({std::span(kEntries).first<1>()}, declarations, {}, report);
+        const auto metadata = [](RegistrationContext& context) noexcept -> pg::Status
+        { return context.Declare(kProvider, "nested metadata"); };
+        const auto second = Definition(kProviderModule, metadata);
+        Fixture::gFirst = &second;
+        auto other = StaticModuleHost::Create({std::span(kEntries).first<1>()}, declarations, {}, report);
+        if (!host || !other)
+        {
+            return false;
+        }
+        state->Host = &*other;
+        state->SharedReport = &report;
+        const auto failed = host->Register(kModule, report);
+        if (failed || failed.error() != expected || !state->SawBusy || report.Module != kModule ||
+            report.RelatedModule != ModuleId() || report.Progress != ModuleOperationProgress::kCleanupPending ||
+            report.PrimaryError != expected || report.OriginalError != expected || report.CleanupError ||
+            host->Modules().front().State != StaticModuleState::kCleanupPending ||
+            other->Modules().front().State != StaticModuleState::kLoaded || !declarations.Declarations().empty() ||
+            !other->Register(kProviderModule, report))
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool ReportSeparatesOriginalFailureFromCleanupResult()
@@ -980,6 +1060,8 @@ int main(int argc, char* const* argv)
         return DestroyBusy(args.back());
     }
     const std::array tests{
+        std::pair{"failed registration retires factories before reporting",
+                  FailedRegistrationRetiresFactoriesBeforeReporting},
         std::pair{"factory owns exactly one inactive object", FactoryMustOwnExactlyOneInactiveObject},
         std::pair{"reports separate original and cleanup errors", ReportSeparatesOriginalFailureFromCleanupResult},
         std::pair{"activation report separates cleanup error", ActivationReportSeparatesCleanupError},
