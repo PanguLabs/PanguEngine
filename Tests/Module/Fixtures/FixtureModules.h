@@ -5,9 +5,14 @@
 #include <RegistrationContext.h>
 
 #include <cstddef>
+#include <vector>
 
 namespace pg::module::fixture
 {
+struct FixtureValue
+{
+    std::vector<int> Values;
+};
 // Stable identities for these logical fixture Modules, independent of build/path.
 inline constexpr ModuleId kFirstId{
     .Bytes =

@@ -1,3 +1,4 @@
+#include "ModuleDeclaration.h"
 #include <Error.h>
 #include <ModuleDescriptor.h>
 #include <ModuleError.h>
@@ -142,7 +143,7 @@ bool RollsBackAndPreservesOriginalErrorAndProgress()
     const auto snapshot = report;
     const auto retry = host->Register(kFirst, report);
     if (failed || failed.error() != kOriginal || snapshot.PrimaryError != kOriginal ||
-        snapshot.Progress != ModuleOperationProgress::kRolledBack ||
+        snapshot.Progress != ModuleOperationProgress::kCleanupPending ||
         host->Modules().front().State != StaticModuleState::kRegistrationFailed || retry ||
         report.Progress != ModuleOperationProgress::kUnchanged || scope.Declarations().size() != 1 ||
         scope.Declarations().front().Owner != kSecond)
@@ -165,7 +166,7 @@ bool RollsBackAndPreservesOriginalErrorAndProgress()
     const auto callback = otherHost->Register(kFirst, report);
     return !absent && !callback && absent.error() == callback.error() &&
            before.Progress == ModuleOperationProgress::kUnchanged &&
-           report.Progress == ModuleOperationProgress::kRolledBack;
+           report.Progress == ModuleOperationProgress::kCleanupPending;
 }
 
 bool IgnoredDeclarationFailureCannotCommit()
@@ -198,7 +199,7 @@ bool IgnoredDeclarationFailureCannotCommit()
         const auto result = host->Register(kFirst, report);
         if (result || result.error() != MakeModuleError(ModuleError::kDeclarationConflict) ||
             scope.Declarations().size() != (existing ? 1U : 0U) ||
-            report.Progress != ModuleOperationProgress::kRolledBack)
+            report.Progress != ModuleOperationProgress::kCleanupPending)
         {
             return false;
         }
@@ -277,10 +278,15 @@ bool ConcreteScopesOwnIndependentCopies()
         {
             return false;
         }
+        if (firstScope.Declarations().size() != 1 ||
+            firstScope.Declarations().front().DisplayName != std::string(256, 'a') ||
+            secondScope.Declarations().size() != 1 || secondScope.Declarations().front().DisplayName != "second scope")
+        {
+            return false;
+        }
+        // Shutdown revokes the Host's declarations after these deep-copy checks.
     }
-    return firstScope.Declarations().size() == 1 &&
-           firstScope.Declarations().front().DisplayName == std::string(256, 'a') &&
-           secondScope.Declarations().size() == 1 && secondScope.Declarations().front().DisplayName == "second scope";
+    return firstScope.Declarations().empty() && secondScope.Declarations().empty();
 }
 
 bool RejectsCrossHostScopeReentry()
@@ -307,7 +313,8 @@ bool RejectsCrossHostScopeReentry()
         if (result.has_value() == fail || !Fixture::gObservedBusy || report.Module != kFirst ||
             report.RelatedModule != ModuleId() ||
             report.PrimaryError != (fail ? std::optional(kOriginal) : std::nullopt) ||
-            report.Progress != (fail ? ModuleOperationProgress::kRolledBack : ModuleOperationProgress::kRegistered) ||
+            report.Progress !=
+                (fail ? ModuleOperationProgress::kCleanupPending : ModuleOperationProgress::kRegistered) ||
             scope.Declarations().size() != (fail ? 0U : 1U) ||
             inner->Modules().front().State != StaticModuleState::kLoaded || !inner->Register(kSecond, report))
         {

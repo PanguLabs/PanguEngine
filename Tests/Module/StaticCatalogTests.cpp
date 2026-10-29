@@ -2,6 +2,7 @@
 
 #include <ModuleDescriptor.h>
 #include <RegistrationContext.h>
+#include <ScopeIdentity.h>
 #include <StaticModuleHost.h>
 
 #include <iostream>
@@ -35,6 +36,21 @@ int main()
         declarations.back().DisplayName != "first")
     {
         std::cerr << "Declarations from both STATIC archives must be published in dependency order\n";
+        return 1;
+    }
+    for (const auto id : host->RegistrationOrder())
+    {
+        if (!host->Activate(id, report))
+        {
+            return 1;
+        }
+    }
+    const auto first = host->CreateScope(pg::service::Scope::kContext, host->HostScope(), report);
+    const auto second = host->CreateScope(pg::service::Scope::kContext, host->HostScope(), report);
+    if (!first || !second || !host->BeginCloseScope(*first, report) || !host->TryFinishCloseScope(*first, report) ||
+        !host->BeginShutdown(report) || !host->TryFinishShutdown(report) || !scope.Declarations().empty())
+    {
+        std::cerr << "Real STATIC factories must assemble independent Scopes and clean up\n";
         return 1;
     }
     return 0;

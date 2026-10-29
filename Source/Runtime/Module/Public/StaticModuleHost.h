@@ -1,11 +1,14 @@
 #pragma once
 
 #include <Error.h>
+#include <ModuleDeclaration.h>
 #include <ModuleDescriptor.h>
 #include <ModuleIdentity.h>
 #include <Result.h>
+#include <ScopeIdentity.h>
 
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -14,6 +17,10 @@
 namespace pg::module
 {
 class RegistrationScope;
+namespace detail
+{
+class ScopeRuntime;
+}
 
 enum class DependencyBindingReason : std::uint8_t
 {
@@ -47,9 +54,12 @@ struct OwnedModuleDescriptor
 
 enum class StaticModuleState : std::uint8_t
 {
-    kLoaded,
-    kRegistered,
-    kRegistrationFailed,
+    kLoaded = 0,
+    kRegistered = 1,
+    kActive = 2,
+    kCleanupPending = 3,
+    kUnloaded = 4,
+    kRegistrationFailed = kCleanupPending, // Source compatibility for the first metadata-only slice.
 };
 
 struct StaticModuleRecord
@@ -65,6 +75,11 @@ enum class ModuleOperationProgress : std::uint8_t
     kLoaded,
     kRegistered,
     kRolledBack,
+    kActive,
+    kCleanupPending,
+    kUnloaded,
+    kScopeReady,
+    kScopeClosed,
 };
 
 // Fixed-size owning snapshot; no callback, string view or borrowed report lifetime.
@@ -74,18 +89,23 @@ struct ModuleOperationReport
     std::optional<pg::Error> PrimaryError;
     ModuleId Module{};
     ModuleId RelatedModule{};
+    ScopeHandle Scope{};
+    DeclarationId Declaration{};
+    std::optional<pg::Error> OriginalError = std::nullopt;
+    std::optional<pg::Error> CleanupError = std::nullopt;
 };
 
-// Same-binary STATIC startup only. No external loader, activation or unload API.
-// Scope must outlive the Host. All calls, including callbacks, are externally serialized.
+// Same-binary STATIC coordinator; logical lifecycle does not perform OS unload.
+// Declaration domain outlives Host. Management calls are externally serialized;
+// exported ScopeAccess/ScopeBorrow support concurrent admission and close.
 class StaticModuleHost final
 {
 public:
-    ~StaticModuleHost() = default;
+    ~StaticModuleHost();
     StaticModuleHost(const StaticModuleHost&) = delete;
     StaticModuleHost& operator=(const StaticModuleHost&) = delete;
-    StaticModuleHost(StaticModuleHost&&) noexcept = default;
-    StaticModuleHost& operator=(StaticModuleHost&&) noexcept = default;
+    StaticModuleHost(StaticModuleHost&& /*other*/) noexcept;
+    StaticModuleHost& operator=(StaticModuleHost&& /*other*/) noexcept;
 
     [[nodiscard]] static pg::Result<StaticModuleHost>
     Create(const StaticModuleCatalog& catalog, RegistrationScope& scope,
@@ -95,6 +115,18 @@ public:
     [[nodiscard]] std::span<const StaticModuleRecord> Modules() const noexcept { return Records; }
     [[nodiscard]] std::span<const ModuleId> RegistrationOrder() const noexcept { return Order; }
     [[nodiscard]] pg::Status Register(ModuleId id, ModuleOperationReport& report) noexcept;
+    [[nodiscard]] ScopeHandle HostScope() const noexcept;
+    [[nodiscard]] pg::Result<ScopeHandle> CreateScope(pg::service::Scope kind, ScopeHandle parent,
+                                                      ModuleOperationReport& report);
+    [[nodiscard]] pg::Status Activate(ModuleId id, ModuleOperationReport& report);
+    [[nodiscard]] pg::Status Load(ModuleId id, ModuleOperationReport& report);
+    [[nodiscard]] pg::Status BeginUnload(ModuleId id, ModuleOperationReport& report);
+    [[nodiscard]] pg::Status TryFinishUnload(ModuleId id, ModuleOperationReport& report);
+    [[nodiscard]] pg::Status BeginCloseScope(ScopeHandle scope, ModuleOperationReport& report);
+    [[nodiscard]] pg::Status TryFinishCloseScope(ScopeHandle scope, ModuleOperationReport& report);
+    [[nodiscard]] pg::Status PollCleanup(ModuleOperationReport& report);
+    [[nodiscard]] pg::Status BeginShutdown(ModuleOperationReport& report);
+    [[nodiscard]] pg::Status TryFinishShutdown(ModuleOperationReport& report);
 
 private:
     explicit StaticModuleHost(RegistrationScope& scope) noexcept;
@@ -106,5 +138,7 @@ private:
     std::vector<StaticModuleRecord> Records;
     std::vector<RegisterModuleFn> Callbacks;
     std::vector<ModuleId> Order;
+    std::uint64_t Domain{};
+    std::unique_ptr<detail::ScopeRuntime> Runtime;
 };
 } // namespace pg::module

@@ -1,3 +1,5 @@
+#include "ScopeIdentity.h"
+#include "ScopeRuntime.h"
 #include <StaticModuleHost.h>
 
 #include <Error.h>
@@ -11,9 +13,11 @@
 #include <cstddef>
 #include <expected>
 #include <iterator>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 
 namespace pg::module
 {
@@ -61,6 +65,31 @@ pg::Status ValidateDescriptor(const ModuleDescriptor& descriptor, ModuleOperatio
 StaticModuleHost::StaticModuleHost(RegistrationScope& scope) noexcept
     : Scope(&scope)
 {
+}
+
+StaticModuleHost::~StaticModuleHost() = default;
+StaticModuleHost::StaticModuleHost(StaticModuleHost&& other) noexcept
+    : Scope(other.Scope)
+    , Records(std::move(other.Records))
+    , Callbacks(std::move(other.Callbacks))
+    , Order(std::move(other.Order))
+    , Domain(std::exchange(other.Domain, 0))
+    , Runtime(std::move(other.Runtime))
+{
+}
+StaticModuleHost& StaticModuleHost::operator=(StaticModuleHost&& other) noexcept
+{
+    if (this != &other)
+    {
+        Runtime.reset();
+        Scope = other.Scope;
+        Records = std::move(other.Records);
+        Callbacks = std::move(other.Callbacks);
+        Order = std::move(other.Order);
+        Domain = std::exchange(other.Domain, 0);
+        Runtime = std::move(other.Runtime);
+    }
+    return *this;
 }
 
 std::optional<std::size_t> StaticModuleHost::Find(ModuleId id) const noexcept
@@ -127,6 +156,13 @@ pg::Result<StaticModuleHost> StaticModuleHost::Create(const StaticModuleCatalog&
     {
         return std::unexpected(resolved.error());
     }
+    const auto domain = detail::AllocateScopeDomain();
+    if (!domain)
+    {
+        return Reject(report, ModuleError::kLimitExceeded);
+    }
+    host.Domain = *domain;
+    host.Runtime = std::make_unique<detail::ScopeRuntime>(host.Domain, scope, host.Records);
     report = {
         .Progress = ModuleOperationProgress::kLoaded,
         .PrimaryError = std::nullopt,
@@ -220,6 +256,10 @@ pg::Status StaticModuleHost::Register(ModuleId id, ModuleOperationReport& report
 {
     report = {};
     report.Module = id;
+    if (!Runtime || Runtime->IsShuttingDown())
+    {
+        return Reject(report, ModuleError::kInvalidState, id);
+    }
     if (Scope->Registering)
     {
         return Reject(report, ModuleError::kBusy, id);
@@ -239,7 +279,8 @@ pg::Status StaticModuleHost::Register(ModuleId id, ModuleOperationReport& report
         if (dependency.IsBound())
         {
             const auto provider = Find(dependency.Dependency);
-            if (!provider || Records.at(*provider).State != StaticModuleState::kRegistered)
+            if (!provider || (Records.at(*provider).State != StaticModuleState::kRegistered &&
+                              Records.at(*provider).State != StaticModuleState::kActive))
             {
                 return Reject(report, ModuleError::kDependencyNotRegistered, id, dependency.Dependency);
             }
@@ -249,35 +290,48 @@ pg::Status StaticModuleHost::Register(ModuleId id, ModuleOperationReport& report
     struct ScopeGuard
     {
         bool* Registering;
-        explicit ScopeGuard(bool& registering) noexcept
+        detail::ScopeRuntime* Runtime;
+        ScopeGuard(bool& registering, detail::ScopeRuntime& runtime) noexcept
             : Registering(&registering)
+            , Runtime(&runtime)
         {
         }
         ScopeGuard(const ScopeGuard&) = delete;
         ScopeGuard& operator=(const ScopeGuard&) = delete;
         ScopeGuard(ScopeGuard&&) = delete;
         ScopeGuard& operator=(ScopeGuard&&) = delete;
-        ~ScopeGuard() { *Registering = false; }
+        ~ScopeGuard()
+        {
+            *Registering = false;
+            Runtime->EndOperation();
+        }
     };
+    if (!Runtime->TryBeginOperation())
+    {
+        return Reject(report, ModuleError::kBusy, id);
+    }
     Scope->Registering = true;
-    const ScopeGuard guard{Scope->Registering};
-    RegistrationContext transaction(*Scope, id);
+    const ScopeGuard guard{Scope->Registering, *Runtime};
+    RegistrationContext transaction(*Scope, id, Domain);
     const auto result = Callbacks.at(*index)(transaction);
     if (transaction.Failure || !result)
     {
         const auto error = transaction.Failure ? *transaction.Failure : result.error();
-        record.State = StaticModuleState::kRegistrationFailed;
+        Runtime->RegistrationFailed(id, error);
         report = {
-            .Progress = ModuleOperationProgress::kRolledBack,
+            .Progress = ModuleOperationProgress::kCleanupPending,
             .PrimaryError = error,
             .Module = id,
             .RelatedModule = ModuleId(),
         };
+        report.OriginalError = error;
         return std::unexpected(error);
     }
     // No user code or recoverable operations occur during publication. Calls are serialized.
     Scope->Published.reserve(Scope->Published.size() + transaction.Pending.size());
+    Scope->Recipes.reserve(Scope->Recipes.size() + transaction.PendingRecipes.size());
     std::ranges::move(transaction.Pending, std::back_inserter(Scope->Published));
+    std::ranges::move(transaction.PendingRecipes, std::back_inserter(Scope->Recipes));
     record.State = StaticModuleState::kRegistered;
     report = {
         .Progress = ModuleOperationProgress::kRegistered,
@@ -286,5 +340,50 @@ pg::Status StaticModuleHost::Register(ModuleId id, ModuleOperationReport& report
         .RelatedModule = ModuleId(),
     };
     return {};
+}
+
+ScopeHandle StaticModuleHost::HostScope() const noexcept { return Runtime ? Runtime->HostScope() : ScopeHandle{}; }
+pg::Result<ScopeHandle> StaticModuleHost::CreateScope(pg::service::Scope kind, ScopeHandle parent,
+                                                      ModuleOperationReport& report)
+{
+    return Runtime ? Runtime->CreateScope(kind, parent, report)
+                   : pg::Result<ScopeHandle>{Reject(report, ModuleError::kInvalidState)};
+}
+pg::Status StaticModuleHost::Activate(ModuleId id, ModuleOperationReport& report)
+{
+    return Runtime ? Runtime->Activate(id, report) : pg::Status{Reject(report, ModuleError::kInvalidState, id)};
+}
+pg::Status StaticModuleHost::Load(ModuleId id, ModuleOperationReport& report)
+{
+    return Runtime ? Runtime->Load(id, report) : pg::Status{Reject(report, ModuleError::kInvalidState, id)};
+}
+pg::Status StaticModuleHost::BeginUnload(ModuleId id, ModuleOperationReport& report)
+{
+    return Runtime ? Runtime->BeginUnload(id, report) : pg::Status{Reject(report, ModuleError::kInvalidState, id)};
+}
+pg::Status StaticModuleHost::TryFinishUnload(ModuleId id, ModuleOperationReport& report)
+{
+    return Runtime ? Runtime->TryFinishUnload(id, report) : pg::Status{Reject(report, ModuleError::kInvalidState, id)};
+}
+pg::Status StaticModuleHost::BeginCloseScope(ScopeHandle scope, ModuleOperationReport& report)
+{
+    return Runtime ? Runtime->BeginCloseScope(scope, report) : pg::Status{Reject(report, ModuleError::kInvalidState)};
+}
+pg::Status StaticModuleHost::TryFinishCloseScope(ScopeHandle scope, ModuleOperationReport& report)
+{
+    return Runtime ? Runtime->TryFinishCloseScope(scope, report)
+                   : pg::Status{Reject(report, ModuleError::kInvalidState)};
+}
+pg::Status StaticModuleHost::PollCleanup(ModuleOperationReport& report)
+{
+    return Runtime ? Runtime->PollCleanup(report) : pg::Status{Reject(report, ModuleError::kInvalidState)};
+}
+pg::Status StaticModuleHost::BeginShutdown(ModuleOperationReport& report)
+{
+    return Runtime ? Runtime->BeginShutdown(report) : pg::Status{Reject(report, ModuleError::kInvalidState)};
+}
+pg::Status StaticModuleHost::TryFinishShutdown(ModuleOperationReport& report)
+{
+    return Runtime ? Runtime->TryFinishShutdown(report) : pg::Status{Reject(report, ModuleError::kInvalidState)};
 }
 } // namespace pg::module

@@ -1,7 +1,7 @@
 # Pangu Service / Context 架构 v1
 
-> 设计状态：Frozen（Scope、生命周期及 Concrete / Contract / Registry 三种 Service 模式的语义契约）；C++ API 未冻结；实现仅有局部 PoC
-> 更新：2026-10-20
+> 设计状态：Frozen（Scope、生命周期及 Concrete / Contract / Registry 三种 Service 模式的语义契约）；C++ API 未冻结；已有 STATIC Scope 资源生命周期切片，业务 Service API 仍待实现
+> 更新：2026-10-29
 > 决策：[ADR-0003](../decisions/0003-no-subsystem-service-context.md)、[ADR-0006](../decisions/0006-three-service-modes.md)
 > 本地参考探针：`.probe/service-lifecycle`（Git 忽略，不随仓库分发；与正式设计的差异见下文）
 
@@ -94,6 +94,14 @@ class ServiceRef;
 预期 Host/Context 对核心 Concrete Service 使用强类型成员 API；动态 Contract 才需要 Scoped `Registry::Acquire<T>()`；Registry Service 使用各业务 Module 自己的 Registry API，不引入 ExtensionDescriptor。
 
 ## 当前 PoC 与生产边界
+
+### 当前正式 STATIC 实现（2026-10-29）
+
+`PanguModule` 已实现可重复仅移动 `ScopeFactory`、明确 Host/Context/World Owner 句柄、具体 Scope 资源日志、工厂先追踪后 Start、局部装配回滚、Borrow/Busy 排空与依赖逆序清理。`ScopeAccess<T>` 只拥有稳定访问控制块，`ScopeBorrow<T>` 才保护实际 T；已导出令牌的获取与关闭通过原子闸门线性化。工厂和资源不要求业务类型继承统一 Service 基类；装配期显式 `Dependency<T>` 不作为全局 ServiceLocator。实现及限制见 [Scope 生命周期设计](../../docs/superpowers/specs/2026-10-28-module-scope-lifecycle-design.md) 和[验收计划](../../docs/superpowers/plans/2026-10-28-module-scope-lifecycle.md)。
+
+`StaticModuleHost` 当前是受控 STATIC 协调器，不是完整 EngineHost/ModuleManager。`RegistrationScope` 是声明注册域，运行时 Scope Owner 分开持有实例；Shutdown 撤销本 Host 的声明。管理操作需外部串行化；实际 Service 的并发数据访问由其业务线程契约保证。完整 Contract Provider 选择、业务 Registry、TaskScheduler/GPU 排空、真实动态 CodePin/Loader 和设备运行验收仍属后续。
+
+### 历史 PoC
 
 `.probe/service-lifecycle` 包含独立 CMake 验证探针：三个 Scope 规则、DAG、服务初始化回滚、活动借用阻止停止、真正 DLL/SO 的 Code Guard 释放。
 

@@ -3,6 +3,8 @@ cmake_minimum_required(VERSION 4.0)
 add_library(PanguModule STATIC
     Private/ModuleIdentity.cpp
     Private/RegistrationContext.cpp
+    Private/ScopeBuildContext.cpp
+    Private/ScopeRuntime.cpp
     Private/StaticModuleHost.cpp
 )
 

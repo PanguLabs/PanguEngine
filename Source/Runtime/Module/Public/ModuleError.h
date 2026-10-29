@@ -26,6 +26,13 @@ enum class ModuleError : std::uint8_t
     kDeclarationConflict = 13,
     kInvalidDeclaration = 14,
     kBusy = 15,
+    kNotReady = 16,
+    kTypeMismatch = 17,
+    kInvalidScope = 18,
+    kScopeNotFound = 19,
+    kDependencyInUse = 20,
+    kDependencyNotActive = 21,
+    kUndeclaredDependency = 22,
 };
 
 [[nodiscard]] constexpr pg::Error MakeModuleError(ModuleError code) noexcept

@@ -1,7 +1,7 @@
 # Pangu ModuleDescriptor & Registration API v1
 
 > 状态：**Partially Frozen**。第 8 节列出的行为契约已冻结；C++ 代码块仍为 API 提案，**Public Header、具体签名/布局、导出名、ABI 与生产 Loader 实现未冻结**。
-> 更新：2026-10-28
+> 更新：2026-10-29
 > 前置已冻结：[Module Registration & Lifetime v1](module-registration-lifetime.md)、[Service v1](service.md)、[ABI Profile / Fingerprint v1](../foundation/abi-profile-fingerprint.md)、[Memory](memory-management.md)、[Build System](../foundation/build-system.md)
 > 决策：[ADR-0010：统一 C++23 Module 入口](../decisions/0010-unified-cpp-module-entry.md)、[ADR-0011：Module API v1 行为契约](../decisions/0011-module-api-behavior-contract.md)。冻结行为不代表实现或跨平台 ABI 已验收，现有证据见第 9 节。
 
@@ -339,6 +339,14 @@ public:
 冻结 Public API/ABI 前还必须完成：可独立编译的公共头文件及上述依赖类型；同一契约的 STATIC/SHARED 接线；所有借用数据与报告预算/上限；无异常分配策略；五平台目标布局和调用约定验证；装载前真实产物绑定与装载后二次核对；并发线性化、失败注入和卸载回归。不得因本轮行为冻结跳过任何一项，也不要求恢复独立 C POD Discovery。
 
 ## 9. 本轮验证证据与限制
+
+### 当前 STATIC Scope 生命周期切片（2026-10-29）
+
+在下述 Descriptor/Catalog 切片之上，新增 `ScopeFactory` / `ScopeBuildContext` / `ScopeAccess<T>` / `ScopeBorrow<T>` 及 STATIC Scope 协调器。工厂声明一次、按具体 Scope 重复装配；Scope/Module 闸门与原始错误由 Host 持有，完成 Start 才发布访问；失败进入局部或 Module CleanupPending，Poll/外部借用未完成时保持资源存活，逆序逐个 Stop/Poll/Destroy。未交付句柄的失败 Scope 由 Host 持续跟踪。
+
+`StaticModuleHost` 新增 Activate、固定 Catalog 项重新 Load、Scope 创建/关闭、受管逻辑卸载及 Shutdown；仅是同次构建 STATIC 实现，不执行 OS 卸载。句柄含 Host Domain/槽位/generation，旧 Scope 或旧访问控制块不会指向重建实例。注册域撤销也会使 `Declarations()` 借用失效；需跨清理持有诊断时复制值快照。
+
+API/布局仍未冻结。当前库的 `std::move_only_function` 可用性不一致，统一使用内部拥有型仅移动 callable 适配；OOM 仍为终止政策。具体合并图门槛、预算、报告、析构契约、实际验收与未验证部分见 [设计](../../docs/superpowers/specs/2026-10-28-module-scope-lifecycle-design.md) 和[计划](../../docs/superpowers/plans/2026-10-28-module-scope-lifecycle.md)。不据此声称完整 Service Registry、动态 CodePin、SHARED 预检、最终 EXE ABI 或五平台设备运行已经验收。
 
 ### 当前正式实现切片（2026-10-28）
 
