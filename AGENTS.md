@@ -6,7 +6,13 @@
 
 - **中文优先，专业术语可使用英文。**
 - 讨论、分析、设计说明、代码评审和项目文档优先使用简体中文；必要时保留 C++、ABI、Module、Plugin、ECS 等专业术语。
+- 代码注释使用简体中文，专业术语可保留英文。注释应简明，说明原因或约束，不复述代码。
 - 代码标识符、命名空间、API、命令行参数、文件路径及约定的配置键保持其原有拼写，不要为翻译而更名。
+
+## 提交与协作
+
+- **提交信息与 PR 描述同样使用中文**：只保留标题与中文说明体，标题沿用仓库既有风格。
+- **不添加任何 AI 工具或模型署名尾注**，包括 `Co-Authored-By:`、`Generated-with:`、`Signed-off-by:` 等；工具自带的署名默认值和计划模板均不得覆盖本规则。
 
 ## 项目及仓库
 
@@ -42,7 +48,6 @@
 - `.claude/skills` 是本地生成的目录映射，不应提交到 Git；Codex 可以直接使用 `.agents/skills/`。
 - 新建或修改的 `CMakeLists.txt` 使用 `cmake_minimum_required(VERSION 4.0)`，并按目标平台校验编译器；具体规则以 [`wiki/foundation/toolchain.md`](wiki/foundation/toolchain.md) 和 [`wiki/foundation/build-system.md`](wiki/foundation/build-system.md) 为准。
 - 修改完成后尽可能执行针对性的构建、测试或静态检查，并明确说明未验证的部分。
-- 未经明确要求，不提交或推送 Git 变更。
 
 ## 目录维护与生命周期
 
@@ -50,7 +55,7 @@
 - `docs/superpowers/specs/`：正式设计规格纳入 Git，完成后保留；被替代的规格标明 Superseded。
 - `docs/superpowers/plans/`：正式实施计划纳入 Git；完成后保留任务状态、验收摘要、关键提交与遗留问题，不存放大量执行日志或临时 Diff。
 - `Tests/`：长期维护的正式测试纳入 Git，Plan 完成后不自动清理；仅在功能移除、契约废弃、测试重复或已被等效测试替代且不降低有效覆盖时删除或合并。新增、维护、删除测试或记录测试验收时，遵守 [Tests 维护规范](Tests/README.md)。
-- `.superpowers/sdd/<plan>/`：Plan 执行期间的临时上下文、探针、脚本、日志和评审产物统一放在对应工作区，不纳入 Git，不放入 `.probe/`。Plan 完成并通过 Review 与验收、必要结论已归档且无运行任务依赖后，方可清理对应目录；未完成、暂停或验收失败的 Plan 保留。
+- `.superpowers/sdd/<plan>/`：Plan 执行期间的临时上下文、探针、脚本、日志和评审产物统一放在对应工作区，不纳入 Git，不放入 `.probe/`。Plan 完成并通过 Review 与验收后，必须先归档必要结论并确认无运行任务依赖，再删除对应目录，作为 Plan 的收尾步骤；未完成、暂停或验收失败的 Plan 保留。
 - `.probe/`：非 Plan 执行产生的临时 Probe/PoC，不纳入 Git，按需清理；有长期价值的测试迁入 `Tests/`，设计结论同步 `wiki/`。正式验收不得依赖未版本化的 Probe。
 - 各平台 BuildRoot：构建产物与缓存不纳入 Git，按需清理；不得擅自删除其他任务或平台正在使用的构建状态，不混用不同宿主的构建树。
 
@@ -67,3 +72,14 @@
 - 架构规范统一位于 `wiki/`；从 [`wiki/README.md`](wiki/README.md) 进入，按 Foundation / Core / Runtime 分类。Runtime 按功能领域组织，不使用统一 Subsystem 架构，见 [Service 规范](wiki/core/service.md)。
 - 具体子系统文档是该子系统设计的权威来源；`wiki/decisions/` 保存重大决策的理由与替代关系。
 - 严格区分 Frozen、Partially Frozen 与 Draft，不能将历史讨论草案当作已实现或全部冻结的接口。
+
+<!-- CODEGRAPH_START -->
+## CodeGraph
+
+In repositories indexed by CodeGraph (a `.codegraph/` directory exists at the repo root), reach for it BEFORE grep/find or reading files when you need to understand or locate code:
+
+- **MCP tool** (when available): `codegraph_explore` answers most code questions in one call — the relevant symbols' verbatim source plus the call paths between them, including dynamic-dispatch hops grep can't follow. Name a file or symbol in the query to read its current line-numbered source. If it's listed but deferred, load it by name via tool search.
+- **Shell** (always works): `codegraph explore "<symbol names or question>"` prints the same output.
+
+If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is the user's decision.
+<!-- CODEGRAPH_END -->
