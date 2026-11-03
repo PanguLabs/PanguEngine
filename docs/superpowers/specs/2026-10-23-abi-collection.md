@@ -1,6 +1,8 @@
 # 五平台 ABI Profile 采集器迭代设计
 
-> 设计状态：Approved；实现状态：Completed（批准的 STATIC 范围，2026-10-27）。Task 1—12 的 68 项检查全部完成；R1—10 及提交 `9561fe6` 的追加 8 项评审问题已修复并独立复审通过，无剩余 Critical/Important。最近一次完整三桌面 CTest 为 **104/104**，移动端/CRT 构建与采集矩阵通过；追加修复与文档已按用户授权通过 amend 合入同一提交，未推送。见[计划与验收状态](../plans/2026-10-23-abi-collection.md)。最终 EXE/SHARED Loader 不在本轮范围。
+> 历史说明（2026-11-02）：本规格中逐 TU 收据、Compiler Launcher、Guard/Collect、宿主 Bootstrap 与对应旧测试已由 [ADR-0013](../../../wiki/decisions/0013-native-build-abi-boundary.md) 及 [新规格](2026-11-02-native-build-abi-boundary-design.md) 替代。其 2026-10-27 验收记录仍为当时事实，不构成当前生产构建要求。
+
+> 设计状态：Superseded（2026-11-02，由 [ADR-0013](../../../wiki/decisions/0013-native-build-abi-boundary.md) 与[新规格](2026-11-02-native-build-abi-boundary-design.md) 替代）；历史实现状态：Completed（批准的 STATIC 范围，2026-10-27）。Task 1—12 的 68 项检查全部完成；R1—10 及提交 `9561fe6` 的追加 8 项评审问题已修复并独立复审通过，无剩余 Critical/Important。最近一次完整三桌面 CTest 为 **104/104**，移动端/CRT 构建与采集矩阵通过；追加修复与文档已按用户授权通过 amend 合入同一提交，未推送。见[计划与验收状态](../plans/2026-10-23-abi-collection.md)。最终 EXE/SHARED Loader 不在本轮范围。
 > 日期：2026-10-23（设计）；实现状态核对：2026-10-27
 > 实现基线：`dbfe7aa`（Windows 首切片）
 > 权威协议：[ABI Profile / Fingerprint v1](../../../wiki/foundation/abi-profile-fingerprint.md)

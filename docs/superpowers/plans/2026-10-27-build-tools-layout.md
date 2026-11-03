@@ -1,5 +1,7 @@
 # BuildTools 目录与命名迁移计划
 
+> 历史说明（2026-11-02）：原 AbiProfile 专用 Bootstrap/Published 缓存已经由 [ADR-0013](../../../wiki/decisions/0013-native-build-abi-boundary.md) 退役并删除；BuildTools 的历史布局不再是当前生产规范。
+
 > 状态：Completed。目录迁移已合入 `b570415`，macOS 路径解析竞态及 Android CRLF 后续修复已合入 `dd846f0`。下文执行授权、提交状态和测试结果保留各轮历史记录；当前问题与日志状态见末尾“记录核对（2026-10-28）”。
 >
 > 当时执行方式：在当前共享源码工作区直接实施。用户已通过“按讨论结果修改”授权；不提交或推送。
@@ -68,11 +70,11 @@
 
 - 在 macOS 原生 APFS 目录中，另一线程反复创建、删除 `.invalid` 和 `.collection-lock`，会使实际加载的系统 `/usr/lib/libc++.1.dylib` 的 `std::filesystem::weakly_canonical` 返回**空路径且错误码为零**。独立标准库调用在 10,000 轮中观察到 639 次该结果；不依赖 SMB 源码挂载即可复现。
 - 原请求解析仅检查错误码；空输出路径进入 `Within(output, input)` 后，被当成所有非空输入的祖先，触发原始 `collection_output_input_alias`。并行 Guard、Compile 和完成状态清理使该窗口可达；误报发生在完成记录发布前。
-- 新增正式回归 [`CheckConcurrentOutputs`](../../../Tests/AbiProfile/CollectionRequestTests.cpp)：调用真实输入守卫，同时模拟上述标记和锁生命周期。修复前 `ctest --preset macos -R '^AbiCollectionRequest$' --output-on-failure` 在 4,000 轮中有 **491 次同类误报**，CTest 失败。
+- 新增正式回归 `CheckConcurrentOutputs`（历史 `Tests/AbiProfile/CollectionRequestTests.cpp`）：调用真实输入守卫，同时模拟上述标记和锁生命周期。修复前 `ctest --preset macos -R '^AbiCollectionRequest$' --output-on-failure` 在 4,000 轮中有 **491 次同类误报**，CTest 失败。
 
 ### 修复边界
 
-- [`ResolvePath`](../../../BuildTools/AbiProfile/Private/ToolIo.cpp) 使用 `canonical` 解析实际存在的前缀；只在 ENOENT 时剥离缺失后缀，拼回后作词法规范化。成功结果必须为绝对路径，其他文件系统错误仍失败。
+- `ResolvePath`（历史 `BuildTools/AbiProfile/Private/ToolIo.cpp`） 使用 `canonical` 解析实际存在的前缀；只在 ENOENT 时剥离缺失后缀，拼回后作词法规范化。成功结果必须为绝对路径，其他文件系统错误仍失败。
 - 请求解析、编译命令解析、生命周期输出检查和 `IsSameFile` 统一使用该工具私有函数；原有 symlink、hardlink、保留工作目录及 `equivalent` 身份校验保留。未改变 ABI Schema、Fingerprint 或 Loader 保证范围。
 - 并发回归限定于 `__APPLE__`：Windows 删除中的文件可能返回 `access_denied`，应保持 Fail Closed，不能要求这种权限错误被接受。其他平台继续执行既有路径与文件身份回归。
 - 临时诊断已移除；独立只读评审及限定回归平台后的复审均无阻断项。临时探针和日志当时保存在本地 `.probe/macos-interface-cycle/`，已于 2026-10-28 按用户要求清理；正式回归不依赖该忽略目录。
@@ -89,10 +91,10 @@
 
 ## Android CRLF 解析后续修复（2026-10-28）
 
-- 确认两处同类问题：[`AndroidCollector::Macro`](../../../BuildTools/AbiProfile/Private/AndroidCollector.cpp) 把 CRLF 的 CR 保留为宏值；[`LibcxxConfiguration`](../../../BuildTools/AbiProfile/Private/HeaderTrace.cpp) 也保留行末 CR，导致普通 LF 源码与 CRLF 基线的配置比较冲突。
+- 确认两处同类问题：`AndroidCollector::Macro`（历史 `BuildTools/AbiProfile/Private/AndroidCollector.cpp`） 把 CRLF 的 CR 保留为宏值；`LibcxxConfiguration`（历史 `BuildTools/AbiProfile/Private/HeaderTrace.cpp`） 也保留行末 CR，导致普通 LF 源码与 CRLF 基线的配置比较冲突。
 - 两处解析都仅移除**紧邻已找到的 LF 的一个 CR**，不作通用 trim；ABI 值中的空格、嵌入 CR、额外 CR 和未配对的 EOF CR 仍参与严格校验。原始编译器输出和 Evidence 不改写，Profile/Fingerprint 协议不变。
-- [`AndroidCollectorTests`](../../../Tests/AbiProfile/AndroidCollectorTests.cpp) 使用真实 NDK 观测构造 LF/CRLF 变体，验证生成相同 Profile、原始 Evidence 保留，以及两种格式下尾随空格和嵌入 CR 的错误 ABI 值被拒绝。修复前 LF 通过、CRLF 在 `android_abi_macros_or_triple` 失败；修复后原始 API/CLI 两项 Android 测试 **2/2 通过**，包括普通源码和既有负测。
-- [`AbiProfileTests`](../../../Tests/AbiProfile/AbiProfileTests.cpp) 新增 10 项快速共享配置解析回归，覆盖双向 LF/CRLF、混合换行、末行无终止换行、值变化、缺失空值宏及显著字节保留。修复前 **60/63**（三项换行等价失败），修复后通过。
+- `AndroidCollectorTests`（历史 `Tests/AbiProfile/AndroidCollectorTests.cpp`） 使用真实 NDK 观测构造 LF/CRLF 变体，验证生成相同 Profile、原始 Evidence 保留，以及两种格式下尾随空格和嵌入 CR 的错误 ABI 值被拒绝。修复前 LF 通过、CRLF 在 `android_abi_macros_or_triple` 失败；修复后原始 API/CLI 两项 Android 测试 **2/2 通过**，包括普通源码和既有负测。
+- `AbiProfileTests`（历史 `Tests/AbiProfile/AbiProfileTests.cpp`） 新增 10 项快速共享配置解析回归，覆盖双向 LF/CRLF、混合换行、末行无终止换行、值变化、缺失空值宏及显著字节保留。修复前 **60/63**（三项换行等价失败），修复后通过。
 - 最终正式 Android ARM64 Preset 的配置、构建和两 Module 的宿主 ABI Collection 通过；Linux 的共享回归及 Collector **2/2**、macOS/iOS 的共享回归及 Collector **3/3** 通过。未执行 Android/iOS 设备程序，也未重新运行 Linux/macOS 的完整测试集。
 - 最终 Windows 正式完整 CTest **36/36 通过**（470.17 秒，无失败重跑），包含原先失败的两项 Android Collector、两组新增换行回归及既有负测；本轮 Android CRLF 解析问题已关闭。
 - 四个 C++ 文件的 clang-format、实际 Windows 编译数据库的 clang-tidy 和差异检查通过；两轮独立只读代码评审无阻断项。本轮临时证据当时保存在 `.probe/android-crlf/`，已于 2026-10-28 按用户要求清理；修复轮结束时既有暂存内容保持原样，未提交或推送。

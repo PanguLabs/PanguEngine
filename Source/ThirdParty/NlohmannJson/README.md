@@ -30,9 +30,7 @@ git submodule update --init --recursive
 
 ## 使用与优化约束
 
-- 声明层头文件只引用 JSON 类型时使用 `<nlohmann/json_fwd.hpp>`；
-  实际解析/访问 JSON 的 `.cpp` 包含 `<nlohmann/json.hpp>`。
-  [BuildTools/AbiProfile/Private/AbiProfile.h](../../../BuildTools/AbiProfile/Private/AbiProfile.h) 已这样处理，核心算法放在 `.cpp`。
+- 声明层头文件只引用 JSON 类型时使用 `<nlohmann/json_fwd.hpp>`；实际解析/访问 JSON 的 `.cpp` 包含 `<nlohmann/json.hpp>`。
 - CMake 定义 `JSON_USE_GLOBAL_UDLS=0`，禁止把 JSON 字面量操作符引入全局命名空间。
   v3.12.0 的字面量定义由 `<nlohmann/json.hpp>` 提供，仅在需要的局部作用域中
   `using namespace nlohmann::literals;`。
@@ -40,9 +38,9 @@ git submodule update --init --recursive
   等可失败路径处理非受信任输入。只有静态受控的测试 JSON 字面量/输入才使用
   不返回错误的便利接口。
 
-- `JsonExtras` CTest 验证固定版本、字面量、JSON Pointer、DOM 访问与无异常解析失败路径。
+- [`JsonExtras`](../../../Tests/ThirdParty/NlohmannJson/JsonExtrasTests.cpp) CTest 验证固定版本、字面量、JSON Pointer、DOM 访问与无异常解析失败路径；`NlohmannSubmoduleRequired` 验证缺少任一头文件时配置明确失败。
   不引入其他版本的独立头文件或实验性零拷贝 API。
 
 升级必须明确更新版本要求，在 `Repo/` 检出目标提交并更新主仓库 gitlink，复核许可证、
-Frozen ABI Canonical JSON/SHA-256 测试向量及 Windows/WSL/macOS Clang 测试。
+独立 JSON 接入测试及 Windows/WSL/macOS Clang 测试。
 不得将不同版本或提交的头文件复制混用。

@@ -1,7 +1,7 @@
 # Pangu Plugin / Module 架构基线
 
 > 状态：Partially Frozen（职责分离、单 Module 单库、CMake Target 命名、三种 Service、注册/生命周期语义已冻结；Manifest/Descriptor 具体布局和 API 待冻结）
-> 更新：2026-10-23
+> 更新：2026-11-02
 > 决策：[ADR-0005：单 Module 单库](../decisions/0005-one-module-one-library.md)、[ADR-0006：三种 Service 模式](../decisions/0006-three-service-modes.md)、[ADR-0008：Module 注册与生命周期](../decisions/0008-module-registration-lifetime.md)
 > 参考：[EngineHost](engine-host.md)、[Service](service.md)、[ABI](../foundation/abi.md)、[内存所有权](memory-management.md)、[构建系统](../foundation/build-system.md)
 
@@ -37,7 +37,7 @@ Plugin / Module 体系要兼顾静态构建与动态扩展、Game 与 Editor 运
 
 - `Pangu::` **MUST 仅用于真实 Pangu Module Target 的别名**（例如 `Pangu::Foundation`、`Pangu::ECS`）。每个 Module 仍对应唯一实际 `STATIC` / `SHARED` Library Target。
 - `ThirdParty::` **MUST 用于项目对外提供的第三方依赖 Target 名称**（例如 `ThirdParty::NlohmannJson`、`ThirdParty::Asio`）；允许原生 CMake `ALIAS` 指向上游 Target，不为命名创建多余库。第三方 SDK 可暴露多个 Target。
-- `PanguBuildOptions`、`PanguAbiProfileTool`、`PanguAbiProfile` 等自有构建策略、工具与辅助 Target 使用**无 `Pangu::` 前缀**的普通名称；它们不是 Pangu Module。**不保留旧 `Pangu::BuildOptions` 或 `Pangu::NlohmannJson` 别名。**
+- `PanguBuildOptions` 等自有构建策略、工具与辅助 Target 使用**无 `Pangu::` 前缀**的普通名称；它们不是 Pangu Module。**不保留旧 `Pangu::BuildOptions` 或 `Pangu::NlohmannJson` 别名。**
 - 编译器、标准库、SDK/NDK 的基础选择由 CMake Toolchain/Preset 统一提供；`PanguBuildOptions` 为引擎代码施加 C++23、无异常和警告策略，ThirdParty 不调用 `pangu_configure_module()`。
 - 第三方依赖只需进入 CMake 图（`INTERFACE` / `STATIC` / `SHARED` / `IMPORTED` 或上游 Target），不引入 External Module、ThirdParty Manager、统一 Package Adapter 或构建 Wrapper。
 
@@ -61,8 +61,8 @@ Plugin / Module 体系要兼顾静态构建与动态扩展、Game 与 Editor 运
 3. **依赖先于使用**：启动、停止和卸载必须考虑 Module 间引用以及外部持有的资源、任务、回调。
 4. **安全卸载优先**：发现仍有使用者时拒绝或推迟卸载，不允许忽略悬空引用；动态库句柄与 CodePin 由现有 Module 机制维护，不建立独立 BinaryImageManager。
 5. **动态/静态部署兼容**：不把“Plugin”定义为只能由动态库交付的扩展。`STATIC` / `SHARED` 是各 Module 的 CMake Library Target 类型；`Monolithic` / `Modular` 仅在确需统一 Engine/Game/Editor 部署策略时作为顶层 CMake 构建选项，**不新增 Module 分类**，也不强制所有 Module 采用相同类型；详见 [构建系统](../foundation/build-system.md#monolithic--modular-与-module-库类型的边界)。
-6. **统一 C++23 Module 入口，无强制 C Bootstrap**：STATIC Catalog 和 SHARED Query 都返回同一种 C++23 ModuleDefinition，SHARED 仅保留固定 `extern "C"` 符号用于定位，ABI/Public API 已在 OS Load 前可信预检；不需要独立 C POD Discovery 或人工维护的 C 注册桥，具体约束见 [ADR-0010](../decisions/0010-unified-cpp-module-entry.md)。其他真正 C ABI 互操作仍可使用 C 回调。
-7. **ABI 受控**：受控 C++ 构建可以跨 Module 交换兼容 STL 类型，但必须保证 ABI Fingerprint/配置兼容及所有权有效。
+6. **统一 C++23 Module 入口，无强制 C Bootstrap**：STATIC Catalog 和 SHARED Query 都返回同一种 C++23 ModuleDefinition，SHARED 仅保留固定 `extern "C"` 符号用于定位；不需要独立 C POD Discovery 或人工维护的 C 注册桥。依 ADR-0013，同树同配置配套插件免 AbiProfile，单独交付插件才在 OS Load 前执行可信 ABI/Public API 预检。
+7. **ABI 边界按交付方式划分**：受控同树 C++ 构建可以跨 Module 交换兼容 STL 类型，不运行 AbiProfile；独立交付 C++ 二进制必须在接纳边界验证兼容配置与所有权。历史 strict-v1 Fingerprint 不再是普通构建协议。
 8. **构建与发现分离**：CMake 描述构建关系，运行时的插件发现/安装可能仍需要 Manifest；两类信息不一定共用同一种文件。
 9. **第三方依赖不强制 Package Adapter**：可通过 CMake 及相应 Module/ThirdParty 目标集成。
 
@@ -100,7 +100,7 @@ Plugin / Module 体系要兼顾静态构建与动态扩展、Game 与 Editor 运
 
 ### 后续冻结顺序
 
-[Module Registration & Lifetime v1](module-registration-lifetime.md) 的**注册、依赖、状态、CodePin、回滚语义已 Frozen**；依 [ADR-0010](../decisions/0010-unified-cpp-module-entry.md) **STATIC/SHARED 统一 C++23 ModuleDefinition/Registration，SHARED 以稳定 `extern "C"` 导出名定位 C++ Query**，不需要独立 C POD；具体 ModuleDescriptor、原生 C++23 Query/固定导出符号、ModuleManager Public API 与 ABI Profile/Fingerprint 的具体构建和装载接线仍待实现；Fingerprint 的 Schema/Canonical/算法已在 ADR-0009 冻结。
+[Module Registration & Lifetime v1](module-registration-lifetime.md) 的**注册、依赖、状态、CodePin、回滚语义已 Frozen**；依 [ADR-0010](../decisions/0010-unified-cpp-module-entry.md) **STATIC/SHARED 统一 C++23 ModuleDefinition/Registration，SHARED 以稳定 `extern "C"` 导出名定位 C++ Query**，不需要独立 C POD。ABI 接纳范围由 [ADR-0013](../decisions/0013-native-build-abi-boundary.md) 冻结：同树配套插件免 AbiProfile，独立交付插件保留装载前预检；具体 ModuleDescriptor、Query/导出符号、ModuleManager Public API、独立交付兼容描述与 Loader 接线仍待实现。
 
 [Module API v1](module-api.md) 已按 [ADR-0011](../decisions/0011-module-api-behavior-contract.md) 冻结身份/版本、依赖绑定、同库 Catalog 与驻留、Scope 局部回滚和操作后置条件；Public API/ABI 仍待验证，不由该行为冻结替代实现验收。
 

@@ -11,10 +11,8 @@ add_library(PanguModule STATIC
 add_library(Pangu::Module ALIAS PanguModule)
 pangu_configure_module(PanguModule)
 target_link_libraries(PanguModule PUBLIC PanguFoundation)
-# Build tool bootstrap reuses this Foundation implementation without Target ABI hooks.
-if(COMMAND pangu_register_abi_module)
-    pangu_register_abi_module(PanguModule)
-endif()
+# 保持改造前的扫描策略：只对本目标关闭，不做全局关闭；A/B 验收要求扫描设置一致。
+set_property(TARGET PanguModule PROPERTY CXX_SCAN_FOR_MODULES OFF)
 
 target_include_directories(PanguModule PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/Public"

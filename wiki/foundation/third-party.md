@@ -1,7 +1,7 @@
 # ThirdParty 接入与功能封装
 
 > 状态：Partially Frozen（CMake Target 命名、Module/ThirdParty 边界已冻结；获取方式、逐库补丁及部署策略按依赖确定）
-> 更新：2026-10-23
+> 更新：2026-11-02
 > 相关：[构建系统](build-system.md)、[工具链](toolchain.md)、[Plugin / Module](../core/plugin-module.md)、[ABI](abi.md)
 
 ## 源码与构建入口
@@ -47,7 +47,7 @@ Source/ThirdParty/<DependencyName>/
 
 - **`Pangu::` 只表示真实的 Pangu Module**（如 `Pangu::Foundation`、`Pangu::ECS`）。
 - **`ThirdParty::` 表示第三方依赖**（如 `ThirdParty::NlohmannJson`、`ThirdParty::Asio`）。上游已提供 CMake Target 时可用原生 `ALIAS` 统一名称；不为命名强制编译新的 Wrapper Library。
-- 引擎构建策略和工具使用普通 Target 名称（如 `PanguBuildOptions`、`PanguAbiProfileTool`），**不使用 `Pangu::`**。
+- 引擎构建策略和工具使用普通 Target 名称（如 `PanguBuildOptions`），**不使用 `Pangu::`**。
 - 依赖通过 `target_link_libraries(... PRIVATE|PUBLIC|INTERFACE ...)` 明确表达。第三方 Target 不调用 `pangu_configure_module()`，不获得 ModuleId、注册、Service 或生命周期身份。
 
 本规范不额外定义 `PanguThirdParty.cmake`、`pangu_add_third_party()`、External Module 或 Package Adapter。
@@ -63,7 +63,7 @@ Source/ThirdParty/<DependencyName>/
 
 **Pangu Module 封装的是引擎功能，而不是每个第三方库。** 一个功能 Module 可以依赖多个第三方 Target，不强制一库一 Module，也不为每个依赖新增 Service/Registry。
 
-第三方 API 默认优先通过使用方的 `PRIVATE` 依赖实现隔离；**不强制所有第三方类型都隐藏在 Pangu Module Public API 之外**。确需公开时应审查版本、API/ABI、对象/分配器所有权及销毁代码驻留。宿主工具和测试可以直接使用 `ThirdParty::` Target；ABI Profile 工具使用 JSON 就是现有实例。
+第三方 API 默认优先通过使用方的 `PRIVATE` 依赖实现隔离；**不强制所有第三方类型都隐藏在 Pangu Module Public API 之外**。确需公开时应审查版本、API/ABI、对象/分配器所有权及销毁代码驻留。宿主工具和测试可以直接使用 `ThirdParty::` Target；`JsonExtras` 测试是当前实例。
 
 对于 Gameplay Hot Swap，第三方代码实际链接/装载到哪个 DLL，必须据此管理对象、回调、任务、线程和卸载时序；静态链接进入可卸载 DLL 的代码也需要 CodePin/Drain 约束。ThirdParty Target 名称及 `PRIVATE` 传播设置本身不提供运行时卸载安全。一个 Pangu Module 仍对应唯一实际 STATIC/SHARED Library Target。
 
@@ -82,9 +82,9 @@ Source/ThirdParty/<DependencyName>/
 ## 当前接入
 
 `NlohmannJson/Repo` 固定到官方 v3.12.0 正式发布版，外层直接暴露 `single_include` 并设置
-`JSON_USE_GLOBAL_UDLS=0`。该依赖只供宿主 ABI Profile 工具及测试使用，
-没有新增 Runtime Module，没有启用上游测试，也没有在配置阶段执行下载。
+`JSON_USE_GLOBAL_UDLS=0`。当前保留 `ThirdParty::NlohmannJson` 和独立 JSON 回归测试，
+不再依赖已退役的 ABI Profile 工具；没有新增 Runtime Module、上游测试或配置时下载。
 
 ## 编译型第三方的实际验证（2026-10-23）
 
-`Tests/Toolchain/ThirdParty` 创建一个编译真实 C++23 源码的普通 `ThirdParty::CompiledProbe` STATIC Target，不调用 `pangu_configure_module()`，不链接 `PanguBuildOptions`。通过 Windows、WSL Linux、macOS、Android ARM64、iOS ARM64 五平台编译及其实际 TU 宏一致性审计，并在 Windows/Linux/macOS 上执行真实的 ThirdParty + Pangu STATIC 库链接和 CTest，验证此前区分「Toolchain 选择」和「Pangu Target Policy」的方案至少适用于该代表性编译型 ThirdParty。该目标仅用于回归，不是引擎功能依赖，也不证明任意外部库都已具备相同 ABI。详见 [验证说明](../../Tests/Toolchain/README.md)。
+`Tests/Toolchain/ThirdParty` 创建一个编译真实 C++23 源码的普通 `ThirdParty::CompiledProbe` STATIC Target，不调用 `pangu_configure_module()`，不链接 `PanguBuildOptions`。曾通过 Windows、WSL Linux、macOS、Android ARM64、iOS ARM64 五平台编译及旧 TU 宏审计；现行回归保留真实 C++ 编译，并在 Windows/Linux/macOS 上执行 ThirdParty + Pangu STATIC 库链接和 CTest，验证此前区分「Toolchain 选择」和「Pangu Target Policy」的方案至少适用于该代表性编译型 ThirdParty。该目标仅用于回归，不是引擎功能依赖，也不证明任意外部库都已具备相同 ABI。详见 [验证说明](../../Tests/Toolchain/README.md)。

@@ -1,5 +1,7 @@
 # Windows 宿主并行 ABI 输出校验修复计划
 
+> 历史说明（2026-11-02）：该计划修复的是已退役的 ABI 收据/Guard 输出等待机制；当前原生 CMake + Ninja 不保留这套实现，历史修复事实保留。现行策略见 [ADR-0013](../../../wiki/decisions/0013-native-build-abi-boundary.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 > 状态：Completed。代码已进入 `main` 的 `c518990`，Android 并行采集遗留已关闭。原实施沿用 `feature/module-static-catalog`，基线 `4392b2e` 加此前 STATIC 切片；下文“未提交”与 index 约束保留当时状态。最新核对见文末。
 

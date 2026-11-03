@@ -1,13 +1,15 @@
-# Pangu ABI Profile / Fingerprint v1
+# Pangu ABI Profile / Fingerprint v1（历史协议）
 
-> 设计状态：Frozen（Schema v1、Canonical Serialization、SHA-256 Fingerprint、严格兼容判定与装载校验顺序）；五平台 STATIC 构建集成已完成，最终 EXE/SHARED Loader 与公开二进制入口布局待实现
-> 更新：2026-10-27
-> 决策：[ADR-0009：ABI Profile 与 Fingerprint v1](../decisions/0009-abi-profile-fingerprint.md)
+> 设计状态：Superseded（v1 Schema、Canonical Serialization、SHA-256 Fingerprint 与 strict-v1 作为历史协议保留；生产适用范围由 ADR-0013 替代）
+> 更新：2026-11-02
+> 历史决策：[ADR-0009](../decisions/0009-abi-profile-fingerprint.md)；当前边界：[ADR-0013](../decisions/0013-native-build-abi-boundary.md)
 > 基线：[ABI](abi.md)、[工具链](toolchain.md)、[构建系统](build-system.md)、[Module 注册与生命周期](../core/module-registration-lifetime.md)、[内存管理](../core/memory-management.md)
 
-## 1. 目标与适用范围
+## 1. 历史目标与当前适用范围
 
-v1 对同一受控构建、同一目标进程中的 C++ Module 定义**可复现、保守、失败时拒绝（Fail Closed）**的 ABI 配置兼容闸门。Windows、Linux、macOS、Android、iOS 各自使用实际目标 ABI；不同目标平台的二进制不得互换。ABI Fingerprint 相等是受控 C++ 互操作的**必要条件而非充分条件**。
+> **当前规则**：普通同树构建、Tests、STATIC 最终组合以及与宿主同树同配置并配套交付的插件不使用 AbiProfile。只有独立交付的 C++ SDK/预编译库和单独交付给已有宿主的原生插件进入二进制接纳边界；未来格式不得冒充 strict-v1。以下 v1 字段、算法和历史构建流程用于解释旧产物与旧测试，不是当前生产接线要求。
+
+v1 曾对同一受控构建、同一目标进程中的 C++ Module 定义**可复现、保守、失败时拒绝（Fail Closed）**的 ABI 配置兼容闸门。Windows、Linux、macOS、Android、iOS 各自使用实际目标 ABI；不同目标平台的二进制不得互换。ABI Fingerprint 相等是受控 C++ 互操作的**必要条件而非充分条件**。
 
 - `AbiProfile`：真实构建参数、C++ ABI、标准库及运行库契约的结构化记录。
 - `AbiFingerprint`：对 **Canonical AbiProfile** 的 32 字节哈希；仅用于快速比较与定位差异。
@@ -115,16 +117,16 @@ digest        = SHA-256(domain_prefix || UTF8(canonical))
 
 这里的拒绝既适用于 SHARED，也适用于静态组合中的兼容性校验。不同 Module 的 `BuildIdentity` 可以不同，但在 v1 受控 C++ 互操作场景，AbiProfile 必须严格一致。
 
-## 6. 构建和装载协议（语义/顺序 Frozen）
+## 6. 构建和装载协议（独立交付预检原则 Frozen；strict-v1 构建流程已退役）
 
-### 构建与 STATIC
+### 历史构建与 STATIC（已由 ADR-0013 退役）
 
 - CMake 4.0+ 是 Module Target/编译链接配置权威来源；每个 Module 一个真实 STATIC/SHARED Target，不增加 ABI 专用 Module Library 或 BinaryImage 层。
 - 配置与生成阶段提取实际 Clang、Target Triple、标准库、Runtime 和 ABI 选项；任何未能确定的重要字段/ABI 宏差异都使“可安全跨 Module C++ 交换”的构建失败，不允许用户手填 Fingerprint 冒充采集结果。
 - 严格校验每个 C++ TU 的实际 ABI 有关编译命令和公共接口编译政策；不能仅采样一个 Compile Command。预生成值关联实际 Module 产物与静态 Catalog；使用宿主侧受控工具输出 Canonical JSON 与 Fingerprint。
-- STATIC Module 进入 EXE/DLL/SO 时，在最终链接/装配阶段检查该受管进程内适用 C++ 互操作的 Profile；成功链接并不自动意味着 ABI/ODR 一致。实际被链接入的 STATIC 代码，CodePin 覆盖其真正的承载库。
+- **历史规则，已废止**：v1 曾要求 STATIC Module 进入 EXE/DLL/SO 时在最终链接/装配阶段检查 Profile。当前同树 STATIC 不再运行该校验；CodePin 仍保护实际承载代码的动态库。
 
-### SHARED
+### 历史 SHARED strict-v1 流程（当前仅独立交付插件保留预检原则）
 
 ```text
 CMake Target -> Compiler / Runtime Probe -> Canonical Profile + SHA-256
@@ -152,7 +154,7 @@ CMake Target -> Compiler / Runtime Probe -> Canonical Profile + SHA-256
 - Windows Release MD/Debug MD/Release MT 的受管 Module 构建、采集及增量验证通过；Foundation/Module 同配置指纹一致，跨 CRT 配置指纹不同。七种配置的构建前后源码摘要一致。CMake 验证使用 Windows/macOS 4.4.3、Linux 4.4.2；保持最低 CMake 4.0 的声明并核对所用属性的最低版本，未单独运行 4.0.x 二进制，该项不作为本轮未关闭门禁。
 - **绝不扩大保证范围**：`complete.json` 表示当前构建内的受控 STATIC 证据，不表示实际最终消费者 EXE/SHARED、OS Load 前后身份、签名/可信发布、TOCTOU、跨编译器不受控 C++ 产物或 Loader API/ODR 已验收。下方按日期记录的 2026-10-22～24 部分为**历史阶段快照**，不代表最新 Root 接线状态。
 
-完整 CLI 与文件布局见 [ABI 工具说明](../../BuildTools/AbiProfile/README.md)，当前验收状态与历史记录见 [Implementation Plan](../../docs/superpowers/plans/2026-10-23-abi-collection.md)。实现主体原提交为 `9561fe6`；追加评审修复与文档已按用户授权通过 amend 合入同一提交，未推送。以下带日期的阶段记录保留当时结论，不作为当前待办。
+完整 CLI 与文件布局原先记录在已删除的 `BuildTools/AbiProfile/README.md`（可用历史提交检索）；历史验收见 [Implementation Plan](../../docs/superpowers/plans/2026-10-23-abi-collection.md)。实现主体原提交为 `9561fe6`；追加评审修复与文档已按用户授权通过 amend 合入同一提交，未推送。以下带日期的阶段记录保留当时结论，不作为当前待办。
 
 ## Build-Time 编码工具的历史阶段实现进展（2026-10-22）
 
@@ -160,7 +162,7 @@ CMake Target -> Compiler / Runtime Probe -> Canonical Profile + SHA-256
 
 目前工具可以对提供的 Profile 进行 v1 Schema 子集词汇的 **显式支持校验**、严格值/平台组合检查、重复 JSON Key 拒绝、冻结 Schema 的内容 SHA-256 校验（只归一化 CRLF/LF，防止替换成宽松规则）、v1 约束下的 RFC 8785 Canonical JSON、领域分隔 SHA-256，并输出两个构建期文件；失败返回非零且清理此前可能残留的输出，拒绝输出路径覆盖 Schema/Profile 输入文件。Frozen Windows 向量 Canonical 长度为 779 字节，Baseline 与 Iterator Debug Level 变异的两组 SHA-256 已纳入正式回归；测试覆盖五平台的合法/非法 Profile 组合与格式拒绝，桌面 Windows、WSL Linux、macOS 均运行通过。
 
-原四参数编码模式只保证 Profile 声明内容与 Fingerprint 算法，不从人工 JSON 推断受信任身份；其 stderr 仍标明 `provenance and TU ABI options NOT ATTESTED`。2026-10-23 增加了下面的 Windows 正式采集切片。其他平台的自动采集、最终消费者校验与可信产物绑定仍未完成；**不得**把该 CLI 据摘要相等接入生产 SHARED Loader 放行候选库。参见 [工具使用说明](../../BuildTools/AbiProfile/README.md)。
+原四参数编码模式只保证 Profile 声明内容与 Fingerprint 算法，不从人工 JSON 推断受信任身份；其 stderr 仍标明 `provenance and TU ABI options NOT ATTESTED`。2026-10-23 增加了下面的 Windows 正式采集切片。其他平台的自动采集、最终消费者校验与可信产物绑定仍未完成；**不得**把该 CLI 据摘要相等接入生产 SHARED Loader 放行候选库。工具使用说明现已随旧实现退役，需要追溯请查看历史提交。
 
 2026-10-23 补充了原始 NUL、输出路径别名、独立输出清理、真实 Close 失败及有界报告回归。
 文件提交显式检查 write/flush/close；清理逐项尝试，无法完成时在独立 stdout JSON 报告中标明

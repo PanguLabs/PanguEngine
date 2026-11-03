@@ -1,11 +1,12 @@
 cmake_minimum_required(VERSION 4.0)
 
-# Each logical fixture Module has exactly one real archive and normal ABI hooks.
+# 每个夹具 Module 对应一个真实静态库。
 foreach(_module IN ITEMS First Second)
     add_library(PanguCatalog${_module} STATIC ${_module}.cpp)
     pangu_configure_module(PanguCatalog${_module})
     target_link_libraries(PanguCatalog${_module} PRIVATE PanguModule)
-    pangu_register_abi_module(PanguCatalog${_module})
+    # 保持改造前的扫描策略：只对 Catalog 夹具关闭，不做全局关闭；A/B 验收要求扫描设置一致。
+    set_property(TARGET PanguCatalog${_module} PROPERTY CXX_SCAN_FOR_MODULES OFF)
 endforeach()
 target_link_libraries(PanguCatalogFirst PRIVATE PanguCatalogSecond)
 

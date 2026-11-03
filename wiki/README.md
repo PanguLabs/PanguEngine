@@ -1,7 +1,7 @@
 # PanguEngine 设计文档索引
 
 > 状态：维护中（Index）
-> 更新：2026-10-27
+> 更新：2026-11-02
 > 约定：文档文件名使用英文 kebab-case，正文中文优先，专业术语可使用英文。
 
 ## 如何阅读
@@ -37,7 +37,7 @@
 | [Android 工具链](foundation/android-toolchain.md) | NDK/SDK、官方 Clang、CMake/Gradle 配置与验证 | Partially Frozen |
 | [Apple 工具链](foundation/apple-toolchain.md) | MacPorts、macOS/iOS SDK、构建及验证 | Partially Frozen |
 | [ABI](foundation/abi.md) | 同受控构建内的兼容性与所有权原则 | Partially Frozen |
-| [ABI Profile / Fingerprint v1](foundation/abi-profile-fingerprint.md) | 固定 Schema、RFC 8785 Canonical、SHA-256、严格相容与加载协议；含机器可读 Schema / 向量 | Frozen（设计协议）；五平台 STATIC ABI Collection Task 1—12 已完成并独立复审通过（2026-10-27），最终 EXE/SHARED Loader 待实现 |
+| [ABI Profile / Fingerprint v1（历史协议）](foundation/abi-profile-fingerprint.md) | strict-v1 Schema、Canonical、SHA-256 与历史采集结果，生产接线已退役 | Superseded（当前 ABI 交付边界见 ADR-0013） |
 | [平台](foundation/platform.md) | 五平台目标与开发环境 | Partially Frozen |
 
 ## Core
@@ -70,6 +70,8 @@
 - [ADR-0009：ABI Profile / Fingerprint v1](decisions/0009-abi-profile-fingerprint.md)
 - [ADR-0010：STATIC/SHARED 统一原生 C++23 Module 接口](decisions/0010-unified-cpp-module-entry.md)
 - [ADR-0011：冻结 Module API v1 的行为契约](decisions/0011-module-api-behavior-contract.md)
+- [ADR-0012：宿主本地构建树](decisions/0012-host-local-build-trees.md)
+- [ADR-0013：原生增量构建与 ABI 交付边界](decisions/0013-native-build-abi-boundary.md)
 
 ## 文档维护规则
 

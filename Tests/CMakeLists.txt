@@ -15,6 +15,6 @@ add_test(NAME BuildEnvironment
     COMMAND "${CMAKE_COMMAND}" "-DPANGU_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/CMake/EnvironmentTests.cmake"
 )
-add_subdirectory(AbiProfile)
+add_subdirectory(ThirdParty/NlohmannJson)
 add_subdirectory(Foundation)
 add_subdirectory(Module)

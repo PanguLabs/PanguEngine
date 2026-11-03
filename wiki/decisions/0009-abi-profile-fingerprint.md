@@ -1,34 +1,34 @@
 # ADR-0009：冻结 ABI Profile / Fingerprint v1
 
-> Status: Accepted（Schema、Canonical、哈希与兼容判定协议；SHARED 入口形式由 ADR-0010 部分修订，不代表平台实现完成）
+> Status: Superseded（生产适用范围由 [ADR-0013](0013-native-build-abi-boundary.md) 替代；v1 格式作为历史协议资料保留）
 > 日期：2026-10-21
-> 权威规范：[ABI Profile / Fingerprint v1](../foundation/abi-profile-fingerprint.md)
-> SHARED 入口形式修订：[ADR-0010](0010-unified-cpp-module-entry.md)，不修改本 ADR 冻结的 Fingerprint 算法/严格校验政策
+> 历史规范：[ABI Profile / Fingerprint v1](../foundation/abi-profile-fingerprint.md)
+> SHARED 入口形式曾由 [ADR-0010](0010-unified-cpp-module-entry.md) 修订；当前生产边界以 ADR-0013 为准
 > 基于：[ABI 基线](../foundation/abi.md)、[工具链决策](0004-platform-clang-toolchains.md)、[Module 注册与生命周期](0008-module-registration-lifetime.md)
 
 ## Context
 
-同一个受控进程允许 C++ Module 跨库交换 STL 类型，但不能只凭 Clang 主版本或“同一种 STL”判定兼容。现有 ABI 基线要求 Profile/Fingerprint，却没有固定 Schema、序列化、哈希和拒绝策略；Module v1 的 STATIC Catalog/SHARED 发现也需要一致的构建与装载闸门。
+同一个受控进程允许 C++ Module 跨库交换 STL 类型，但不能只凭 Clang 主版本或“同一种 STL”判定兼容。该阶段为此定义了 Profile/Fingerprint v1，并把逐 TU 证明、STATIC 最终组合校验和 SHARED 预检接入构建。后续实践证明这种生产适用范围给普通增量构建带来过高成本，故由 ADR-0013 收缩。
 
-## Decision
+## Decision（历史 v1）
 
-1. v1 定义固定七个顶层字段的 Profile Schema：`schema=1`、`policy=strict-v1`、`target`、`compiler`、`language`、`stdlib`、`runtime`。字段和 ABI 选项的完整规范见权威文档及机器可读 Schema；未知或缺少必须字段必须拒绝。
-2. 使用 RFC 8785（JCS）规范化 JSON 为 UTF-8 字节；Profile 禁止任意额外字段，使用固定 ASCII 令牌，ABI 选项列表在输入验证时排序/去重检查。
-3. Fingerprint = SHA-256(`ASCII("PANGU_ABI_PROFILE_V1") + 0x00 + canonical UTF-8 bytes`)，完整 32 字节/64 字符小写十六进制，不截断。规范测试向量与变异向量随 Wiki 保存。
-4. v1 仅采用**严格配置等值**兼容策略；工具链/标准库 ABI、CRT、RTTI、目标 ABI、布局选项、SDK/NDK/Sysroot ABI 身份不匹配时拒绝 C++ 边界。Compiler Patch 或 SDK 身份变化在 v1 亦保守拒绝；需要经验证新兼容政策才允许放宽。
-5. Profile 和 Fingerprint 来自**真实构建**，必须覆盖 Host 及 STATIC/SHARED Module 的受控 C++ 交互目标与 ABI 关键 TU 配置；不能由用户手填声明兼容。
-6. SHARED 装载前必须对**与实际加载产物可验证绑定**的元数据完成 ABI Profile/Fingerprint、版本及 C++ Public Module API Contract 预检；预检失败不得 OS Load，更不得进入原生 C++ Query。OS Load 后通过版本化稳定导出符号获得原生 C++23 ModuleDefinition，进行 Profile/接口信息二次一致性校验，成功后才执行统一 C++ 注册；STATIC 在最终组合/装配时进行校验。此处入口形式依 [ADR-0010](0010-unified-cpp-module-entry.md) 修订，**不再需要窄 C Discovery POD**。`LoadLibrary/dlopen` 可能提前运行初始化代码，二次校验不能宣称阻止任意代码提前执行。
-7. Fingerprint 不包含 BuildIdentity、ModuleId、PluginId；它不是签名，不证明 Public API/ODR、Allocator、Lifetime 或代码来源安全。Module 协议、公共接口契约及 ModuleCodePin/ServiceRef 仍单独检查。
+1. v1 定义固定七个顶层字段的 Profile Schema：`schema=1`、`policy=strict-v1`、`target`、`compiler`、`language`、`stdlib`、`runtime`。
+2. 使用 RFC 8785（JCS）规范化 JSON 为 UTF-8 字节；Profile 禁止任意额外字段，ABI 选项列表在输入验证时排序/去重检查。
+3. Fingerprint = SHA-256(`ASCII("PANGU_ABI_PROFILE_V1") + 0x00 + canonical UTF-8 bytes`)，完整 32 字节/64 字符小写十六进制，不截断。
+4. v1 采用严格配置等值兼容策略；工具链/标准库 ABI、CRT、RTTI、目标 ABI、布局选项、SDK/NDK/Sysroot ABI 身份不匹配时拒绝。
+5. **已被 ADR-0013 替代**：Profile/Fingerprint 不再要求覆盖同树普通构建的每个 ABI 关键 TU，也不再通过逐 TU 收据证明本地对象来源。未来独立交付边界的配置描述不得冒充 strict-v1。
+6. **已被 ADR-0013 替代**：STATIC 最终组合不再强制执行 v1 Profile 校验；与宿主同树、同配置且配套交付的 SHARED 插件免 AbiProfile 预检。只有独立交付给已有宿主的原生插件继续保留 OS Load 前可信预检原则。
+7. Fingerprint 不包含 BuildIdentity、ModuleId、PluginId；它不是签名，不证明 Public API/ODR、Allocator、Lifetime 或代码来源安全。此限制作为历史协议属性仍成立。
 
 ## Consequences
 
-- Canonical 输出和 Fingerprint 可跨构建环境用固定测试向量实现，不用维护自制 JSON Canonicalization。
-- 严格比较可能拒绝事实上 ABI 兼容的 Compiler Patch、SDK Patch 或其他配置，但降低 v1 假阳性风险；未来兼容例外需独立 Policy 与跨平台测试。
-- Windows MSVC STL Iterator Debug Level/CRT 与其它平台 libc++ ABI namespace/version 必须来自实际目标构建。
-- v1 指纹成为 Build/Loader 的边界协议，不增加 BinaryImage 层或恢复自研 PanguBuild。
+- Schema、Canonical、SHA-256 和测试向量保留，用于解释历史产物和决策，不再作为普通生产构建或 Tests 的活动协议。
+- 旧 strict-v1 的逐 TU、收据、Collector/Guard/Collect 生产接线由 ADR-0013 明确退役；实现迁移另由对应实施计划完成。
+- 独立交付 C++ 二进制仍需要兼容性与产物身份策略，但其下一版格式、可信绑定和 Loader 另行冻结。
+- 不增加 BinaryImage 层，也不恢复自研 PanguBuild。
 
 ## Open Questions
 
-AbiProfile/AbiFingerprint 的 C++ API 内存布局、生成工具、Target 每 TU 的选项采集、平台 SDK/Runtime 具体探针、SHARED C++ Query 入口 Public ABI / 稳定导出符号、可信预检元数据嵌入与实际加载产物绑定方式、Public ABI Surface Digest、Plugin Manifest、真实五平台验收。以上不属于本 ADR 的已冻结范围。
+独立交付二进制的最小配置格式、Public Module API Contract/Digest、可信产物绑定与 TOCTOU、SDK/Plugin Manifest 和生产 Loader，见 ADR-0013 的后续范围。v1 本身不再扩展。
 
-**本决策不等于已构建引擎 Module、完成动态装载或做完跨平台 ABI 实测。**
+**本 ADR 记录历史 v1 协议，不表示当前生产构建仍应运行 v1 工具链。**

@@ -1,5 +1,7 @@
 # 五平台 ABI Profile 采集器 Implementation Plan
 
+> 历史说明（2026-11-02）：已完成的旧 ABI Collection 任务保留当时验收状态，其 launcher/收据/collector/bootstrap 实现已由 [ADR-0013](../../../wiki/decisions/0013-native-build-abi-boundary.md) 退役；现行执行与验收见 [原生构建实施计划](2026-11-02-native-build-abi-boundary.md)。
+
 > 状态：Completed（批准的 STATIC 范围，2026-10-27）；Task 1—12 的 68 项检查全部完成，独立复审通过。追加评审修复与文档已按用户授权通过 amend 合入同一提交，未推送。最终 EXE/SHARED Loader 不在本计划范围。
 >
 > 阅读约定：当前提交及问题状态见“记录核对（2026-10-28）”；阶段验收与已勾选的任务清单保留当时结论。折叠区中的未完成项、评审阻断和测试数量仅描述当时状态。

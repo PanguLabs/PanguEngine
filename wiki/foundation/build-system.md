@@ -1,8 +1,8 @@
 # Pangu 构建系统
 
-> 状态：Partially Frozen（CMake 4.0+、单 Module 单库及 Target 命名空间规则已冻结；具体构建 API/产物协议待设计）
-> 更新：2026-10-27
-> 决策：[ADR-0001：采用 CMake](../decisions/0001-adopt-cmake.md)、[ADR-0005：一个 Module 一个库](../decisions/0005-one-module-one-library.md)、[ADR-0012：构建树按宿主本地化](../decisions/0012-host-local-build-trees.md)
+> 状态：Partially Frozen（CMake 4.0+、原生 Ninja 增量、单 Module 单库、Target 命名空间及普通构建零 AbiProfile 已冻结；独立交付格式待设计）
+> 更新：2026-11-02
+> 决策：[ADR-0001：采用 CMake](../decisions/0001-adopt-cmake.md)、[ADR-0005：一个 Module 一个库](../decisions/0005-one-module-one-library.md)、[ADR-0012：构建树按宿主本地化](../decisions/0012-host-local-build-trees.md)、[ADR-0013：原生构建与 ABI 交付边界](../decisions/0013-native-build-abi-boundary.md)
 
 ## 已确定的决策
 
@@ -14,6 +14,8 @@
 - **Plugin 是功能分发/启用单位，不要求有自己的库目标**，可以包含多个 Module 或只包含 Assets。
 - ThirdParty 可以是独立的 CMake 目标，并被 Pangu Module 依赖；不强制使用 Package Adapter，也不要求每个 ThirdParty 目标都成为 Pangu Module。
 - 第三方依赖统一使用 `ThirdParty::` CMake Target 名称，优先原生 Target/ALIAS；源码获取可选固定 Git submodule、Vendor Snapshot、预编译 SDK 或系统依赖，不强制所有 API 经 Module 私有封装。详见 [ThirdParty 接入](third-party.md)。
+- Ninja 根据 CMake 规则、编译器头依赖、输出与命令变化判断重建；Pangu 不用逐 TU 收据、编译数据库扫描或第二套依赖图替代 Ninja。
+- 普通 configure、编译、归档、最终链接和 Tests 不运行 Pangu 自制 AbiProfile；同树、同配置并随宿主配套交付的插件同样豁免。独立 SDK/预编译库和单独交付给已有宿主的插件才进入二进制接纳边界。
 - CMake 是构建关系的权威来源；Plugin 的安装、发现和版本信息仍可能需要独立 Manifest，不因此形成第二份构建配置。
 
 ## CMake Target 命名与职责（Frozen）
@@ -22,7 +24,7 @@
 | --- | --- | --- |
 | `Pangu::` | **仅限真实 Pangu Module**；每个 Module 唯一对应实际 `STATIC` / `SHARED` Target | `Pangu::Foundation`、`Pangu::Module` |
 | `ThirdParty::` | 第三方依赖的 CMake 构建接口；允许 `INTERFACE` / `STATIC` / `SHARED` / `IMPORTED` 和上游 Target `ALIAS` | `ThirdParty::NlohmannJson`、`ThirdParty::Flecs` |
-| 无上述命名空间 | Pangu 自有构建策略、宿主程序、构建工具、测试或辅助库（不是 Module） | `PanguBuildOptions`、`PanguAbiProfileTool`、`PanguAbiProfile` |
+| 无上述命名空间 | Pangu 自有构建策略、宿主程序、构建工具、测试或辅助库（不是 Module） | `PanguBuildOptions`、`PanguToolchainLinkTests` |
 
 ```cmake
 add_library(PanguFoundation STATIC Private/Error.cpp)
@@ -48,9 +50,7 @@ add_library(ThirdParty::NlohmannJson ALIAS ThirdPartyNlohmannJson)
 
 ## 当前正式构建目录
 
-普通开发、维护和诊断工具源码位于根目录 `Tools/`；正式构建依赖的工具源码位于 `BuildTools/`，当前包含 `BuildTools/AbiProfile/`。`BuildTools` 表示构建职责，`Bootstrap` 表示准备这些工具的过程，与运行时 `EngineHost` 区分。构建关系仍由 CMake 维护，不引入新的构建内核。
-
-`cmake/BuildTools.cmake` 通过 `pangu_prepare_build_tools()` 调用 `BuildTools/AbiProfile/Bootstrap/CMakeLists.txt`，独立生成并发布宿主本机工具。Windows 使用 `${sourceDir}/Build/BuildTools/Windows/`，Linux/macOS 使用 `$HOME/PanguEngineBuild/BuildTools/<HostPlatform>/`；每个根目录包含 `build/`、`staging/` 和 `published/<输入哈希>/`。目标平台构建使用已发布工具的确定路径，工具编译配置与目标配置隔离。完整说明见 [BuildTools](../../BuildTools/README.md)。
+普通开发、维护和诊断工具源码位于根目录 `Tools/`。旧 `BuildTools/AbiProfile/` 与 `cmake/BuildTools.cmake` 已按 ADR-0013 从源码移除。未来若出现真实代码生成等构建工具，只按实际消费者显式接入，不预建通用 Bootstrap，也不引入新的构建内核。
 
 正式构建输出**按宿主文件系统隔离**：Windows/Android 使用 Windows NTFS；WSL Linux 使用 ext4；macOS/iOS 使用 macOS APFS。源码仍为 Windows 上唯一工作区，Linux 与 macOS 直接从 SMB 挂载读取同一份源码；不再要求正式构建输出都位于源码仓库内。不再借用 `.probe/` 存放正式构建结果：
 
@@ -76,14 +76,16 @@ macOS 使用 `ssh -o BatchMode=yes moozen-macos`，通过 `/Users/moozen/Windows
 
 根 `CMakeLists.txt` 已在 `project()` **之前**引入 `cmake/ValidateBuildEnvironment.cmake`：桌面平台及 iOS 检查 `LLVM_ROOT` 和必要的 Clang / `clang-scan-deps` 可执行文件；Android 在官方 NDK Toolchain 的 `CMAKE_TOOLCHAIN_FILE` 已选择时检查 `ANDROID_HOME`、`ANDROID_NDK_HOME` 和 Toolchain 文件是否存在。这样新建缓存时缺失环境变量会直接得到带 `Pangu ... preflight` 的诊断；现有平台 Settings 仍继续做后续工具链身份与版本校验。
 
-正式 `Tests/CMake/EnvironmentTests.cmake` 在 Windows、WSL Ubuntu 和 macOS 通过 CTest 验证缺失环境变量时必须明确拒绝。当前三平台均通过 `BuildEnvironment`、`FoundationError`、`ModuleIdentity` 三项回归；Android/iOS 的 `PanguFoundation` 和 `PanguModule` 已验证 STATIC 目标编译/归档与 Host ABI 采集，不提供交叉设备运行结果。新增 `Source/Runtime/Foundation/` 对应独立 `PanguFoundation` STATIC Target，符合一 Module 一库。
+正式 `Tests/CMake/EnvironmentTests.cmake` 在 Windows、WSL Ubuntu 和 macOS 通过 CTest 验证缺失环境变量时必须明确拒绝。历史三平台曾通过 `BuildEnvironment`、`FoundationError`、`ModuleIdentity` 等回归；Android/iOS 的 `PanguFoundation` 和 `PanguModule` 有 STATIC 目标编译/归档历史结果，不提供交叉设备运行结果；旧 Host ABI 采集已退役。新增 `Source/Runtime/Foundation/` 对应独立 `PanguFoundation` STATIC Target，符合一 Module 一库。
 
-## ABI Profile v1 构建期工具（2026-10-27 实施状态）
+## ABI Profile v1 构建期工具（2026-10-27 历史实现，现已删除）
 
-- CMake 通过 `cmake/BuildTools.cmake` 为 Windows/Linux/macOS 原生宿主构建并版本化发布 `PanguAbiProfileTool`；Android/iOS 的交叉编译使用对应 Windows/macOS 构建工具，不在目标平台运行。它不是 Pangu Runtime Module，不改变单 Module 单 Library Target 约束。
-- `Source/ThirdParty/NlohmannJson/Repo` 是 nlohmann/json 的 Git submodule，固定到官方 v3.12.0 正式发布版。外层 CMake 使用 `Repo/single_include` 创建 `ThirdParty::NlohmannJson` INTERFACE Target，设置 `JSON_USE_GLOBAL_UDLS=0`；许可证保留在上游仓库，仅工具和 ABI Profile Tests 引用，不配置上游工程，不在构建时下载。
-- `Tests/AbiProfile` 包含冻结 Schema/JCS/SHA256 向量、真实 CLI、依赖闭包/SCC、Host Bootstrap、Compiler Launcher/收据和五平台 Collector 测试。Windows/Linux/macOS 执行原生完整 CTest；Android/iOS 交叉目标不执行 Host 测试程序，但由宿主执行 Profile 采集并检查真实 STATIC Module 的完成记录。
-- Windows/Linux/macOS 与 Android/iOS 的正式 STATIC Module 均已接入 C++ 全 TU 编译收据、Profile 自动采集及依赖校验，细节见文末。最终消费者 EXE/SHARED Loader 的可信产物绑定与 OS Load 前后复核仍未完成。**不能将能计算 Fingerprint 或 Build-Time complete.json 误认为已完成 Loader 信任验证。** 具体进度见 [ABI Profile / Fingerprint v1](abi-profile-fingerprint.md)。
+以下为 2026-10-27 的历史状态；相关构建入口与测试已按 [ADR-0013](../decisions/0013-native-build-abi-boundary.md) 从源码删除，不能作为当前操作说明：
+
+- 当时 CMake 通过 `cmake/BuildTools.cmake` 为 Windows/Linux/macOS 原生宿主构建并版本化发布 `PanguAbiProfileTool`；Android/iOS 的交叉编译使用对应 Windows/macOS 构建工具，不在目标平台运行。它不是 Pangu Runtime Module，不改变单 Module 单 Library Target 约束。`cmake/BuildTools.cmake` 已删除。
+- `Source/ThirdParty/NlohmannJson/Repo` 是保留的 nlohmann/json v3.12.0 Git submodule；`ThirdParty::NlohmannJson` 是 INTERFACE Target，设置 `JSON_USE_GLOBAL_UDLS=0`。旧 ABI 工具已删除，当前由 `Tests/ThirdParty/NlohmannJson` 验证；不配置上游工程，不在构建时下载。
+- 当时 `Tests/AbiProfile` 包含冻结 Schema/JCS/SHA256 向量、真实 CLI、依赖闭包/SCC、Host Bootstrap、Compiler Launcher/收据和五平台 Collector 测试；该目录已删除，历史结论仅保留在 [旧验收记录](../../docs/superpowers/plans/2026-10-23-abi-collection.md) 与 [ABI Profile / Fingerprint v1（历史协议）](abi-profile-fingerprint.md)。
+- 当时 Windows/Linux/macOS 与 Android/iOS 的正式 STATIC Module 均接入了 C++ 全 TU 编译收据、Profile 自动采集及依赖校验。该机制不再运行；独立交付二进制的可信产物绑定与 OS Load 前后复核属于 ADR-0013 的后续边界，当前尚未实现。
 
 ## 已落地的轻量化 CMake 配置（实现层，非新架构冻结）
 
@@ -106,12 +108,12 @@ cmake/
 ```
 
 - `PanguPlatform.cmake` 在 `project(... LANGUAGES CXX)` 后按 **目标平台** 选择配置，并拒绝错误的 Clang 版本/不支持的平台；Android 只允许官方 NDK Toolchain 的 Clang，不套用桌面 LLVM 23 规则。
-- `PanguBuildOptions` 是无产物、无 `Pangu::` 别名的 **INTERFACE 编译策略 Target**，仅为显式依赖它的 Pangu 自有 Target 设置 C++23、`-fno-exceptions` 和基础警告参数；工具链/标准库选择由 Preset/Toolchain 在 `project()` 之前完成，普通 ThirdParty Target 不需要链接 `PanguBuildOptions`。RTTI 以及 ABI 相关 Release/Debug、CRT/Iterator 模式不得假定由该目标自动校验；五平台受管 STATIC Target 的实际配置由统一 C++ Collector 核验。
+- `PanguBuildOptions` 是无产物、无 `Pangu::` 别名的 **INTERFACE 编译策略 Target**，仅为显式依赖它的 Pangu 自有 Target 设置 C++23、`-fno-exceptions` 和基础告警参数；工具链/标准库选择由 Preset/Toolchain 在 `project()` 之前完成，普通 ThirdParty Target 不需要链接 `PanguBuildOptions`。RTTI、CRT/Iterator 等有效配置遵守平台工具链策略，不恢复逐 TU Collector。
 - `pangu_configure_module(<existing-target>)` 仅为现有 `add_library(... STATIC|SHARED ...)` Target **PRIVATE** 应用 Pangu 编译策略，并设置 PIC 和输出目录；必须**先创建**真实 Module Target，不隐式生成 Library、Manifest、Catalog 或 ModuleId。当前 `PanguModule` 通过 `add_library(PanguModule STATIC ...)` 建立，`Pangu::Module` 仅是 Alias。
 - 平台 Settings 负责目标特殊规则：Windows 使用 Clang + MSVC STL（Windows ARM 不在 v1）；Linux Toolchain 在 `project()` 前选择并核对匹配 LLVM 的 libc++ 头文件、`__config_site`、运行库及 RPATH；缺失时拒绝，不退回 `libstdc++`，不同安装布局可用 `PANGU_LIBCXX_ROOT` 显式覆盖；macOS Toolchain 统一选择 MacPorts Clang 23 与 libc++；Android 采用 NDK Clang；iOS 采用 MacPorts Clang 23 + 独立 iPhoneOS SDK。
 - `cmake/` 不写死本机工具链安装路径。Windows、Linux、macOS、iOS 从 `LLVM_ROOT` 派生编译器和 `clang-scan-deps` 路径，并校验编译器位于该安装目录内；Android 从 `ANDROID_HOME` 读取 SDK 目录、从 `ANDROID_NDK_HOME` 选择官方 NDK Toolchain，并校验实际使用的 NDK 与环境变量一致。
 - `Lib/` 存放 STATIC Library（以及平台归档产物）；`Bin/` 存放动态库/可执行程序。当前 Runtime 含 Foundation 错误值、Module Identity/Descriptor、STATIC Catalog 与声明事务切片，不意味着完整 Plugin、ModuleManager 或 Shader/Asset Pipeline 已实现。
-- CMake Preset 默认 Ninja + Release，配置并导出 `compile_commands.json`；根目录仅通过 `BUILD_TESTING` 控制 `Tests/` 总入口，测试子目录及本机/交叉编译分支统一由 `Tests/CMakeLists.txt` 组织。`BUILD_TESTING=OFF` 完整排除测试库、测试程序及测试宏审计目标；交叉编译开启测试时保留编译型 Toolchain 验证，暂不创建无法直接运行的测试程序。Android 预设以 NDK r30 已验证的 ARM64/API29 为默认验收切片，iOS 预设以本地 iPhoneOS18.2/arm64/iOS18.0 为验证参数；它们**不是永久支持下限**，未来可按目标更换。
+- CMake Preset 默认 Ninja + Release，配置并导出 `compile_commands.json` 供 IDE/clang-tidy 使用；根目录通过 `BUILD_TESTING` 控制 `Tests/` 总入口。`BUILD_TESTING=OFF` 完整排除测试目标；交叉编译开启测试时保留编译型 Toolchain 验证，不创建需要设备运行的测试程序。Android ARM64/API29 与 iOS arm64/iOS18.0 是当前验收参数，**不是永久支持下限**。
 
 先在启动 CMake 的环境中设置下列变量；目录值由本机配置提供，不写入共享 Preset：
 
@@ -140,9 +142,9 @@ cmake --build --preset macos
 ctest --preset macos
 ```
 
-Android 设置 `ANDROID_HOME`、`ANDROID_NDK_HOME` 后，从 Windows 或已安装 SDK/NDK 的宿主运行 `cmake --preset android-arm64` / `cmake --build --preset android-arm64`。iOS 设置 `LLVM_ROOT` 并确认 SDK 可由 `PANGU_IOS_SDK_PATH`、`xcrun` 或上述独立 SDK 回退目录定位后，在 macOS 上运行 `cmake --preset ios-arm64` / `cmake --build --preset ios-arm64`。两种移动平台已验收受管 STATIC Module 的交叉编译、归档、Host ABI 采集及完成记录；应用链接、设备运行和最终消费者 ABI 校验仍需单独验收。
+Android 设置 `ANDROID_HOME`、`ANDROID_NDK_HOME` 后，从 Windows 或已安装 SDK/NDK 的宿主运行 `cmake --preset android-arm64` / `cmake --build --preset android-arm64`。iOS 设置 `LLVM_ROOT` 并确认 SDK 后，在 macOS 上运行 `cmake --preset ios-arm64` / `cmake --build --preset ios-arm64`。两种移动平台日常构建仅编译/归档真实 Runtime target，不运行宿主 ABI 采集；应用链接、设备运行和独立交付兼容性验证另行验收。
 
-Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正式目标。需要同时编译 Toolchain 回归库并执行宏审计时，配置命令分别追加 `-DBUILD_TESTING=ON`（`cmake --preset android-arm64 -DBUILD_TESTING=ON` 或在 macOS 执行 `cmake --preset ios-arm64 -DBUILD_TESTING=ON`）；随后仍使用对应的构建 Preset。交叉编译的测试入口不会创建设备测试程序。
+Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正式目标。需要同时编译 Toolchain 回归库时，可显式追加 `-DBUILD_TESTING=ON`；随后仍使用对应的构建 Preset。不会执行宏审计或创建设备测试程序。
 
 本次将 Linux/macOS 标准库参数从 `PanguBuildOptions` 迁移至 Toolchain，**升级已有构建目录时必须使用** `cmake --fresh --preset <name>` 使 `CMAKE_CXX_FLAGS_INIT` 与链接参数重新初始化；之后可使用普通 `cmake --preset <name>`。切换 `LLVM_ROOT` 或 SDK/NDK 时也应重新配置。不同平台及 Host 的二进制缓存必须独立；更换构建根时重新配置，禁止复用旧目录的 CMake Cache。
 
@@ -166,17 +168,17 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 
 ## 与旧方案的关系
 
-1. 完整自研 `PanguBuild` 构建核心已被 CMake 替代；`PanguBuild` 是否保留为上层工具仍待决定。
+1. 完整自研 `PanguBuild` 构建核心已被 CMake 替代；不恢复 `PanguBuild` 作为第二构建内核或上层调度器。新增构建职责优先通过 CMake Target 与按需工具表达。
 2. `Module.toml` 不再是每个 Module 必需文件；`CMakeLists.txt` 是编译和链接配置的权威来源。分发清单 `Plugin.toml` 是否沿用及其字段仍未冻结。
 3. 旧方案允许 Module 和多个 CMake Target / 物理镜像之间灵活映射；**ADR-0005 已收紧为一个 Module 对应一个库 Target 和一个主要产物**。
 4. 不建立独立 BinaryImageManager / BinaryImageDescriptor；物理库文件和 CodePin 是现有 Module 管理机制的内部实现细节。
 
 ## Compile-Time / Build-Time First 的构建职责
 
-按 [C++ 规范与最佳实践](cpp-guidelines.md)，类型与静态分发应尽量在编译期解决；**Module 依赖、编译器/标准库配置、生成代码、Shader/Asset 预处理和 ABI 兼容性采集**等更适合在 Build-Time 完成。它们属于 CMake 与配套工具的协同职责，并不要求恢复已废弃的自研 PanguBuild 构建内核。
+按 [C++ 规范与最佳实践](cpp-guidelines.md)，类型与静态分发应尽量在编译期解决。Module 依赖、编译器/标准库配置和按需生成代码属于 CMake 与目标工具链职责；Shader/Asset 处理与打包只由实际消费者或显式命令触发。独立交付二进制的兼容性描述属于交付边界，不挂入普通 Build-Time 增量链路。
 
 - CMake 仍是构建依赖的权威来源；可由 PanguMeta 等工具按需要生成代码，生成源文件归入对应 Module 唯一库 Target。
-- 编译器与目标平台配置应从**实际编译**获得并验证；ABI Fingerprint 的 Schema、RFC 8785 Canonical、SHA-256 和严格兼容政策已由 [ABI Profile v1](abi-profile-fingerprint.md) 冻结；五平台受管 STATIC Module 的采集、严格依赖闭包与构建内内容关联已完成验收；最终消费者、可信发布和 Loader 绑定仍需单独实现。
+- 编译器与目标平台配置仍由真实 Toolchain/Target 表达并验证；历史 [ABI Profile v1](abi-profile-fingerprint.md) 不再参与同树普通构建。独立交付 C++ 二进制的下一版配置描述、可信发布和 Loader 绑定另行设计。
 - 预生成并不取代 Runtime 对外部输入、动态模块状态、设备能力以及资源版本的必要验证。
 - 元数据生成、Shader/Asset Pipeline 和完整增量构建协议均为后续设计，不因通用最佳实践而自动视为已实现。
 
@@ -188,32 +190,22 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 | 库类型与部署策略 | `STATIC` / `SHARED` 是逐 Module CMake Target 类型；`Monolithic` / `Modular` 仅在需要统一部署策略时作为顶层 CMake 选项。具体默认库类型、Preset、平台策略与选项命名待决 |
 | 产物布局 | 库、Manifest、符号文件、动态库导出、安装和分发目录 |
 | Meta 生成 | Clang 属性提取、代码生成、增量依赖、多配置构建 |
-| ABI | Profile Schema / Canonical / Fingerprint 算法与兼容判定已冻结；五平台受管 STATIC Module 的全 TU 采集、生成和依赖校验已完成；最终装配、装载前预检及二次校验待实现 |
+| ABI | 同树普通构建与独立交付边界已由 ADR-0013 冻结；历史 strict-v1 已退役。下一版独立交付配置描述、可信产物绑定、预检与二次复核待真实消费者出现后设计 |
 | ThirdParty | Source/Binary 版本、目标导出与平台链接 |
-| 交叉编译 | Android ARM64/iOS ARM64 的受管 STATIC Module 已完成当前 NDK/SDK 的交叉编译、归档和 Host ABI 采集；其余 Android ABI、iOS 设备执行与跨平台真实 SHARED 加载仍待验收 |
+| 交叉编译 | Android ARM64/iOS ARM64 的历史 STATIC 编译与归档结果已记录；新方案需验证原生编译与独立链接冒烟，设备执行和外部 SHARED 加载仍待验收 |
 
 ## 验证要求
 
 后续至少验证 Module 与 Target 的一对一关系、产物数量、编译数据库、增量构建一致性、Meta 生成依赖、ABI 兼容配置、CodePin 以及平台矩阵。已有 PoC 不等于正式 Runtime / 多平台验收。
 
-## 编译型 ThirdParty 与 ABI Compiler Evidence 审计（2026-10-23）
+## 现行 Toolchain 与 ThirdParty 回归
 
-在不增设 Pangu Module Wrapper 的前提下，已新增 `Tests/Toolchain/` 的普通 `ThirdParty::CompiledProbe` STATIC Target 和使用 `pangu_configure_module()` 的 `Pangu::ToolchainProbe` STATIC Target。二者均编译真实 C++23 源码；前者不链接 `PanguBuildOptions`，但和正式 Module 一样继承对应平台 Toolchain 的编译器与标准库配置。
+`BUILD_TESTING=ON` 时，`Tests/Toolchain/` 的 `ThirdParty::CompiledProbe` 和 `Pangu::ToolchainProbe` 使用所选平台 Clang/C++23 编译为真实 STATIC 库。普通第三方库不继承 `PanguBuildOptions`；桌面 `ToolchainLibraryLink` 通过链接两个库并运行 CTest 验证跨库 C++23 返回值。编译器/头依赖与命令变更导致的重编由 CMake + Ninja 判断，不执行自制 ABI 审计。
 
-`BUILD_TESTING=ON` 时，测试入口的 `PANGU_VALIDATE_TOOLCHAIN` 子选项默认为 ON，编译四个代表性 TU 并运行 `PanguAbiCompileAudit`：两项正式 Runtime 源文件、普通 ThirdParty、Pangu Module 探针。该子选项设为 OFF 仅关闭 Toolchain 回归；总开关 `BUILD_TESTING=OFF` 则完整排除全部测试目标，包括缓存中仍启用的 Toolchain 子选项。`Tests/Toolchain/AuditCompilerMacros.cmake` 从 CMake **实际生成的 `compile_commands.json`** 中提取命令，调用 Clang `-E -dM` 获取宏证据，并审计 Clang Patch、STL、CRT、RTTI、C++ 标准、目标宽度、指令集、Android API 等是否一致。输出到 `Build/<Platform>/Abi/compile-evidence.json`，携带命令和宏文本的 SHA-256，但显式为 `trusted: false`。
+`BUILD_TESTING=OFF` 时不构建上述测试目标。Android/iOS 正式 Preset 默认关闭 Tests；单独的移动平台最终链接冒烟须由显式目标执行，不纳入默认 `ALL`。详情见 [Toolchain 测试](../../Tests/Toolchain/README.md)。
 
-新 CTest `ToolchainLibraryLink`（真实静态库链接及 C++23 返回类型运行）、`AbiCompileAudit`、`AbiCompileAuditRejectRTTI`、`AbiCompileAuditRejectEXCEPTIONS` 已在 Windows/WSL Linux/macOS 验证；后二者是真正修改 Clang 参数的负向测试，拒绝异常/RTTI 冲突且失败不残留证据。Android/iOS 在宿主的交叉编译流程中执行同样的 Clang 审计，不执行设备程序。参见 [Toolchain 验证细节](../../Tests/Toolchain/README.md)。
+## 历史 ABI Collection（2026-10-23 至 2026-10-27，已退役）
 
-**编译宏审计本身的限制**：`PanguAbiCompileAudit` 生成的 `trusted: false` 宏文本并不等于正式 ABI Profile；SDK/CRT/STL 实际来源、完整 TU 收据、Canonical/Fingerprint 与 STATIC 构建内完成状态现已由单独的 C++ Collector 核验和发布。**未完成的是最终 EXE/SHARED Loader 的可信产物绑定、TOCTOU 防护与加载前后复核**，不得把宏审计或 STATIC 的 `complete.json` 直接当作 Loader 放行依据。
+旧分支曾为受管 STATIC Module 实现逐 TU 宏审计、Compiler Launcher、Guard/Collect、完整收据及闭包检查，历史 CTest 记录为 Windows 36/36、Linux 34/34、macOS 34/34；这些是 **2026-10-27 的旧实现成绩，不是当前测试数量或构建性能**。旧工具及仅验证其机制的 Tests 均已删除，不再将 `complete.json`、`Abi/compile-evidence.json` 作为活动产物。
 
-## 五平台统一 ABI Collection（2026-10-27，STATIC 范围已完成验收）
-
-根工程不再调用已删除的 `cmake/AbiProfile/Windows.cmake` 或 `pangu_enable_windows_abi_profiles()`。生产 CMake 使用 `pangu_register_abi_module(Target)`、可选 `pangu_register_abi_static(Target)`、`pangu_finalize_abi_profiles(TARGETS ...)`，由 CMake 的原生 Target 生成顺序支撑统一 C++ Guard、Compiler Launcher、Archive 与 Collect。Module 保持原有单个 STATIC Library Target，不创建第二个库。
-
-- 构建普通 `PanguModule` Target 即应产出 `<BuildRoot>/Abi/<Config>/PanguModule/complete.json`，并以真实编译收据验证归档对象，不能让独立 Profile Target 成为可绕过的附加步骤。
-- CMake 只提供配置求值的 Target 事实和依赖顺序（`TRANSITIVE_LINK_PROPERTIES`）；C++ 按实际 `INTERFACE`、条件 Generator Expression、技术 STATIC SCC 完成严格闭包、Profile 相容校验与组封口。无法核验的 C++ 依赖保持 Fail Closed。
-- Windows 原生 MD/MT、WSL Linux 原生 libc++、macOS/macPorts libc++、Android NDK/iOS SDK 目标产物由对应 构建工具检查。Android/iOS 只运行宿主采集工具，绝不执行设备目标 witness。
-- 现有构建目录若保留无法绑定收据的旧对象，Guard 拒绝直接使用，应改用独立、干净的本机 BuildRoot 重新配置和编译。不能伪造、覆盖对象收据或修改旧对象绕过 CMake。
-- **范围限制**：当前完成的是受管 STATIC 构建内的对象及 ABI Profile 一致性。最终 EXE、SHARED Loader、签名/可信发布、TOCTOU 与 OS Load 前后复核尚未实现，不得将 `complete.json` 当成加载器授权证据。
-
-截至 2026-10-27，Task 1—12 及追加评审修复均已完成并独立复审通过，无剩余 Critical/Important。最近一次完整 CTest 为 Windows **36/36**、WSL Linux **34/34**、macOS **34/34**，合计 **104/104**；Android/iOS ARM64 与 Windows Debug MD/Release MT 的真实 Module 构建、Host 采集、增量 Guard 和完成引用摘要校验通过，移动端未执行目标程序。七种配置的构建前后源码摘要一致。实际 CMake 为 Windows/macOS 4.4.3、Linux 4.4.2；已核对最低 CMake 4.0 的声明与所用属性支持版本，未单独运行 4.0.x 二进制，该项不作为本轮未关闭门禁。追加评审修复与文档已按用户授权通过 amend 合入同一提交，未推送。参见[工具入口与限制](../../BuildTools/AbiProfile/README.md)和[计划与验收状态](../../docs/superpowers/plans/2026-10-23-abi-collection.md)。
+历史设计与验收仍可在 [2026-10-23 ABI Collection 实施计划](../../docs/superpowers/plans/2026-10-23-abi-collection.md) 和 [v1 历史协议](abi-profile-fingerprint.md) 中查阅；源码如需追溯使用历史 Git 提交，当前目录已不再有该工具。现行边界以 [ADR-0013](../decisions/0013-native-build-abi-boundary.md) 为准。
