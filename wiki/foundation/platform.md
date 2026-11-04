@@ -1,7 +1,7 @@
 # Pangu 平台支持基线
 
 > 状态：Partially Frozen（目标平台与访问环境已确定；Runtime/HAL 与完整 CI 尚未冻结）
-> 更新：2026-11-02
+> 更新：2026-11-04
 
 ## 目标平台与验证状态
 
@@ -14,6 +14,8 @@
 | iOS | macOS 主机交叉编译 iPhoneOS Device | iOS ARM64 动态库编译与链接通过；签名、打包及真机/模拟器验证未完成 |
 
 **目标支持不等于完整引擎实现或设备运行验证。** 上表只列出验证层级，不作为平台工具链版本、路径和参数的权威来源。
+
+**源码 Plugin / 独立 Project 集成（2026-11-04）**：Windows 正式 Engine CTest 22/22、WSL Linux 与 macOS 各 21/21；三桌面独立 Build Tool 各 3/3。Android ARM64 与 iOS ARM64 使用正式 Preset 构建 Engine，独立 Project 的 Game/Editor 完成最终链接及显式 SHARED 文件部署。此记录不扩展到完整 App、签名、设备运行或生产 Loader。命令、源码状态、性能与 Linux 时钟修复见[验收记录](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md)。
 
 **历史记录（ABI Collection 已按 ADR-0013 退役）**：截至 2026-10-27，五平台受管 STATIC Module 的 ABI Collection 曾完成验收：Windows x64、WSL Ubuntu Linux x64、macOS x64 通过完整 CTest，最近一轮分别为 **36/36、34/34、34/34（104/104）**；Android ARM64、iOS ARM64 通过真实目标编译/归档、Host 采集、增量 Guard 和完成引用摘要校验。Windows 另覆盖 Release MD、Debug MD、Release MT。该验收未执行 Android/iOS 目标程序，也不扩展至其他移动 ABI、Apple Silicon 或 Simulator。详见 [ABI Profile 实施状态](abi-profile-fingerprint.md)与[计划验收记录](../../docs/superpowers/plans/2026-10-23-abi-collection.md)。
 

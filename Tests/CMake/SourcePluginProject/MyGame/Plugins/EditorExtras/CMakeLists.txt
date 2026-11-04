@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 4.0)
+file(APPEND "${CMAKE_BINARY_DIR}/PluginVisits.txt" "mygame.editor-extras\n")
+add_library(PanguEditorExtras STATIC Private/EditorExtras.cpp)
+add_library(Pangu::EditorExtras ALIAS PanguEditorExtras)
+pangu_configure_module(PanguEditorExtras)
+target_include_directories(PanguEditorExtras PRIVATE "${CMAKE_SOURCE_DIR}/Source")
+target_link_libraries(PanguEditorExtras PUBLIC Pangu::Physics)

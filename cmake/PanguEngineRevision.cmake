@@ -1,0 +1,87 @@
+include_guard(GLOBAL)
+
+function(pangu_validate_engine_revision)
+    cmake_parse_arguments(PER "" "SOURCE_DIR;EXPECTED_COMMIT;ALLOW_LOCAL_OVERRIDE" "" ${ARGN})
+    if(PER_UNPARSED_ARGUMENTS OR PER_KEYWORDS_MISSING_VALUES OR NOT PER_SOURCE_DIR OR
+       NOT PER_EXPECTED_COMMIT OR NOT DEFINED PER_ALLOW_LOCAL_OVERRIDE)
+        message(FATAL_ERROR "pangu_validate_engine_revision requires SOURCE_DIR, EXPECTED_COMMIT and ALLOW_LOCAL_OVERRIDE")
+    endif()
+    string(LENGTH "${PER_EXPECTED_COMMIT}" shaLength)
+    if(NOT shaLength EQUAL 40 OR NOT PER_EXPECTED_COMMIT MATCHES "^[0-9a-fA-F]+$")
+        message(FATAL_ERROR "Pangu Engine.commit expected Git SHA must be exactly 40 hexadecimal characters")
+    endif()
+    string(TOLOWER "${PER_EXPECTED_COMMIT}" PER_EXPECTED_COMMIT)
+    if(NOT IS_DIRECTORY "${PER_SOURCE_DIR}" OR NOT EXISTS "${PER_SOURCE_DIR}/CMakeLists.txt")
+        message(FATAL_ERROR "Pangu Engine revision source directory invalid: ${PER_SOURCE_DIR}")
+    endif()
+    if(NOT PER_ALLOW_LOCAL_OVERRIDE MATCHES "^(ON|OFF)$")
+        message(FATAL_ERROR "Pangu Engine revision ALLOW_LOCAL_OVERRIDE must be ON or OFF")
+    endif()
+
+    execute_process(COMMAND git -C "${PER_SOURCE_DIR}" rev-parse --show-toplevel
+        RESULT_VARIABLE rootStatus OUTPUT_VARIABLE gitRoot ERROR_VARIABLE rootError
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT rootStatus EQUAL 0)
+        message(FATAL_ERROR "Pangu Engine source must be a Git worktree root: ${rootError}")
+    endif()
+    file(REAL_PATH "${PER_SOURCE_DIR}" actualSource)
+    file(REAL_PATH "${gitRoot}" actualGitRoot)
+    if(CMAKE_HOST_WIN32)
+        string(TOLOWER "${actualSource}" actualSource)
+        string(TOLOWER "${actualGitRoot}" actualGitRoot)
+    endif()
+    if(NOT actualSource STREQUAL actualGitRoot)
+        message(FATAL_ERROR "Pangu Engine SOURCE_DIR must be the Git worktree root: ${PER_SOURCE_DIR}; Git root=${gitRoot}")
+    endif()
+
+    execute_process(COMMAND git -C "${PER_SOURCE_DIR}" rev-parse --verify HEAD
+        RESULT_VARIABLE shaStatus OUTPUT_VARIABLE actualSha ERROR_VARIABLE shaError
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT shaStatus EQUAL 0)
+        message(FATAL_ERROR "Pangu Engine revision cannot read Git HEAD for ${PER_SOURCE_DIR}: ${shaError}")
+    endif()
+
+    execute_process(COMMAND git -C "${PER_SOURCE_DIR}"
+        status --porcelain --untracked-files=no --ignore-submodules=none
+        RESULT_VARIABLE dirtyStatus OUTPUT_VARIABLE dirtyFiles ERROR_VARIABLE dirtyError
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT dirtyStatus EQUAL 0)
+        message(FATAL_ERROR "Pangu Engine revision cannot check tracked dirty state: ${dirtyError}")
+    endif()
+
+    execute_process(COMMAND git -C "${PER_SOURCE_DIR}" submodule status --recursive
+        RESULT_VARIABLE subStatus OUTPUT_VARIABLE submodules ERROR_VARIABLE subError
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set(submoduleBroken OFF)
+    if(NOT subStatus EQUAL 0)
+        set(submoduleBroken ON)
+    endif()
+    if(NOT "${submodules}" STREQUAL "")
+        string(REPLACE "\n" ";" lines "${submodules}")
+        foreach(line IN LISTS lines)
+            string(SUBSTRING "${line}" 0 1 marker)
+            if(marker STREQUAL "-" OR marker STREQUAL "+" OR marker STREQUAL "U")
+                set(submoduleBroken ON)
+            endif()
+        endforeach()
+    endif()
+
+    set(dirty OFF)
+    if(NOT dirtyFiles STREQUAL "")
+        set(dirty ON)
+    endif()
+    if(NOT actualSha STREQUAL PER_EXPECTED_COMMIT OR dirty OR submoduleBroken)
+        set(reason "Pangu Engine Git lock mismatch: expected ${PER_EXPECTED_COMMIT}; actual ${actualSha}; dirty=${dirty}; submodule_broken=${submoduleBroken}")
+        if(NOT dirtyFiles STREQUAL "")
+            string(APPEND reason "; tracked=${dirtyFiles}")
+        endif()
+        if(submoduleBroken)
+            string(APPEND reason "; submodule_status=${submodules}; details=${subError}")
+        endif()
+        if(PER_ALLOW_LOCAL_OVERRIDE)
+            message(WARNING "${reason}; local override explicitly enabled")
+        else()
+            message(FATAL_ERROR "${reason}; set PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE=ON only for local development")
+        endif()
+    endif()
+endfunction()

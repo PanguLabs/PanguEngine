@@ -18,3 +18,4 @@ add_test(NAME BuildEnvironment
 add_subdirectory(ThirdParty/NlohmannJson)
 add_subdirectory(Foundation)
 add_subdirectory(Module)
+add_subdirectory(CMake/SourcePlugins)

@@ -1,8 +1,8 @@
 # ThirdParty 接入与功能封装
 
 > 状态：Partially Frozen（CMake Target 命名、Module/ThirdParty 边界已冻结；获取方式、逐库补丁及部署策略按依赖确定）
-> 更新：2026-11-02
-> 相关：[构建系统](build-system.md)、[工具链](toolchain.md)、[Plugin / Module](../core/plugin-module.md)、[ABI](abi.md)
+> 更新：2026-11-04
+> 相关：[构建系统](build-system.md)、[工具链](toolchain.md)、[Plugin / Module](../core/plugin-module.md)、[ABI](abi.md)、[ADR-0014 源码 Plugin](../decisions/0014-source-plugins-project-build.md)
 
 ## 源码与构建入口
 
@@ -21,6 +21,8 @@ Source/ThirdParty/<DependencyName>/
 `DependencyName` 是稳定的依赖接入名称，不强制与远程仓库 basename 相同。
 例如 `NlohmannJson` 对应上游 `nlohmann/json`；一个 SDK 可以包含多个实际库。
 `Repo/` 内的文件归上游仓库管理，外层文件归 PanguEngine 管理。
+
+`TomlPlusPlus/Repo` 同样固定为 Submodule（v3.4.0 提交 `30172438cee64926dc41fdd9c11fb3ba5b2ba9de`）。`ThirdParty::TomlPlusPlus` 仅供独立 PanguBuildTool 使用，以 `TOML_EXCEPTIONS=0` 解析 Manifest，不传播到 Runtime 公共接口；工具不依赖 Engine 的 `PanguBuildOptions`，详见[BuildTools](../../BuildTools/README.md)。
 
 - 采用 submodule 时固定到明确提交，由主仓库 gitlink 记录，不以浮动分支决定构建输入。预编译 SDK 或 Snapshot 同样必须记录版本、来源、许可证和校验信息。
 - 对采用 submodule 的依赖，首次检出可使用 `git clone --recurse-submodules <PanguEngine URL>`；已有工作区执行 `git submodule update --init --recursive`。
@@ -61,7 +63,7 @@ Source/ThirdParty/<DependencyName>/
 | ③ 独立编译/技术适配 | 如 Asio 单独编译、配置宏或处理平台差异 | 使用普通 CMake Target，不新增 |
 | ④ 独立引擎功能 | ECS、Renderer、Physics 等需要独立功能 API、身份或生命周期 | 建立对应功能 Pangu Module |
 
-**Pangu Module 封装的是引擎功能，而不是每个第三方库。** 一个功能 Module 可以依赖多个第三方 Target，不强制一库一 Module，也不为每个依赖新增 Service/Registry。
+**Pangu Module 封装的是引擎功能，而不是每个第三方库。** 源码 Pangu Plugin 的交付限制只适用于 Pangu 自有 Plugin/SDK 路线，**不禁止普通 ThirdParty 预编译 SDK、系统库和 OS Framework**；它们继续按照 Target、Toolchain、ABI 与 Ownership 契约独立审核，也不自动继承 Pangu 独立插件 Preflight。一个功能 Module 可以依赖多个第三方 Target，不强制一库一 Module，也不为每个依赖新增 Service/Registry。
 
 第三方 API 默认优先通过使用方的 `PRIVATE` 依赖实现隔离；**不强制所有第三方类型都隐藏在 Pangu Module Public API 之外**。确需公开时应审查版本、API/ABI、对象/分配器所有权及销毁代码驻留。宿主工具和测试可以直接使用 `ThirdParty::` Target；`JsonExtras` 测试是当前实例。
 

@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 4.0)
+file(APPEND "${CMAKE_BINARY_DIR}/PluginVisits.txt" "mygame.gameplay\n")
+add_library(PanguGameplay STATIC Private/Gameplay.cpp)
+add_library(Pangu::Gameplay ALIAS PanguGameplay)
+pangu_configure_module(PanguGameplay)
+target_include_directories(PanguGameplay PRIVATE "${CMAKE_SOURCE_DIR}/Source")
+target_link_libraries(PanguGameplay PUBLIC Pangu::Physics)

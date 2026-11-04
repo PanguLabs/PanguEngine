@@ -4,7 +4,7 @@
 > 更新：2026-11-02
 > 决策：[ADR-0008：统一 Module 注册与生命周期](../decisions/0008-module-registration-lifetime.md)、[ADR-0011：Module API 行为契约](../decisions/0011-module-api-behavior-contract.md)
 > 权威边界：[Plugin / Module](plugin-module.md)、[Service](service.md)、[Memory](memory-management.md)、[EngineHost](engine-host.md)
-> 构建/错误前提：[Build System](../foundation/build-system.md)、[ABI](../foundation/abi.md)、[Error / Diagnostics](../foundation/error-diagnostics.md)
+> 构建/错误前提：[Build System](../foundation/build-system.md)、[ABI](../foundation/abi.md)、[Error / Diagnostics](../foundation/error-diagnostics.md)、[ADR-0014 源码交付](../decisions/0014-source-plugins-project-build.md)
 
 ## 1. 目标及非目标
 
@@ -28,7 +28,7 @@
 - `ModuleDescriptor` 在语义上描述逻辑身份、协议版本、构建身份/ABI 相容要求与 Module 依赖；已解析的代码入口可以通过独立的运行期句柄持有。运行期状态、借用计数、动态库句柄、错误现场不放入持久 Descriptor；Descriptor 的确切字段/布局均未冻结。
 - Module 的描述信息可能起初指向其自身代码/只读数据；Module 管理器需在持有代码驻留保护时复制所有要跨卸载保留的身份、依赖、诊断字符串。不能将插件字符串视图长期挂在 Host 上。
 - Module 构建依赖（CMake Target/Link 边）与**运行期 Module Dependency** 不完全等价；不得从 `target_link_libraries` 自动推导全部生命周期依赖。静态强类型调用应由构建依赖和实际代码驻留保证共同覆盖。
-- `ModuleId` 的 128 位身份/规范文本及精确版本、显式依赖绑定行为由 [Module API v1 第 2 节](module-api.md#2-身份与描述数据) 冻结，C++ 布局和生成工具仍待设计；历史 ABI Profile v1 已由 ADR-0013 从普通构建政策中退役，独立交付的下一版兼容描述另行设计。
+- `ModuleId` 的 128 位身份/规范文本及精确版本、显式依赖绑定行为由 [Module API v1 第 2 节](module-api.md#2-身份与描述数据) 冻结，C++ 布局和生成工具仍待设计；历史 ABI Profile v1 已退役，独立 Pangu 二进制交付的下一版兼容描述路线已由 ADR-0014 取消。
 
 ## 3. 静态与动态模块的发现/注册
 
@@ -41,10 +41,10 @@
 
 ### SHARED Module
 
-1. Module 加载器通过一个版本化稳定 `extern "C"` 导出名定位**原生 C++23 ModuleDefinition Query**（候选 `PanguModuleQueryV1`），该 C Language Linkage 仅用于**按名找符号**，不是 C POD 交换协议或全引擎 C Bootstrap。单独交付给已有宿主的插件必须先通过装载前可信产物绑定与 C++ ABI/Public Module API Contract 预检；同树同配置配套插件不需要 AbiProfile 预检。
-2. STATIC 和 SHARED 使用同一种原生 C++23 `ModuleDefinition`、Descriptor 和 `RegistrationContext`，SHARED **不再要求窄 C POD Discovery、数值 C 状态码转换或 `void*` 注册桥**。依 ADR-0013，与宿主同树、同配置并配套交付的 SHARED 插件免 AbiProfile 预检；单独交付给已有宿主的原生插件仍必须在 OS Load/Query 前完成可信产物绑定、目标 ABI、协议版本及 Public Module API Contract 预检，装载后二次复核通过后执行统一 C++ 注册事务。
-3. 需要区分独立插件的装载前预检与装载后的接口复核：`LoadLibrary`/`dlopen` 可能在取得导出入口之前运行 DLL 初始化器/全局构造，因此运行时符号校验**不能**宣称不可信插件代码已在执行前受到安全隔离。历史 ABI Profile v1 不再是活动格式；独立交付的下一版预检格式与绑定工艺另行冻结。禁止依赖全局构造产生业务注册副作用。
-4. 动态导出入口由 CMake/PanguMeta 等生成，不要求业务 Module 手写导出符号或注册桥。查询函数返回的 C++ Descriptor/依赖字符串等数据在 CodePin 有效期内借用并由 Host 复制；精确符号名称、C++ Public API 布局/契约、独立交付兼容描述和平台调用约定仍待验证。此技术路线依 [ADR-0010](../decisions/0010-unified-cpp-module-entry.md) 与 [ADR-0013](../decisions/0013-native-build-abi-boundary.md) 修订。
+1. Module 加载器通过一个版本化稳定 `extern "C"` 导出名定位**原生 C++23 ModuleDefinition Query**（候选 `PanguModuleQueryV1`），该 C Language Linkage 仅用于**按名找符号**，不是 C POD 交换协议或全引擎 C Bootstrap。同树、同配置的源码插件不需要 AbiProfile；ADR-0014 不支持向既有宿主独立交付 Pangu 原生二进制插件。
+2. STATIC 和 SHARED 使用同一种原生 C++23 `ModuleDefinition`、Descriptor 和 `RegistrationContext`，SHARED **不再要求窄 C POD Discovery、数值 C 状态码转换或 `void*` 注册桥**。装载后仍须复核协议、ModuleId、依赖与入口有效性，再执行统一 C++ 注册事务；源码交付不取消 CodePin 和安全卸载要求。
+3. `LoadLibrary`/`dlopen` 可能在取得导出入口之前运行 DLL 初始化器/全局构造，因此运行时符号校验**不能**宣称不可信插件代码已在执行前受到安全隔离。历史 ABI Profile v1 不再是活动格式，独立 Pangu 插件 Preflight 路线已取消。禁止依赖全局构造产生业务注册副作用。
+4. 动态导出入口由 CMake/PanguMeta 等生成，不要求业务 Module 手写导出符号或注册桥。查询函数返回的 C++ Descriptor/依赖字符串等数据在 CodePin 有效期内借用并由 Host 复制；精确符号名称、C++ Public API 布局/契约和平台调用约定仍待验证。此技术路线依 [ADR-0010](../decisions/0010-unified-cpp-module-entry.md)、[ADR-0013](../decisions/0013-native-build-abi-boundary.md) 与 [ADR-0014](../decisions/0014-source-plugins-project-build.md) 修订。
 5. 加载后的动态库句柄与 CodePin 由 Module 机制拥有和协调；不为文件句柄再建独立 BinaryImage/管理层。
 
 两种装载来源通过不同的物理定位方式取得**同一种 C++23 ModuleDefinition**，之后使用完全一致的 C++23 注册、依赖、事务与生命周期协议；SHARED 的固定符号名不构成独立的 C 数据交换层。

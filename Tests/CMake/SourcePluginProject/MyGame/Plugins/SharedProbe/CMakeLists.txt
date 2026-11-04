@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 4.0)
+add_library(PanguSharedProbe SHARED Private/SharedProbe.cpp)
+add_library(Pangu::SharedProbe ALIAS PanguSharedProbe)
+pangu_configure_module(PanguSharedProbe)
+set_target_properties(PanguSharedProbe PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)

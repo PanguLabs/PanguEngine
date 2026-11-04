@@ -1,3 +1,6 @@
 [submodule "NlohmannJson"]
 	path = Source/ThirdParty/NlohmannJson/Repo
 	url = https://github.com/nlohmann/json.git
+[submodule "TomlPlusPlus"]
+	path = Source/ThirdParty/TomlPlusPlus/Repo
+	url = https://github.com/marzer/tomlplusplus.git

@@ -1,8 +1,8 @@
 # Pangu 构建系统
 
-> 状态：Partially Frozen（CMake 4.0+、原生 Ninja 增量、单 Module 单库、Target 命名空间及普通构建零 AbiProfile 已冻结；独立交付格式待设计）
-> 更新：2026-11-02
-> 决策：[ADR-0001：采用 CMake](../decisions/0001-adopt-cmake.md)、[ADR-0005：一个 Module 一个库](../decisions/0005-one-module-one-library.md)、[ADR-0012：构建树按宿主本地化](../decisions/0012-host-local-build-trees.md)、[ADR-0013：原生构建与 ABI 交付边界](../decisions/0013-native-build-abi-boundary.md)
+> 状态：Partially Frozen（CMake 4.0+、Ninja 原生增量、单 Module 单库、Target 命名空间及源码 Plugin/独立 Project 构建政策已冻结；最小源码插件接线已实现，完整发布/运行时 Loader 尚未实现）
+> 更新：2026-11-04
+> 决策：[ADR-0001：采用 CMake](../decisions/0001-adopt-cmake.md)、[ADR-0005：一个 Module 一个库](../decisions/0005-one-module-one-library.md)、[ADR-0012：构建树按宿主本地化](../decisions/0012-host-local-build-trees.md)、[ADR-0013：原生构建](../decisions/0013-native-build-abi-boundary.md)、[ADR-0014：源码 Plugin 与独立 Project](../decisions/0014-source-plugins-project-build.md)
 
 ## 已确定的决策
 
@@ -15,8 +15,14 @@
 - ThirdParty 可以是独立的 CMake 目标，并被 Pangu Module 依赖；不强制使用 Package Adapter，也不要求每个 ThirdParty 目标都成为 Pangu Module。
 - 第三方依赖统一使用 `ThirdParty::` CMake Target 名称，优先原生 Target/ALIAS；源码获取可选固定 Git submodule、Vendor Snapshot、预编译 SDK 或系统依赖，不强制所有 API 经 Module 私有封装。详见 [ThirdParty 接入](third-party.md)。
 - Ninja 根据 CMake 规则、编译器头依赖、输出与命令变化判断重建；Pangu 不用逐 TU 收据、编译数据库扫描或第二套依赖图替代 Ninja。
-- 普通 configure、编译、归档、最终链接和 Tests 不运行 Pangu 自制 AbiProfile；同树、同配置并随宿主配套交付的插件同样豁免。独立 SDK/预编译库和单独交付给已有宿主的插件才进入二进制接纳边界。
-- CMake 是构建关系的权威来源；Plugin 的安装、发现和版本信息仍可能需要独立 Manifest，不因此形成第二份构建配置。
+- 普通 configure、编译、归档、最终链接和 Tests 不运行 Pangu 自制 AbiProfile；同树、同配置源码插件同样豁免。Pangu 原生 Plugin/SDK 不再以独立预编译二进制交付给已有宿主，故不实施独立插件装载前 Preflight；ThirdParty/系统预编译库继续单独接受 Toolchain/ABI 适配审核。
+- CMake 是构建关系的权威来源；源码 Plugin 必须有严格校验的 `Plugin.toml` 用于身份发现、`CMakeLists.txt` 用于真实编译/链接表达。发现、启用、实际编译、显式部署与运行时激活彼此独立。
+
+## 源码 Plugin / Project 构建政策与最小实现
+
+依据 [ADR-0014](../decisions/0014-source-plugins-project-build.md)：Engine 可独立顶层构建；Game Project 自行选择 Toolchain、CTest、隔离 BuildRoot，通过 Engine 源码 `add_subdirectory()` 进入同一目标图。配置期仅从 Engine/Project 两个固定 `Plugins/` 根扫描直接子目录，所有候选必须同时包含 `Plugin.toml` + `CMakeLists.txt`，严格验证稳定 ID 和可选 SemVer。顶层每次 Configure（**包括无 Plugin**）都须通过宿主 Clang/C++23 独立增量构建并运行 `PanguBuildTool`（`toml++`、JSON）；不能因插件为空跳过。Plugin 显式启用后仍用 `EXCLUDE_FROM_ALL`，只由实际 Game/Editor/Tool Target 链接/依赖触发编译，部署和激活另行控制。
+
+已实现 `BuildTools/PanguBuildTool`、`cmake/PanguPlugins.cmake` 的发现/启用接线及 `cmake/PanguEngineRevision.cmake` 的 Project Git 锁定校验。`ENGINE_ROOT` / `PROJECT_ROOT` 参数指向持有 `Plugins/` 的工程根。Engine standalone 默认启用内部测试；嵌入 Project 时内部测试默认关闭，父级拥有 `BUILD_TESTING`，需要时另开 `PANGU_BUILD_ENGINE_TESTS`。Project 及 Game/Editor STATIC Catalog、Assets 和显式 SHARED 部署以正式测试夹具验收；生产 Loader、PanguMeta 和 App 发布未因此实现。平台命令、结果和性能证据见[本次验收](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md)。
 
 ## CMake Target 命名与职责（Frozen）
 
@@ -85,7 +91,7 @@ macOS 使用 `ssh -o BatchMode=yes moozen-macos`，通过 `/Users/moozen/Windows
 - 当时 CMake 通过 `cmake/BuildTools.cmake` 为 Windows/Linux/macOS 原生宿主构建并版本化发布 `PanguAbiProfileTool`；Android/iOS 的交叉编译使用对应 Windows/macOS 构建工具，不在目标平台运行。它不是 Pangu Runtime Module，不改变单 Module 单 Library Target 约束。`cmake/BuildTools.cmake` 已删除。
 - `Source/ThirdParty/NlohmannJson/Repo` 是保留的 nlohmann/json v3.12.0 Git submodule；`ThirdParty::NlohmannJson` 是 INTERFACE Target，设置 `JSON_USE_GLOBAL_UDLS=0`。旧 ABI 工具已删除，当前由 `Tests/ThirdParty/NlohmannJson` 验证；不配置上游工程，不在构建时下载。
 - 当时 `Tests/AbiProfile` 包含冻结 Schema/JCS/SHA256 向量、真实 CLI、依赖闭包/SCC、Host Bootstrap、Compiler Launcher/收据和五平台 Collector 测试；该目录已删除，历史结论仅保留在 [旧验收记录](../../docs/superpowers/plans/2026-10-23-abi-collection.md) 与 [ABI Profile / Fingerprint v1（历史协议）](abi-profile-fingerprint.md)。
-- 当时 Windows/Linux/macOS 与 Android/iOS 的正式 STATIC Module 均接入了 C++ 全 TU 编译收据、Profile 自动采集及依赖校验。该机制不再运行；独立交付二进制的可信产物绑定与 OS Load 前后复核属于 ADR-0013 的后续边界，当前尚未实现。
+- 当时 Windows/Linux/macOS 与 Android/iOS 的正式 STATIC Module 均接入了 C++ 全 TU 编译收据、Profile 自动采集及依赖校验。该机制不再运行；当时 ADR-0013 曾计划独立 Pangu Plugin 二进制的可信绑定与 Preflight，但这一后续路线现已由 ADR-0014 取消。
 
 ## 已落地的轻量化 CMake 配置（实现层，非新架构冻结）
 
@@ -148,7 +154,7 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 
 本次将 Linux/macOS 标准库参数从 `PanguBuildOptions` 迁移至 Toolchain，**升级已有构建目录时必须使用** `cmake --fresh --preset <name>` 使 `CMAKE_CXX_FLAGS_INIT` 与链接参数重新初始化；之后可使用普通 `cmake --preset <name>`。切换 `LLVM_ROOT` 或 SDK/NDK 时也应重新配置。不同平台及 Host 的二进制缓存必须独立；更换构建根时重新配置，禁止复用旧目录的 CMake Cache。
 
-**尚未冻结/实现**：`pangu_configure_module` 的长期包装 API、完整工具链锁定（Windows SDK/MSVC STL、Linux libc++ ABI 配置、各平台 SDK 的精确 Profile）、PanguMeta、完整插件封装、Monolithic/Modular 顶层策略、安装/分发和多配置产物政策。这次完成的是可工作的最小构建接线，不将实验便利配置提升为跨平台 ABI 安全证明。
+**尚未冻结/实现**：`pangu_configure_module` 的长期包装 API、完整工具链锁定（Windows SDK/MSVC STL、Linux libc++ ABI 配置、各平台 SDK 的精确 Profile）、PanguMeta、Monolithic/Modular 顶层策略、完整安装/分发和多配置产物政策。源码 Plugin/独立 Project 已提供最小构建接线，不将测试夹具提升为完整发布链路或跨平台 ABI 安全证明。
 
 ## “一个 Module 一个库”的范围
 
@@ -169,16 +175,16 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 ## 与旧方案的关系
 
 1. 完整自研 `PanguBuild` 构建核心已被 CMake 替代；不恢复 `PanguBuild` 作为第二构建内核或上层调度器。新增构建职责优先通过 CMake Target 与按需工具表达。
-2. `Module.toml` 不再是每个 Module 必需文件；`CMakeLists.txt` 是编译和链接配置的权威来源。分发清单 `Plugin.toml` 是否沿用及其字段仍未冻结。
+2. `Module.toml` 不再是每个 Module 必需文件；`CMakeLists.txt` 是编译和链接配置的权威来源。源码 Plugin 必须提供 `Plugin.toml`，它的稳定 ID/可选元数据和两根发现规范已由 ADR-0014 冻结并完成最小实现。
 3. 旧方案允许 Module 和多个 CMake Target / 物理镜像之间灵活映射；**ADR-0005 已收紧为一个 Module 对应一个库 Target 和一个主要产物**。
 4. 不建立独立 BinaryImageManager / BinaryImageDescriptor；物理库文件和 CodePin 是现有 Module 管理机制的内部实现细节。
 
 ## Compile-Time / Build-Time First 的构建职责
 
-按 [C++ 规范与最佳实践](cpp-guidelines.md)，类型与静态分发应尽量在编译期解决。Module 依赖、编译器/标准库配置和按需生成代码属于 CMake 与目标工具链职责；Shader/Asset 处理与打包只由实际消费者或显式命令触发。独立交付二进制的兼容性描述属于交付边界，不挂入普通 Build-Time 增量链路。
+按 [C++ 规范与最佳实践](cpp-guidelines.md)，类型与静态分发应尽量在编译期解决。Module 依赖、编译器/标准库配置和按需生成代码属于 CMake 与目标工具链职责；Shader/Asset 处理与打包只由实际消费者或显式命令触发。独立 Pangu 原生 Plugin/SDK 二进制交付不再是产品路线，普通 ThirdParty/系统库仍遵守自身 ABI/Toolchain 约束。
 
 - CMake 仍是构建依赖的权威来源；可由 PanguMeta 等工具按需要生成代码，生成源文件归入对应 Module 唯一库 Target。
-- 编译器与目标平台配置仍由真实 Toolchain/Target 表达并验证；历史 [ABI Profile v1](abi-profile-fingerprint.md) 不再参与同树普通构建。独立交付 C++ 二进制的下一版配置描述、可信发布和 Loader 绑定另行设计。
+- 编译器与目标平台配置仍由真实 Toolchain/Target 表达并验证；历史 [ABI Profile v1](abi-profile-fingerprint.md) 不再参与同树普通构建。独立 Pangu 原生插件二进制接纳及下一版 ABI Preflight 不再规划；Loader 运行时有效性与 CodePin 不受影响。
 - 预生成并不取代 Runtime 对外部输入、动态模块状态、设备能力以及资源版本的必要验证。
 - 元数据生成、Shader/Asset Pipeline 和完整增量构建协议均为后续设计，不因通用最佳实践而自动视为已实现。
 
@@ -190,7 +196,7 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 | 库类型与部署策略 | `STATIC` / `SHARED` 是逐 Module CMake Target 类型；`Monolithic` / `Modular` 仅在需要统一部署策略时作为顶层 CMake 选项。具体默认库类型、Preset、平台策略与选项命名待决 |
 | 产物布局 | 库、Manifest、符号文件、动态库导出、安装和分发目录 |
 | Meta 生成 | Clang 属性提取、代码生成、增量依赖、多配置构建 |
-| ABI | 同树普通构建与独立交付边界已由 ADR-0013 冻结；历史 strict-v1 已退役。下一版独立交付配置描述、可信产物绑定、预检与二次复核待真实消费者出现后设计 |
+| ABI | 同树构建普通零 AbiProfile 由 ADR-0013 保留；Pangu Plugin/SDK 独立二进制 Preflight 已被 ADR-0014 取消。运行时 SHARED Query、ModuleId、CodePin 与第三方 ABI 审核仍有各自责任 |
 | ThirdParty | Source/Binary 版本、目标导出与平台链接 |
 | 交叉编译 | Android ARM64/iOS ARM64 的历史 STATIC 编译与归档结果已记录；新方案需验证原生编译与独立链接冒烟，设备执行和外部 SHARED 加载仍待验收 |
 

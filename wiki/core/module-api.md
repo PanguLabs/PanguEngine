@@ -1,16 +1,16 @@
 # Pangu ModuleDescriptor & Registration API v1
 
 > 状态：**Partially Frozen**。第 8 节列出的行为契约已冻结；C++ 代码块仍为 API 提案，**Public Header、具体签名/布局、导出名、ABI 与生产 Loader 实现未冻结**。
-> 更新：2026-11-02
+> 更新：2026-11-04
 > 前置已冻结：[Module Registration & Lifetime v1](module-registration-lifetime.md)、[Service v1](service.md)、[ABI 交付边界](../foundation/abi.md)、[Memory](memory-management.md)、[Build System](../foundation/build-system.md)
-> 决策：[ADR-0010：统一 C++23 Module 入口](../decisions/0010-unified-cpp-module-entry.md)、[ADR-0011：Module API v1 行为契约](../decisions/0011-module-api-behavior-contract.md)、[ADR-0013：原生构建与 ABI 交付边界](../decisions/0013-native-build-abi-boundary.md)。冻结行为不代表实现或跨平台 ABI 已验收，现有证据见第 9 节。
+> 决策：[ADR-0010：统一 C++23 Module 入口](../decisions/0010-unified-cpp-module-entry.md)、[ADR-0011：Module API v1 行为契约](../decisions/0011-module-api-behavior-contract.md)、[ADR-0013：原生构建与 ABI 交付边界](../decisions/0013-native-build-abi-boundary.md)、[ADR-0014：源码插件交付](../decisions/0014-source-plugins-project-build.md)。冻结行为不代表实现或跨平台 ABI 已验收，现有证据见第 9 节。
 
 ## 1. 设计目标与边界
 
 一个 Module 仍对应唯一 CMake STATIC 或 SHARED Library Target。Plugin 是分发/启用单元，Module 是代码 Owner；Host / Context / World 是实例 Owner。不得引入 `BinaryImage` 架构层、统一 `IModule` / `IService` 虚基类、`ExtensionDescriptor` / `ExtensionManager` 或隐式全局 Service Locator。
 
 - **STATIC**：编译/生成阶段显式引用每个 Module 的 C++ 登记函数，Catalog 是链接器可见的根。
-- **SHARED**：通过固定的版本化 `extern "C"` 导出符号获取同一原生 C++23 ModuleDefinition，并调用统一 C++23 注册函数。与宿主同树、同配置且配套交付的插件依 ADR-0013 免 AbiProfile 预检；单独交付给已有宿主的插件仍必须在 OS Load 和 Query 之前完成可靠的候选产物绑定与受控 C++ ABI/Public API 预检。LoadLibrary/dlopen 可能执行初始化器，Discovery 不能当成未执行代码的安全边界。
+- **SHARED**：通过固定的版本化 `extern "C"` 导出符号获取同一原生 C++23 ModuleDefinition，并调用统一 C++23 注册函数。与宿主同树、同配置且配套交付的源码插件不经 AbiProfile；ADR-0014 已取消向既有宿主独立交付 Pangu 原生二进制插件及其 Preflight 路线。LoadLibrary/dlopen 可能执行初始化器，Discovery 不能当成未执行代码的安全边界；运行时协议、身份、依赖和 CodePin 检查仍须完成。
 - 两种来源最终创建相同的、由 Host 持有的 `ModuleRecord`（仅内部实现概念），走同一依赖、注册事务、激活、撤销和 CodePin 协议。
 - **Descriptor 不存运行时状态**。动态库句柄、外部 Pin、Task、实例 Borrow、故障报告等属于 Manager/Scope Owner。
 - **注册能力与 Service 实例 Ready 分离**；Concrete Service 不强制注册 Registry。
@@ -78,7 +78,7 @@ using QueryModuleFn = const ModuleDefinition* (*)() noexcept;
 } // namespace pg::module
 ```
 
-`pg::Status` 的具体 C++ API 尚未冻结，此处**不是可独立编译的 Public Header**。按 [ADR-0013](../decisions/0013-native-build-abi-boundary.md)，本草案不携带已退役的 strict-v1 Profile/Fingerprint 字段；独立交付兼容描述另行设计。注册入口不使用异常；回滚、失败报告由 Host 所有的操作上下文负责。
+`pg::Status` 的具体 C++ API 尚未冻结，此处**不是可独立编译的 Public Header**。按 ADR-0013/0014，本草案不携带已退役的 strict-v1 Profile/Fingerprint 字段，也不规划独立 Pangu 插件的下一版交付兼容描述。注册入口不使用异常；回滚、失败报告由 Host 所有的操作上下文负责。
 
 **入口有效性**：STATIC / SHARED 使用同一验证规则：Query 入口、Query 返回的 `ModuleDefinition*` 和其中的 `RegisterModule` 均须非空，否则在进入注册前返回定义无效错误。无需登记任何能力的 Module 仍提供显式返回成功的空操作注册函数，不以空函数指针表达该语义。非空检查不代替 ABI、接口契约和代码驻留校验。
 
@@ -156,18 +156,18 @@ extern "C" PG_EXPORT const pg::module::ModuleDefinition* PanguModuleQueryV1() no
 
 **SHARED 校验和注册顺序：**
 
-ADR-0013 将 SHARED 分为两类：与宿主同树、同配置并配套交付的插件免 AbiProfile；单独交付给已有宿主的插件才执行下面的 Preflight。两类都必须遵守固定符号、入口有效性、ModuleId、依赖、注册事务、CodePin 和生命周期契约。
+ADR-0014 已替代 ADR-0013 曾保留的独立 Pangu 插件二进制交付范围；历史 Preflight 设想不再是当前产品要求。以下为同树、同配置、配套交付的源码 SHARED Module 路径，仍须遵守固定符号、入口有效性、ModuleId、依赖、注册事务、CodePin 和生命周期契约。
 
-1. **Build-Time / Delivery-Time**：配套插件不生成 AbiProfile。独立交付插件的下一版兼容描述与实际产物绑定方式尚未冻结，不能用用户手填声明代替。
-2. **Preflight（仅独立交付插件，OS Load 之前）**：不执行候选模块代码，验证与将要加载的实际产物绑定的目标 ABI、协议、Query/ModuleDefinition Public Module API Contract 及必要平台事实；无法可信绑定、解决检查后替换风险或确认兼容时 **Fail Closed，禁止 OS Load 和 C++ Query**。
-3. **OS Load**：由 ModuleManager 取得并维护真实动态库句柄；`LoadLibrary/dlopen` 可能先执行 DLL 初始化器及全局构造，因此 Preflight 不等于不可信代码沙箱或签名认证。
-4. **Symbol Lookup / C++ Query**：用 `GetProcAddress/dlsym` 等定位固定版本符号，按满足当前边界要求的 C++ 函数类型调用，获得 `const ModuleDefinition*`；返回空值/失配视为失败。独立交付插件必须在 Preflight 后调用；配套插件可直接进入该步骤。Query 不得通过静态构造完成业务注册。
-5. **Post-Load Recheck**：独立交付插件继续核对 Query 返回的协议、ModuleId、依赖、Public Interface Contract 与预检材料；配套插件执行不依赖 AbiProfile 的入口、身份、依赖和接口检查。Descriptor 的借用 `span/string_view` 必须在卸载前复制到 Host 存储；任意失败均不进入注册。
+1. **Build-Time / Delivery-Time**：配套源码插件由同一受控 CMake 图编译，不生成 AbiProfile；系统 SDK/普通 ThirdParty 预编译依赖继续按自身契约审查。
+2. **Explicit Selection / Deployment**：应用显式选择 Module 路径与部署集合；源码 Plugin 的发现/启用以及文件复制不自动构成运行时激活，不扫描未知动态库并赋予执行权限。
+3. **OS Load**：由 ModuleManager 取得并维护真实动态库句柄；`LoadLibrary/dlopen` 可能先执行 DLL 初始化器及全局构造，后续符号检查不构成不可信代码沙箱或签名认证。
+4. **Symbol Lookup / C++ Query**：用 `GetProcAddress/dlsym` 等定位固定版本符号，按满足当前边界要求的 C++ 函数类型调用，获得 `const ModuleDefinition*`；返回空值/失配视为失败。Query 不得通过静态构造完成业务注册。
+5. **Post-Load Recheck**：执行不依赖 AbiProfile 的协议、入口、ModuleId、依赖和接口检查。Descriptor 的借用 `span/string_view` 必须在卸载前复制到 Host 存储；任意失败均不进入注册。
 6. **Native C++ Registration**：对 STATIC 与 SHARED 一律由 ModuleManager 调用 `ModuleDefinition::RegisterModule(RegistrationContext&)`，返回 `pg::Status`（具体类型仍待 ADR-0007 API 冻结），使用同一事务、Scope/Owner、Error 报告、回滚与 CodePin 规则。无需转换 C 错误码或调用单独注册 Bridge。
 
 **数据与生命周期约束**：模块查询入口仅定位/返回元数据，不负责初始化业务实例。Query/注册入口和回调的所在代码必须驻留；引用字段和析构/分配器来源受 Memory Contract 约束。Module 卸载先撤销业务与在途调用、排空 Scope Borrow，最后释放实际动态库。静态 Module 不进行 OS Unload。
 
-**冻结范围区分**：**统一 C++23 ModuleDefinition/Registration + SHARED 稳定 C-linkage 符号定位** 的机制保持 ADR-0010 约束；`PanguModuleQueryV1` 的最终名称、`ModuleDefinition` 的 Public 类型布局/接口契约、载入前可信产物绑定工艺、导出调用约定、错误及并发实现仍属 Draft/待验证，不宣称跨平台已验收。
+**冻结范围区分**：**统一 C++23 ModuleDefinition/Registration + SHARED 稳定 C-linkage 符号定位** 的机制保持 ADR-0010 约束；`PanguModuleQueryV1` 的最终名称、`ModuleDefinition` 的 Public 类型布局/接口契约、导出调用约定、错误及并发实现仍属 Draft/待验证，不宣称生产 Loader 跨平台已验收。
 
 ## 5. RegistrationContext：声明与提交分离
 

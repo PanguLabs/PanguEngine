@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 4.0)
+file(APPEND "${CMAKE_BINARY_DIR}/PluginVisits.txt" "pangu.physics\n")
+add_library(PanguPhysics STATIC Private/Physics.cpp)
+add_library(Pangu::Physics ALIAS PanguPhysics)
+pangu_configure_module(PanguPhysics)
+target_include_directories(PanguPhysics PRIVATE "${CMAKE_SOURCE_DIR}/Source")
+target_link_libraries(PanguPhysics PUBLIC Pangu::Module)

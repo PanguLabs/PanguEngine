@@ -17,6 +17,8 @@ PanguEngine 需要同时支持 Game、Editor 以及工具型宿主。早期使�
 5. Host 负责或协调依赖对象的生命周期闭包：Module 代码、Task、Callback、Resource、Allocator 及 GPU 工作都可能影响关闭或卸载的完成时机。
 6. 不采用**强制 C Bootstrap** 作为整套引擎架构的基础；必要的 ABI 边界互操作仍可使用 C 接口。
 
+源码 Plugin 与独立 Project 的构建边界由 [ADR-0014](../decisions/0014-source-plugins-project-build.md) 规定。Game/Editor fixture 已验证各自 STATIC Catalog 及按消费者构建的模块集合；SHARED 显式部署只产生文件，不等于 EngineHost 运行时激活、动态 Loader 或 CodePin 已实现。具体已验证平台见[验收记录](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md)。
+
 以上不意味着每一个生命周期阶段都有固定枚举名或必须由单个类直接执行。
 
 ## 概念关系
