@@ -1,66 +1,33 @@
 cmake_minimum_required(VERSION 4.0)
 
-add_test(NAME SourcePluginBuildTool
-    COMMAND "${CMAKE_COMMAND}"
-        "-DPANGU_ENGINE_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
-        "-DPANGU_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/BuildToolConfigure"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolConfigureTests.cmake"
-)
-
-add_test(NAME SourcePluginBuildToolInvalidation
-    COMMAND "${CMAKE_COMMAND}"
-        "-DPANGU_ENGINE_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
-        "-DPANGU_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/BuildToolInvalidation"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolInvalidationTests.cmake"
-)
-
-add_test(NAME SourcePluginEngineRevision
-    COMMAND "${CMAKE_COMMAND}"
-        "-DPANGU_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
-        "-DPANGU_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/EngineRevision"
-        -P "${PROJECT_SOURCE_DIR}/Tests/CMake/SourcePluginProject/EngineRevisionTests.cmake"
-)
-
-add_test(NAME SourcePluginProject
-    COMMAND "${CMAKE_COMMAND}"
-        "-DPANGU_ENGINE_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
-        "-DPANGU_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/SourcePluginProject"
-        -P "${PROJECT_SOURCE_DIR}/Tests/CMake/SourcePluginProject/RunIntegration.cmake"
-)
-
-if(WIN32)
-    add_test(NAME SourcePluginBuildToolSourceChange
-        COMMAND "${CMAKE_COMMAND}"
+function(pangu_source_plugin_test name script)
+    pangu_register_test(NAME "${name}"
+        COMMAND "${CMAKE_COMMAND}" -E env "CMAKE_BUILD_PARALLEL_LEVEL=${PANGU_TEST_BUILD_JOBS}"
+            "${CMAKE_COMMAND}"
             "-DPANGU_ENGINE_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
-            "-DPANGU_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/BuildToolSourceChange"
-            -P "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolSourceChangeTests.cmake"
-    )
+            "-DPANGU_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+            "-DPANGU_TEST_ROOT=${CMAKE_BINARY_DIR}/Tests/Work/${name}"
+            "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
+            ${ARGN} -P "${script}"
+        BOUNDARY system AREA plugins TIER full TYPES regression
+        REQUIRES subprocess nested-build PROCESSORS "${PANGU_TEST_BUILD_JOBS}" TIMEOUT 900)
+endfunction()
+
+pangu_source_plugin_test(SourcePluginBuildTool "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolConfigureTests.cmake")
+foreach(scenario IN ITEMS Invalidation FileLinks DirectoryLinks)
+    pangu_source_plugin_test("SourcePluginBuildTool${scenario}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolInvalidationTests.cmake"
+        "-DPANGU_INVALIDATION_SCENARIO=${scenario}")
+endforeach()
+if(WIN32)
+    pangu_source_plugin_test(SourcePluginBuildToolSourceChange "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolSourceChangeTests.cmake")
 endif()
-
-add_test(NAME SourcePluginEnable
-    COMMAND "${CMAKE_COMMAND}"
-        "-DPANGU_ENGINE_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
-        "-DPANGU_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/PluginEnable"
-        -P "${PROJECT_SOURCE_DIR}/Tests/CMake/SourcePluginProject/PluginEnableTests.cmake"
-)
-
-add_test(NAME SourcePluginStaticCatalog
-    COMMAND "${CMAKE_COMMAND}"
-        "-DPANGU_ENGINE_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
-        "-DPANGU_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/StaticCatalog"
-        -P "${PROJECT_SOURCE_DIR}/Tests/CMake/SourcePluginProject/StaticCatalogIntegrationTests.cmake"
-)
-
-add_test(NAME SourcePluginSharedDeploy
-    COMMAND "${CMAKE_COMMAND}"
-        "-DPANGU_ENGINE_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
-        "-DPANGU_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/SharedDeploy"
-        -P "${PROJECT_SOURCE_DIR}/Tests/CMake/SourcePluginProject/SharedDeployTests.cmake"
-)
-
-add_test(NAME SourcePluginIncremental
-    COMMAND "${CMAKE_COMMAND}"
-        "-DPANGU_ENGINE_SOURCE_DIR=${PROJECT_SOURCE_DIR}"
-        "-DPANGU_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/Incremental"
-        -P "${PROJECT_SOURCE_DIR}/Tests/CMake/SourcePluginProject/IncrementalBuildTests.cmake"
-)
+set(projectTests "${PROJECT_SOURCE_DIR}/Tests/CMake/SourcePluginProject")
+foreach(pair IN ITEMS "EngineRevision|EngineRevisionTests" "Project|RunIntegration" "Enable|PluginEnableTests"
+        "StaticCatalog|StaticCatalogIntegrationTests" "SharedDeploy|SharedDeployTests" "Incremental|IncrementalBuildTests"
+        "TestOwnership|PluginTestOwnershipTests")
+    string(REPLACE "|" ";" pair "${pair}")
+    list(GET pair 0 name)
+    list(GET pair 1 script)
+    pangu_source_plugin_test("SourcePlugin${name}" "${projectTests}/${script}.cmake")
+endforeach()

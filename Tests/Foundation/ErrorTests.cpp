@@ -1,6 +1,8 @@
 #include <Error.h>
 #include <Result.h>
 
+#include <gtest/gtest.h>
+
 #include <concepts>
 #include <cstdint>
 #include <expected>
@@ -80,24 +82,67 @@ static_assert(std::same_as<pg::Result<void>, pg::Status>);
 
 static_assert(TestExpectedValues());
 
-bool TestErrorPropagation()
+TEST(Error, PreservesDomainCodeAndNativeValue)
+{
+    EXPECT_EQ(pg::MakeError(kDomain, 42), kSimple);
+    EXPECT_EQ(kSimple.Domain(), kDomain);
+    EXPECT_EQ(kSimple.Code(), 42);
+    EXPECT_FALSE(kSimple.Native().has_value());
+    const auto native = kWithNative.Native();
+    if (native.has_value())
+    {
+        EXPECT_EQ(native->Source, NativeErrorSourceId{7});
+        EXPECT_EQ(native->Value, -17);
+    }
+    else
+    {
+        FAIL() << "Native diagnostics must be present";
+    }
+    EXPECT_NE(kSimple, kWithNative);
+    EXPECT_NE(kSimple, (Error{kDifferentDomain, 42}));
+}
+
+TEST(Result, SuccessPreservesExactValue)
+{
+    const pg::Result<int> result{17};
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(*result, 17);
+}
+
+TEST(Result, SuccessfulPropagationReturns124)
 {
     const auto succeeded = PropagateDummy(false);
+    ASSERT_TRUE(succeeded.has_value());
+    EXPECT_EQ(*succeeded, 124);
+}
+
+TEST(Result, FailedPropagationPreservesOriginalError)
+{
     const auto failed = PropagateDummy(true);
-    if (!succeeded || *succeeded != 124 || failed || failed.error() != kWithNative)
+    ASSERT_FALSE(failed.has_value());
+    EXPECT_EQ(failed.error(), kWithNative);
+    const auto native = failed.error().Native();
+    if (native.has_value())
     {
-        return false;
+        EXPECT_EQ(native->Source, kNative.Source);
+        EXPECT_EQ(native->Value, kNative.Value);
     }
-
-    if (pg::MakeError(kDomain, 42) != kSimple)
+    else
     {
-        return false;
+        FAIL() << "Propagation must preserve native diagnostics";
     }
+}
 
+TEST(Status, SuccessHasNoError)
+{
     const auto statusOk = CheckDummy(false);
+    EXPECT_TRUE(statusOk.has_value());
+}
+
+TEST(Status, FailurePreservesOriginalError)
+{
     const auto statusFailed = CheckDummy(true);
-    return statusOk && !statusFailed && statusFailed.error() == kSimple;
+    ASSERT_FALSE(statusFailed.has_value());
+    EXPECT_EQ(statusFailed.error(), kSimple);
 }
 } // namespace
-
-int main() { return TestErrorPropagation() ? 0 : 1; }

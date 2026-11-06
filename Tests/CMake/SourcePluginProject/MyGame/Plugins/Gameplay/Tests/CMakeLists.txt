@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 4.0)
+include("${PANGU_ENGINE_SOURCE_DIR}/cmake/PanguTestDependencies.cmake")
+pangu_require_googletest(RTTI ON)
+add_executable(MyGameGameplayPluginTests PluginBehaviorTests.cpp)
+target_include_directories(MyGameGameplayPluginTests PRIVATE "${CMAKE_SOURCE_DIR}/Source")
+target_link_libraries(MyGameGameplayPluginTests PRIVATE PanguBuildOptions Pangu::Gameplay ThirdParty::GoogleTestMain)
+pangu_register_gtest(TARGET MyGameGameplayPluginTests BOUNDARY unit AREA build TIER fast)

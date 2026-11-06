@@ -35,6 +35,8 @@ function(ConfigureProject name testing engineTests)
             "-DBUILD_TESTING:BOOL=${testing}"
             "-DPANGU_BUILD_ENGINE_TESTS:BOOL=${engineTests}"
             "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=ON"
+            "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
+            -DPANGU_FIXTURE_UNCLASSIFIED_ENGINE_TEST=OFF
         RESULT_VARIABLE rc OUTPUT_VARIABLE output ERROR_VARIABLE error)
     if(NOT rc EQUAL 0)
         message(FATAL_ERROR "MyGame configure ${name} failed: ${rc}\n${output}\n${error}")
@@ -43,12 +45,28 @@ function(ConfigureProject name testing engineTests)
     if(NOT cache MATCHES "CMAKE_PROJECT_NAME:STATIC=MyGame")
         message(FATAL_ERROR "MyGame must own top-level CMake project: ${name}")
     endif()
-    execute_process(COMMAND "${CMAKE_COMMAND}" --build "${binary}" --target MyGameProbe
+    execute_process(COMMAND "${CMAKE_COMMAND}" --build "${binary}" --parallel "${PANGU_TEST_BUILD_JOBS}" --target MyGameProbe
         RESULT_VARIABLE rc OUTPUT_VARIABLE output ERROR_VARIABLE error)
     if(NOT rc EQUAL 0)
         message(FATAL_ERROR "MyGameProbe build ${name} failed: ${rc}\n${output}\n${error}")
     endif()
-    execute_process(COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${binary}" -N
+    if(engineTests)
+        # PRE_TEST 发现必须基于已构建的程序，不能接受 NOT_BUILT 占位条目。
+        # 聚合目标包含嵌套工具准备，外层串行，工具内部消费同一处理器预算。
+        execute_process(COMMAND "${CMAKE_COMMAND}" --build "${binary}" --parallel 1 --target PanguTestsFull
+            RESULT_VARIABLE rc OUTPUT_VARIABLE output ERROR_VARIABLE error)
+        if(NOT rc EQUAL 0)
+            message(FATAL_ERROR "Engine unit tests build ${name} failed: ${rc}\n${output}\n${error}")
+        endif()
+        execute_process(COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${binary}"
+            --show-only=json-v1
+            RESULT_VARIABLE rc OUTPUT_VARIABLE testsJson ERROR_VARIABLE errors)
+        if(NOT rc EQUAL 0)
+            message(FATAL_ERROR "Engine unit tests discovery ${name} failed: ${rc}\n${errors}")
+        endif()
+        set("${name}_CTEST_JSON" "${testsJson}" PARENT_SCOPE)
+    endif()
+    execute_process(COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${binary}" --show-only=json-v1
         RESULT_VARIABLE rc OUTPUT_VARIABLE listed ERROR_VARIABLE errors)
     if(NOT rc EQUAL 0)
         message(FATAL_ERROR "MyGame CTest query failed: ${rc}\n${errors}")
@@ -56,10 +74,54 @@ function(ConfigureProject name testing engineTests)
     set("${name}_CTEST_LIST" "${listed}" PARENT_SCOPE)
 endfunction()
 
+function(CheckEmbeddedClassification name expected)
+    execute_process(COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${PANGU_TEST_ROOT}/EngineOptIn"
+        -R "^TestingScriptClassification$" --no-tests=error --output-on-failure
+        --parallel "${PANGU_TEST_BUILD_JOBS}"
+        RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE error)
+    file(WRITE "${PANGU_TEST_ROOT}/EngineOptIn-classification-${name}.log"
+        "command=${CMAKE_CTEST_COMMAND} --test-dir ${PANGU_TEST_ROOT}/EngineOptIn -R ^TestingScriptClassification$ --no-tests=error --output-on-failure --parallel ${PANGU_TEST_BUILD_JOBS}\nexit=${status}\n${output}\n${error}")
+    if(expected STREQUAL "PASS")
+        if(NOT status EQUAL 0)
+            message(FATAL_ERROR "Embedded Engine classification failed: ${status}\n${output}\n${error}")
+        endif()
+    else()
+        string(REGEX REPLACE "[ \t\r\n]+" " " diagnostic "${output}\n${error}")
+        string(FIND "${diagnostic}"
+            "UnclassifiedEngineProbe: an existing Engine regression is missing classification/full ownership:" found)
+        if(status EQUAL 0 OR found LESS 0)
+            message(FATAL_ERROR "Unclassified Engine test was not rejected: ${status}\n${output}\n${error}")
+        endif()
+    endif()
+    message(STATUS "Embedded classification ${name}: expected ${expected}, exit=${status}")
+endfunction()
+
+function(ConfigureUnclassifiedEngineCase enabled)
+    execute_process(COMMAND "${CMAKE_COMMAND}" -S "${source}" -B "${PANGU_TEST_ROOT}/EngineOptIn"
+        "-DPANGU_FIXTURE_UNCLASSIFIED_ENGINE_TEST=${enabled}"
+        RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE error)
+    file(WRITE "${PANGU_TEST_ROOT}/EngineOptIn-unclassified-${enabled}.log"
+        "exit=${status}\n${output}\n${error}")
+    if(NOT status EQUAL 0)
+        message(FATAL_ERROR "Cannot configure unclassified Engine test (${enabled}): ${status}\n${output}\n${error}")
+    endif()
+endfunction()
+
 ConfigureProject(Enabled ON OFF)
-if(NOT Enabled_CTEST_LIST MATCHES "Total Tests: 1" OR
-   Enabled_CTEST_LIST MATCHES "ModuleIdentity|StaticModuleCatalog")
-    message(FATAL_ERROR "Project CTest must contain only MyGameProbe by default:\n${Enabled_CTEST_LIST}")
+string(JSON enabledCount LENGTH "${Enabled_CTEST_LIST}" tests)
+set(projectProbeFound OFF)
+if(enabledCount GREATER 0)
+    math(EXPR lastEnabled "${enabledCount} - 1")
+    foreach(index RANGE 0 ${lastEnabled})
+        string(JSON name GET "${Enabled_CTEST_LIST}" tests ${index} name)
+        if(NOT name STREQUAL "MyGameProbe")
+            message(FATAL_ERROR "Default Project registered an unexpected Engine test: ${name}")
+        endif()
+        set(projectProbeFound ON)
+    endforeach()
+endif()
+if(NOT projectProbeFound)
+    message(FATAL_ERROR "Default Project omitted MyGameProbe")
 endif()
 execute_process(COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${PANGU_TEST_ROOT}/Enabled"
     -R "^MyGameProbe$" --output-on-failure RESULT_VARIABLE rc)
@@ -68,17 +130,53 @@ if(NOT rc EQUAL 0)
 endif()
 
 ConfigureProject(Disabled OFF OFF)
-if(NOT Disabled_CTEST_LIST MATCHES "Total Tests: 0")
+string(JSON disabledCount LENGTH "${Disabled_CTEST_LIST}" tests)
+if(NOT disabledCount EQUAL 0)
     message(FATAL_ERROR "Project BUILD_TESTING=OFF must register no tests:\n${Disabled_CTEST_LIST}")
 endif()
 
 ConfigureProject(EngineOptIn ON ON)
-if(NOT EngineOptIn_CTEST_LIST MATCHES "ModuleIdentity")
-    message(FATAL_ERROR "Project explicit PANGU_BUILD_ENGINE_TESTS=ON should register Engine tests")
+CheckEmbeddedClassification(valid PASS)
+string(JSON engineTestCount LENGTH "${EngineOptIn_CTEST_JSON}" tests)
+if(engineTestCount EQUAL 0 OR
+   NOT EngineOptIn_CTEST_LIST MATCHES "PanguModuleUnitTests[.]ModuleIdentity[.]ParseAndFormat")
+    message(FATAL_ERROR "Project explicit PANGU_BUILD_ENGINE_TESTS=ON must discover actual Engine unit tests")
 endif()
+math(EXPR lastEngineTest "${engineTestCount} - 1")
+foreach(index RANGE 0 ${lastEngineTest})
+    string(JSON testName GET "${EngineOptIn_CTEST_JSON}" tests ${index} name)
+    if(testName STREQUAL "MyGameProbe")
+        continue()
+    endif()
+    if(testName MATCHES "NOT_BUILT")
+        message(FATAL_ERROR "Engine unit test discovery returned an invalid entry: ${testName}")
+    endif()
+    string(JSON propertyCount LENGTH "${EngineOptIn_CTEST_JSON}" tests ${index} properties)
+    math(EXPR lastProperty "${propertyCount} - 1")
+    set(hasEngineOwner OFF)
+    foreach(propertyIndex RANGE 0 ${lastProperty})
+        string(JSON property GET "${EngineOptIn_CTEST_JSON}" tests ${index} properties ${propertyIndex})
+        string(JSON propertyName GET "${property}" name)
+        if(propertyName STREQUAL "LABELS")
+            string(JSON labels GET "${property}" value)
+            if(labels MATCHES "\"owner[.]engine\"" AND NOT labels MATCHES "\"owner[.]project\"")
+                set(hasEngineOwner ON)
+            endif()
+        endif()
+    endforeach()
+    if(NOT hasEngineOwner)
+        message(FATAL_ERROR "Engine unit test must retain owner.engine when embedded in Project: ${testName}")
+    endif()
+endforeach()
+
+# 同次运行生成反例并恢复；不依赖预存 fixture，也不递归执行 Engine 系统测试。
+ConfigureUnclassifiedEngineCase(ON)
+CheckEmbeddedClassification(unclassified-engine FAIL)
+ConfigureUnclassifiedEngineCase(OFF)
+CheckEmbeddedClassification(restored PASS)
 
 file(WRITE "${source}/Engine.commit" "invalid-new-lock\n")
-execute_process(COMMAND "${CMAKE_COMMAND}" --build "${PANGU_TEST_ROOT}/Enabled" --target MyGameProbe
+execute_process(COMMAND "${CMAKE_COMMAND}" --build "${PANGU_TEST_ROOT}/Enabled" --parallel "${PANGU_TEST_BUILD_JOBS}" --target MyGameProbe
     RESULT_VARIABLE lockStatus OUTPUT_VARIABLE lockOutput ERROR_VARIABLE lockError)
 if(lockStatus EQUAL 0 OR NOT "${lockOutput}\n${lockError}" MATCHES "Engine[.]commit")
     message(FATAL_ERROR "Changing only Engine.commit must trigger lock revalidation: ${lockStatus}\n${lockOutput}\n${lockError}")

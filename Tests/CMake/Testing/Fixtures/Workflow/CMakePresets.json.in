@@ -1,0 +1,29 @@
+{
+  "version": 9,
+  "include": ["@PANGU_ENGINE_ROOT@/cmake/Platform/@platformDirectory@/CMakePresets.json"],
+  "configurePresets": [{
+    "name": "fixture", "inherits": "@platform@", "binaryDir": "@binary@",
+    @fixtureToolchain@
+    "cacheVariables": {"PANGU_ENGINE_ROOT": "@PANGU_ENGINE_ROOT@"}
+  }],
+  "buildPresets": [
+    {"name": "fixture-fast", "inherits": "@platform@-fast", "configurePreset": "fixture"},
+    {"name": "fixture-full", "inherits": "@platform@-full", "configurePreset": "fixture"}
+  ],
+  "testPresets": [
+    {"name": "fixture-fast", "inherits": "@platform@-fast", "configurePreset": "fixture"},
+    {"name": "fixture-full", "inherits": "@platform@-full", "configurePreset": "fixture"}
+  ],
+  "workflowPresets": [
+    {"name": "fixture-fast", "steps": [
+      {"type": "configure", "name": "fixture"},
+      {"type": "build", "name": "fixture-fast"},
+      {"type": "test", "name": "fixture-fast"}
+    ]},
+    {"name": "fixture-full", "steps": [
+      {"type": "configure", "name": "fixture"},
+      {"type": "build", "name": "fixture-full"},
+      {"type": "test", "name": "fixture-full"}
+    ]}
+  ]
+}

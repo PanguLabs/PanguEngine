@@ -1,0 +1,6 @@
+include("${PANGU_FULL_PARAMETERS}")
+foreach(option IN ITEMS BUILD_TESTING PANGU_BUILD_ENGINE_TESTS)
+    if(NOT ${option})
+        message(FATAL_ERROR "Engine full requires ${option}=ON")
+    endif()
+endforeach()

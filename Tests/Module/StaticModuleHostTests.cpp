@@ -1,3 +1,5 @@
+#include <gtest/gtest.h>
+
 #include "ModuleIdentity.h"
 #include "Result.h"
 #include <ModuleDescriptor.h>
@@ -9,7 +11,6 @@
 #include <bit>
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
 #include <span>
 #include <string>
 #include <string_view>
@@ -41,14 +42,29 @@ ModuleDefinition Definition(ModuleId id, std::span<const ModuleDependency> depen
     };
 }
 
-// Query has no user-data argument. This serial fixture supplies bounded-lifetime candidates.
+// Query 没有用户数据参数；串行夹具只在局部定义存活期间提供候选入口。
 struct Candidates
 {
+    Candidates() { Reset(); }
+    ~Candidates() { Reset(); }
+    Candidates(const Candidates&) = delete;
+    Candidates& operator=(const Candidates&) = delete;
+    Candidates(Candidates&&) = delete;
+    Candidates& operator=(Candidates&&) = delete;
+
     inline static const ModuleDefinition* gFirst{};
     inline static const ModuleDefinition* gSecond{};
     inline static int gQueries{};
     inline static ModuleOperationReport* gNestedReport{};
     inline static RegistrationScope* gNestedScope{};
+    static void Reset() noexcept
+    {
+        gFirst = nullptr;
+        gSecond = nullptr;
+        gQueries = 0;
+        gNestedReport = nullptr;
+        gNestedScope = nullptr;
+    }
     static const ModuleDefinition* QueryFirst() noexcept
     {
         ++gQueries;
@@ -70,8 +86,9 @@ constexpr std::array kEntries{StaticCatalogEntry{Candidates::QueryFirst}, Static
 
 bool IsError(const auto& result, ModuleError code) { return !result && result.error() == MakeModuleError(code); }
 
-bool CopiesMetadataBeforeSourceDestruction()
+TEST(StaticModuleHost, CopiesMetadataBeforeSourceDestruction)
 {
+    const Candidates callbackState;
     RegistrationScope scope;
     ModuleOperationReport report;
     auto host = [&]
@@ -94,73 +111,58 @@ bool CopiesMetadataBeforeSourceDestruction()
     }();
     Candidates::gFirst = nullptr;
     Candidates::gSecond = nullptr;
-    if (!host || Candidates::gQueries != 2 || host->Modules().size() != 2 ||
-        report.Progress != ModuleOperationProgress::kLoaded || report.PrimaryError)
-    {
-        return false;
-    }
+    ASSERT_TRUE(host);
+    ASSERT_EQ(Candidates::gQueries, 2);
+    ASSERT_EQ(host->Modules().size(), 2);
+    ASSERT_EQ(report.Progress, ModuleOperationProgress::kLoaded);
+    ASSERT_FALSE(report.PrimaryError);
     auto const moved = std::move(*host);
     const auto& descriptor = moved.Modules().front().Descriptor;
     const auto order = moved.RegistrationOrder();
-    return descriptor.DisplayName == "owned name" && descriptor.BuildIdentity == "owned build" &&
-           descriptor.Dependencies.front().Id == kSecond && order.size() == 2 && order.front() == kSecond &&
-           order.back() == kFirst;
+    ASSERT_EQ(descriptor.DisplayName, "owned name");
+    ASSERT_EQ(descriptor.BuildIdentity, "owned build");
+    ASSERT_EQ(descriptor.Dependencies.front().Id, kSecond);
+    ASSERT_EQ(order.size(), 2);
+    ASSERT_EQ(order.front(), kSecond);
+    ASSERT_EQ(order.back(), kFirst);
 }
 
-bool RejectsInvalidDefinitionsAndIdentity()
+TEST(StaticModuleHost, RejectsInvalidDefinitionsAndIdentity)
 {
+    const Candidates callbackState;
     RegistrationScope scope;
     ModuleOperationReport report;
     const std::array emptyQuery{StaticCatalogEntry{}};
-    if (!IsError(StaticModuleHost::Create({emptyQuery}, scope, {}, report), ModuleError::kInvalidDefinition))
-    {
-        return false;
-    }
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({emptyQuery}, scope, {}, report), ModuleError::kInvalidDefinition));
     const auto one = std::span(kEntries).first<1>();
     Candidates::gFirst = nullptr;
-    if (!IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDefinition))
-    {
-        return false;
-    }
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDefinition));
     auto first = Definition(kFirst);
     Candidates::gFirst = &first;
     first.RegisterModule = nullptr;
-    if (!IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDefinition))
-    {
-        return false;
-    }
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDefinition));
     first = Definition({});
-    if (!IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDescriptor))
-    {
-        return false;
-    }
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDescriptor));
     first = Definition(kFirst);
     first.Descriptor.ProtocolVersion = 2;
-    if (!IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDescriptor))
-    {
-        return false;
-    }
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDescriptor));
     first = Definition(kFirst);
     first.Descriptor.Version = {};
     const auto zeroVersion = StaticModuleHost::Create({one}, scope, {}, report);
-    if (!zeroVersion)
-    {
-        return false;
-    }
+    ASSERT_TRUE(zeroVersion);
     const StaticModuleCatalog nested{};
     first.LinkedStaticModules = &nested;
-    if (!IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDefinition))
-    {
-        return false;
-    }
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDefinition));
     first = Definition(kFirst);
     Candidates::gSecond = &first;
-    return IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kDuplicateModule) &&
-           report.Module == kFirst && report.PrimaryError == MakeModuleError(ModuleError::kDuplicateModule);
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kDuplicateModule));
+    ASSERT_EQ(report.Module, kFirst);
+    ASSERT_EQ(report.PrimaryError, MakeModuleError(ModuleError::kDuplicateModule));
 }
 
-bool EnforcesLimitsBeforeCopying()
+TEST(StaticModuleHost, EnforcesLimitsBeforeCopying)
 {
+    const Candidates callbackState;
     RegistrationScope scope;
     ModuleOperationReport report;
     auto first = Definition(kFirst);
@@ -168,34 +170,23 @@ bool EnforcesLimitsBeforeCopying()
     const auto one = std::span(kEntries).first<1>();
     std::string name(256, 'n');
     first.Descriptor.DisplayName = name;
-    if (!StaticModuleHost::Create({one}, scope, {}, report))
-    {
-        return false;
-    }
+    ASSERT_TRUE(StaticModuleHost::Create({one}, scope, {}, report));
     name.push_back('n');
     first.Descriptor.DisplayName = name;
-    if (!IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kLimitExceeded))
-    {
-        return false;
-    }
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kLimitExceeded));
     first = Definition(kFirst);
     first.Descriptor.BuildIdentity = name;
-    if (!IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kLimitExceeded))
-    {
-        return false;
-    }
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kLimitExceeded));
     std::array<ModuleDependency, 65> dependencies{};
     first = Definition(kFirst, dependencies);
-    if (!IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kLimitExceeded))
-    {
-        return false;
-    }
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kLimitExceeded));
     const std::array<StaticCatalogEntry, 257> entries{};
-    return IsError(StaticModuleHost::Create({entries}, scope, {}, report), ModuleError::kLimitExceeded);
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({entries}, scope, {}, report), ModuleError::kLimitExceeded));
 }
 
-bool ValidatesDependencies()
+TEST(StaticModuleHost, ValidatesDependencies)
 {
+    const Candidates callbackState;
     RegistrationScope scope;
     ModuleOperationReport report;
     auto second = Definition(kSecond);
@@ -204,11 +195,9 @@ bool ValidatesDependencies()
     auto first = Definition(kFirst, dependencies);
     Candidates::gFirst = &first;
     const auto one = std::span(kEntries).first<1>();
-    if (!IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kMissingDependency) ||
-        report.Module != kFirst || report.RelatedModule != kSecond)
-    {
-        return false;
-    }
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kMissingDependency));
+    ASSERT_EQ(report.Module, kFirst);
+    ASSERT_EQ(report.RelatedModule, kSecond);
     constexpr std::array kWrongVersions{
         ModuleVersion{.Major = 0, .Minor = 2, .Patch = 3},
         ModuleVersion{.Major = 1, .Minor = 0, .Patch = 3},
@@ -217,34 +206,26 @@ bool ValidatesDependencies()
     for (const ModuleVersion version : kWrongVersions)
     {
         second.Descriptor.Version = version;
-        if (!IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kVersionMismatch))
-        {
-            return false;
-        }
+        ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kVersionMismatch));
     }
     second.Descriptor.Version = kVersion;
     for (const auto id : {ModuleId(), kFirst})
     {
         dependencies.front().Id = id;
-        if (!IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kInvalidDependency))
-        {
-            return false;
-        }
+        ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kInvalidDependency));
     }
     dependencies.front().Id = kSecond;
     dependencies.front().Kind = std::bit_cast<DependencyKind>(std::uint8_t{255});
-    if (!IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kInvalidDependency))
-    {
-        return false;
-    }
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kInvalidDependency));
     dependencies.front().Kind = DependencyKind::kRequired;
     const std::array duplicate{dependencies.front(), dependencies.front()};
     first.Descriptor.Dependencies = duplicate;
-    return IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kInvalidDependency);
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kInvalidDependency));
 }
 
-bool OptionalSelectionIsExplicitAndRejectsCycles()
+TEST(StaticModuleHost, OptionalSelectionIsExplicitAndRejectsCycles)
 {
+    const Candidates callbackState;
     RegistrationScope scope;
     ModuleOperationReport report;
     constexpr ModuleDependency kOptionalDependency{
@@ -265,24 +246,18 @@ bool OptionalSelectionIsExplicitAndRejectsCycles()
         return host && host->Modules().front().Bindings.front().Reason == expected &&
                !host->Modules().front().Bindings.front().IsBound();
     };
-    if (!reason(DependencyBindingReason::kNotSelected, true) || !reason(DependencyBindingReason::kMissing, false))
-    {
-        return false;
-    }
+    ASSERT_TRUE(reason(DependencyBindingReason::kNotSelected, true));
+    ASSERT_TRUE(reason(DependencyBindingReason::kMissing, false));
     second.Descriptor.Version = {};
-    if (!reason(DependencyBindingReason::kVersionMismatch, true) ||
-        !IsError(StaticModuleHost::Create({kEntries}, scope, selected, report), ModuleError::kVersionMismatch) ||
-        !IsError(StaticModuleHost::Create({std::span(kEntries).first<1>()}, scope, selected, report),
-                 ModuleError::kMissingDependency))
-    {
-        return false;
-    }
+    ASSERT_TRUE(reason(DependencyBindingReason::kVersionMismatch, true));
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, selected, report), ModuleError::kVersionMismatch));
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({std::span(kEntries).first<1>()}, scope, selected, report),
+                        ModuleError::kMissingDependency));
     second.Descriptor.Version = kVersion;
     auto bound = StaticModuleHost::Create({kEntries}, scope, selected, report);
-    if (!bound || !bound->Modules().front().Bindings.front().IsBound() || bound->RegistrationOrder().front() != kSecond)
-    {
-        return false;
-    }
+    ASSERT_TRUE(bound);
+    ASSERT_TRUE(bound->Modules().front().Bindings.front().IsBound());
+    ASSERT_EQ(bound->RegistrationOrder().front(), kSecond);
     for (const auto binding : {
              OptionalDependencyBinding{.Dependent = kAbsent, .Dependency = kSecond},
              OptionalDependencyBinding{.Dependent = kFirst, .Dependency = kAbsent},
@@ -290,27 +265,20 @@ bool OptionalSelectionIsExplicitAndRejectsCycles()
          })
     {
         const std::array invalid{binding};
-        if (!IsError(StaticModuleHost::Create({kEntries}, scope, invalid, report),
-                     ModuleError::kInvalidOptionalBinding))
-        {
-            return false;
-        }
+        ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, invalid, report),
+                            ModuleError::kInvalidOptionalBinding));
     }
     const std::array duplicate{selected.front(), selected.front()};
-    if (!IsError(StaticModuleHost::Create({kEntries}, scope, duplicate, report), ModuleError::kInvalidOptionalBinding))
-    {
-        return false;
-    }
+    ASSERT_TRUE(
+        IsError(StaticModuleHost::Create({kEntries}, scope, duplicate, report), ModuleError::kInvalidOptionalBinding));
     const std::array backEdge{ModuleDependency{.Id = kFirst, .Version = kVersion}};
     second.Descriptor.Dependencies = backEdge;
-    if (!StaticModuleHost::Create({kEntries}, scope, {}, report))
-    {
-        return false;
-    }
-    return IsError(StaticModuleHost::Create({kEntries}, scope, selected, report), ModuleError::kDependencyCycle);
+    ASSERT_TRUE(StaticModuleHost::Create({kEntries}, scope, {}, report));
+    ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, selected, report), ModuleError::kDependencyCycle));
 }
-bool NestedQueryCannotPolluteOuterReport()
+TEST(StaticModuleHost, NestedQueryCannotPolluteOuterReport)
 {
+    const Candidates callbackState;
     RegistrationScope scope;
     ModuleOperationReport report;
     const auto first = Definition(kFirst);
@@ -320,29 +288,10 @@ bool NestedQueryCannotPolluteOuterReport()
     const auto host = StaticModuleHost::Create({std::span(kEntries).first<1>()}, scope, {}, report);
     Candidates::gNestedReport = nullptr;
     Candidates::gNestedScope = nullptr;
-    return host && !report.PrimaryError && report.Progress == ModuleOperationProgress::kLoaded &&
-           report.Module == ModuleId() && report.RelatedModule == ModuleId();
+    ASSERT_TRUE(host);
+    ASSERT_FALSE(report.PrimaryError);
+    ASSERT_EQ(report.Progress, ModuleOperationProgress::kLoaded);
+    ASSERT_EQ(report.Module, ModuleId());
+    ASSERT_EQ(report.RelatedModule, ModuleId());
 }
 } // namespace
-
-int main()
-{
-    const std::array tests{
-        std::pair{"nested Query cannot pollute outer report", NestedQueryCannotPolluteOuterReport},
-        std::pair{"copies metadata before source destruction", CopiesMetadataBeforeSourceDestruction},
-        std::pair{"rejects invalid definitions and identity", RejectsInvalidDefinitionsAndIdentity},
-        std::pair{"enforces limits before copying", EnforcesLimitsBeforeCopying},
-        std::pair{"validates dependencies", ValidatesDependencies},
-        std::pair{"optional selection is explicit and rejects cycles", OptionalSelectionIsExplicitAndRejectsCycles},
-    };
-    int failures = 0;
-    for (const auto& [name, test] : tests)
-    {
-        if (!test())
-        {
-            std::cerr << "FAIL: " << name << '\n';
-            ++failures;
-        }
-    }
-    return failures == 0 ? 0 : 1;
-}

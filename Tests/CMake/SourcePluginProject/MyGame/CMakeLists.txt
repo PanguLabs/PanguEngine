@@ -35,6 +35,16 @@ if(NOT TARGET PanguBuildOptions OR NOT TARGET Pangu::Foundation OR NOT TARGET Pa
     message(FATAL_ERROR "Engine core Targets were not added to the MyGame build graph")
 endif()
 
+pangu_test_context(OWNER project ENABLED "${BUILD_TESTING}")
+
+option(PANGU_FIXTURE_UNCLASSIFIED_ENGINE_TEST "Inject an Engine test without classification" OFF)
+if(PANGU_FIXTURE_UNCLASSIFIED_ENGINE_TEST)
+    # 在实际 Engine 子树注入旧式登记，验证漏标不能因归属过滤而被忽略。
+    set(unclassifiedCase "${CMAKE_CURRENT_BINARY_DIR}/UnclassifiedEngineTest.cmake")
+    file(WRITE "${unclassifiedCase}" "add_test(UnclassifiedEngineProbe \"${CMAKE_COMMAND}\" -E true)\n")
+    set_property(DIRECTORY "${PANGU_ENGINE_SOURCE_DIR}" APPEND PROPERTY TEST_INCLUDE_FILES "${unclassifiedCase}")
+endif()
+
 set(PANGU_FIXTURE_PLUGIN_CMAKE_DIR "${PANGU_ENGINE_SOURCE_DIR}/cmake" CACHE PATH "Isolated mutable build-tool test wiring")
 include("${PANGU_FIXTURE_PLUGIN_CMAKE_DIR}/PanguPlugins.cmake")
 set(PANGU_FIXTURE_ENGINE_ROOT "${PANGU_ENGINE_SOURCE_DIR}" CACHE PATH "Isolated Engine plugin fixture root")
@@ -49,8 +59,19 @@ pangu_add_enabled_plugins(
 add_executable(MyGameProbe Source/Main.cpp)
 target_link_libraries(MyGameProbe PRIVATE PanguBuildOptions Pangu::Foundation Pangu::Module)
 target_link_libraries(MyGameProbe PRIVATE ${PANGU_FIXTURE_PROBE_DEPENDENCIES})
-if(BUILD_TESTING)
-    add_test(NAME MyGameProbe COMMAND MyGameProbe)
+pangu_tests_enabled(projectTestsEnabled)
+if(projectTestsEnabled)
+    pangu_register_test(NAME MyGameProbe COMMAND MyGameProbe
+        BOUNDARY integration AREA build TIER precommit BUILD_TARGETS MyGameProbe)
+    if("pangu.physics" IN_LIST PANGU_ENABLED_PLUGINS AND "mygame.gameplay" IN_LIST PANGU_ENABLED_PLUGINS)
+        include("${PANGU_ENGINE_SOURCE_DIR}/cmake/PanguTestDependencies.cmake")
+        pangu_require_googletest(RTTI ON)
+        add_executable(MyGamePluginCollaborationTests EXCLUDE_FROM_ALL Tests/PluginCollaborationTests.cpp)
+        target_include_directories(MyGamePluginCollaborationTests PRIVATE Source)
+        target_link_libraries(MyGamePluginCollaborationTests PRIVATE
+            PanguBuildOptions Pangu::Gameplay Pangu::Physics ThirdParty::GoogleTestMain)
+        pangu_register_gtest(TARGET MyGamePluginCollaborationTests BOUNDARY integration AREA build TIER fast)
+    endif()
 endif()
 
 option(PANGU_FIXTURE_BUILD_HOSTS "Build the independent catalog consumer fixtures" OFF)

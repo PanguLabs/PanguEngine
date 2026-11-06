@@ -24,6 +24,30 @@
     {
       "name": "macos",
       "configurePreset": "macos"
+    },
+    {
+      "name": "macos-fast",
+      "configurePreset": "macos",
+      "targets": [
+        "PanguTestsFast"
+      ],
+      "jobs": 1
+    },
+    {
+      "name": "macos-precommit",
+      "configurePreset": "macos",
+      "targets": [
+        "PanguTestsPrecommit"
+      ],
+      "jobs": 1
+    },
+    {
+      "name": "macos-full",
+      "configurePreset": "macos",
+      "targets": [
+        "PanguTestsFull"
+      ],
+      "jobs": 1
     }
   ],
   "testPresets": [
@@ -32,7 +56,103 @@
       "configurePreset": "macos",
       "output": {
         "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
       }
+    },
+    {
+      "name": "macos-fast",
+      "configurePreset": "macos",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      },
+      "filter": {
+        "include": {
+          "label": "^run\\.fast$"
+        }
+      }
+    },
+    {
+      "name": "macos-precommit",
+      "configurePreset": "macos",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      },
+      "filter": {
+        "include": {
+          "label": "^run\\.precommit$"
+        }
+      }
+    },
+    {
+      "name": "macos-full",
+      "configurePreset": "macos",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "macos-fast",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "macos"
+        },
+        {
+          "type": "build",
+          "name": "macos-fast"
+        },
+        {
+          "type": "test",
+          "name": "macos-fast"
+        }
+      ]
+    },
+    {
+      "name": "macos-precommit",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "macos"
+        },
+        {
+          "type": "build",
+          "name": "macos-precommit"
+        },
+        {
+          "type": "test",
+          "name": "macos-precommit"
+        }
+      ]
+    },
+    {
+      "name": "macos-full",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "macos"
+        },
+        {
+          "type": "build",
+          "name": "macos-full"
+        },
+        {
+          "type": "test",
+          "name": "macos-full"
+        }
+      ]
     }
   ]
 }

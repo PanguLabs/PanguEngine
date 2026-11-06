@@ -1,5 +1,7 @@
 # ThirdParty 接入与功能封装
 
+正确性测试使用固定版本 GoogleTest/GoogleMock，性能基准使用固定版本 Google Benchmark；它们是 ThirdParty 辅助依赖，不取得 Pangu Module 身份。基准默认关闭且独立于正确性测试，测试运行契约见[测试规范](testing.md)。
+
 > 状态：Partially Frozen（CMake Target 命名、Module/ThirdParty 边界已冻结；获取方式、逐库补丁及部署策略按依赖确定）
 > 更新：2026-11-04
 > 相关：[构建系统](build-system.md)、[工具链](toolchain.md)、[Plugin / Module](../core/plugin-module.md)、[ABI](abi.md)、[ADR-0014 源码 Plugin](../decisions/0014-source-plugins-project-build.md)

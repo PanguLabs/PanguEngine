@@ -1,8 +1,10 @@
 #include "PluginJson.h"
 #include "PathEncoding.h"
+#include "PluginDiscovery.h"
 
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace pg::build::plugin
 {
@@ -65,6 +67,8 @@ std::string PluginsToJson(const std::vector<PluginEntry>& plugins)
         }
         output += "{\"id\":";
         AppendQuoted(output, entry.Metadata.Id);
+        output += ",\"origin\":";
+        AppendQuoted(output, entry.Origin == PluginOrigin::kEngine ? "engine" : "project");
         output += ",\"name\":";
         AppendQuoted(output, entry.Metadata.Name);
         output += ",\"version\":";

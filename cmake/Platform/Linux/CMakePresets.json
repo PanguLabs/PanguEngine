@@ -24,6 +24,30 @@
     {
       "name": "linux",
       "configurePreset": "linux"
+    },
+    {
+      "name": "linux-fast",
+      "configurePreset": "linux",
+      "targets": [
+        "PanguTestsFast"
+      ],
+      "jobs": 1
+    },
+    {
+      "name": "linux-precommit",
+      "configurePreset": "linux",
+      "targets": [
+        "PanguTestsPrecommit"
+      ],
+      "jobs": 1
+    },
+    {
+      "name": "linux-full",
+      "configurePreset": "linux",
+      "targets": [
+        "PanguTestsFull"
+      ],
+      "jobs": 1
     }
   ],
   "testPresets": [
@@ -32,7 +56,103 @@
       "configurePreset": "linux",
       "output": {
         "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
       }
+    },
+    {
+      "name": "linux-fast",
+      "configurePreset": "linux",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      },
+      "filter": {
+        "include": {
+          "label": "^run\\.fast$"
+        }
+      }
+    },
+    {
+      "name": "linux-precommit",
+      "configurePreset": "linux",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      },
+      "filter": {
+        "include": {
+          "label": "^run\\.precommit$"
+        }
+      }
+    },
+    {
+      "name": "linux-full",
+      "configurePreset": "linux",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "linux-fast",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "linux"
+        },
+        {
+          "type": "build",
+          "name": "linux-fast"
+        },
+        {
+          "type": "test",
+          "name": "linux-fast"
+        }
+      ]
+    },
+    {
+      "name": "linux-precommit",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "linux"
+        },
+        {
+          "type": "build",
+          "name": "linux-precommit"
+        },
+        {
+          "type": "test",
+          "name": "linux-precommit"
+        }
+      ]
+    },
+    {
+      "name": "linux-full",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "linux"
+        },
+        {
+          "type": "build",
+          "name": "linux-full"
+        },
+        {
+          "type": "test",
+          "name": "linux-full"
+        }
+      ]
     }
   ]
 }

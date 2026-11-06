@@ -2,6 +2,7 @@
 
 #include "PluginManifest.h"
 
+#include <cstdint>
 #include <expected>
 #include <filesystem>
 #include <optional>
@@ -10,9 +11,16 @@
 
 namespace pg::build::plugin
 {
+enum class PluginOrigin : std::uint8_t
+{
+    kEngine,
+    kProject,
+};
+
 struct PluginEntry
 {
     PluginManifest Metadata;
+    PluginOrigin Origin{PluginOrigin::kEngine};
     std::filesystem::path SourceDir;
     std::filesystem::path ManifestPath;
     std::vector<std::filesystem::path> ConfigureInputs;

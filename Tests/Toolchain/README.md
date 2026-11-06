@@ -2,7 +2,9 @@
 
 本目录保留真实 C++23 编译和链接回归，不经过 AbiProfile，不生成逐 TU 收据，也不扫描 `compile_commands.json` 来判断编译失效。对应 [Tests 维护规范](../README.md) 与 [ADR-0013](../../wiki/decisions/0013-native-build-abi-boundary.md)。
 
-`BUILD_TESTING=ON` 时默认启用 `PANGU_VALIDATE_TOOLCHAIN=ON`；前者关闭则不配置任何测试。交叉编译时只构建编译型探针，不运行设备程序。
+平台检查的编译、最终链接、宿主检查与设备运行边界见[测试分类与运行契约](../../wiki/foundation/testing.md)。
+
+`BUILD_TESTING=ON` 且 `PANGU_BUILD_ENGINE_TESTS=ON` 时始终配置 Toolchain；任一关闭则不接入 Engine 测试。交叉编译时只构建编译型探针，不运行设备程序。
 
 - `ThirdParty/CompiledProbe.cpp`：真实 `ThirdParty::CompiledProbe` STATIC 库，直接使用平台 Clang、STL、C++23，不继承 Pangu Module 专属告警/异常选项。
 - `Module/PolicyProbe.cpp`：真实 `Pangu::ToolchainProbe` STATIC Module，编译期检查 C++23、无异常和平台 STL。
@@ -12,11 +14,11 @@
 
 ```sh
 cmake --preset windows
-cmake --build --preset windows
-ctest --preset windows -R '^ToolchainLibraryLink$' --output-on-failure
+cmake --build --preset windows-full
+ctest --preset windows-full -R '^ToolchainLibraryLink$' --output-on-failure
 ```
 
-Linux/macOS 改用相应 preset。Android/iOS 默认 `BUILD_TESTING=OFF`；要检查上述编译型 target，可在 configure 时显式追加 `-DBUILD_TESTING=ON`。这不验证设备执行或独立预编译 SDK 的 ABI 兼容。
+完整验证可用 `cmake --workflow --preset windows-full`；普通 ALL 构建不保证独立宿主测试已准备。Linux/macOS 改用相应 preset。Android/iOS 默认 `BUILD_TESTING=OFF`；要检查上述编译型 target，可在 configure 时显式追加 `-DBUILD_TESTING=ON`。这不验证设备执行或独立预编译 SDK 的 ABI 兼容。
 
 ## 移动端最终链接冒烟（显式运行）
 

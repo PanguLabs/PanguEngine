@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 4.0)
+include("${PANGU_ENGINE_SOURCE_DIR}/cmake/PanguTestDependencies.cmake")
+pangu_require_googletest(RTTI ON)
+add_executable(PanguPhysicsPluginTests PluginBehaviorTests.cpp)
+target_include_directories(PanguPhysicsPluginTests PRIVATE "${CMAKE_SOURCE_DIR}/Source")
+target_link_libraries(PanguPhysicsPluginTests PRIVATE PanguBuildOptions Pangu::Physics ThirdParty::GoogleTestMain)
+pangu_register_gtest(TARGET PanguPhysicsPluginTests BOUNDARY unit AREA build TIER fast)

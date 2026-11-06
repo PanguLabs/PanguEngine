@@ -5,53 +5,45 @@
 #include <ScopeIdentity.h>
 #include <StaticModuleHost.h>
 
-#include <iostream>
+#include <gtest/gtest.h>
 
-int main()
+TEST(StaticCatalog, RetainsArchiveRootsAndRunsRealFactories)
 {
     using namespace pg::module;
     RegistrationScope scope;
     ModuleOperationReport report;
     const auto catalog = fixture::GeneratedCatalog();
     auto host = StaticModuleHost::Create(catalog, scope, {}, report);
-    if (!host || host->Modules().size() != 2 || catalog.Entries.size() != 2 ||
-        host->RegistrationOrder().front() != fixture::kSecondId ||
-        host->RegistrationOrder().back() != fixture::kFirstId)
-    {
-        std::cerr << "Catalog must retain both archive Query roots and resolve dependency order\n";
-        return 1;
-    }
+    ASSERT_TRUE(host);
+    ASSERT_EQ(host->Modules().size(), 2U);
+    ASSERT_EQ(catalog.Entries.size(), 2U);
+    ASSERT_EQ(host->RegistrationOrder().size(), 2U);
+    EXPECT_EQ(host->RegistrationOrder().front(), fixture::kSecondId);
+    EXPECT_EQ(host->RegistrationOrder().back(), fixture::kFirstId);
     for (const auto id : host->RegistrationOrder())
     {
-        if (!host->Register(id, report))
-        {
-            std::cerr << "Real STATIC Module registration failed\n";
-            return 1;
-        }
+        ASSERT_TRUE(host->Register(id, report));
     }
     const auto declarations = scope.Declarations();
-    if (declarations.size() != 2 || declarations.front().Id != fixture::kSecondDeclaration ||
-        declarations.front().Owner != fixture::kSecondId || declarations.front().DisplayName != "second" ||
-        declarations.back().Id != fixture::kFirstDeclaration || declarations.back().Owner != fixture::kFirstId ||
-        declarations.back().DisplayName != "first")
-    {
-        std::cerr << "Declarations from both STATIC archives must be published in dependency order\n";
-        return 1;
-    }
+    ASSERT_EQ(declarations.size(), 2U);
+    EXPECT_EQ(declarations.front().Id, fixture::kSecondDeclaration);
+    EXPECT_EQ(declarations.front().Owner, fixture::kSecondId);
+    EXPECT_EQ(declarations.front().DisplayName, "second");
+    EXPECT_EQ(declarations.back().Id, fixture::kFirstDeclaration);
+    EXPECT_EQ(declarations.back().Owner, fixture::kFirstId);
+    EXPECT_EQ(declarations.back().DisplayName, "first");
     for (const auto id : host->RegistrationOrder())
     {
-        if (!host->Activate(id, report))
-        {
-            return 1;
-        }
+        ASSERT_TRUE(host->Activate(id, report));
     }
     const auto first = host->CreateScope(pg::service::Scope::kContext, host->HostScope(), report);
     const auto second = host->CreateScope(pg::service::Scope::kContext, host->HostScope(), report);
-    if (!first || !second || !host->BeginCloseScope(*first, report) || !host->TryFinishCloseScope(*first, report) ||
-        !host->BeginShutdown(report) || !host->TryFinishShutdown(report) || !scope.Declarations().empty())
-    {
-        std::cerr << "Real STATIC factories must assemble independent Scopes and clean up\n";
-        return 1;
-    }
-    return 0;
+    ASSERT_TRUE(first);
+    ASSERT_TRUE(second);
+    EXPECT_NE(*first, *second);
+    ASSERT_TRUE(host->BeginCloseScope(*first, report));
+    ASSERT_TRUE(host->TryFinishCloseScope(*first, report));
+    ASSERT_TRUE(host->BeginShutdown(report));
+    ASSERT_TRUE(host->TryFinishShutdown(report));
+    EXPECT_TRUE(scope.Declarations().empty());
 }

@@ -8,10 +8,9 @@
 #include <ScopeBuildContext.h>
 #include <ScopeFactory.h>
 
-#include <array>
 #include <cstddef>
 #include <expected>
-#include <iostream>
+#include <gtest/gtest.h>
 #include <memory>
 #include <optional>
 #include <utility>
@@ -40,8 +39,7 @@ struct Object
     Object& operator=(Object&&) = delete;
 };
 
-// Adapter boundary used by the real coordinator; these tests exercise the
-// production owning model, hook invocation, type checks and failure latching.
+// 复用真实协调器的适配边界，验证拥有模型、hook、类型检查与错误锁存。
 struct Sink final : detail::ScopeBuildSink
 {
     std::unique_ptr<detail::ErasedScopeObject> Object;
@@ -91,7 +89,7 @@ struct Sink final : detail::ScopeBuildSink
     }
 };
 
-// ScopeHooks<Object> requires this exact mutable-reference signature.
+// ScopeHooks<Object> 要求准确的可变引用签名。
 // NOLINTNEXTLINE(misc-const-correctness)
 [[nodiscard]] pg::Status Start(Object& object) noexcept
 {
@@ -101,7 +99,7 @@ struct Sink final : detail::ScopeBuildSink
 void Stop(Object& /*object*/) noexcept {}
 [[nodiscard]] pg::Status Poll(Object& /*object*/) noexcept { return {}; }
 
-bool OwnershipPrecedesStartAndTokensAreInitiallyClosed()
+TEST(ScopeBuild, OwnershipPrecedesStartAndTokensAreInitiallyClosed)
 {
     int destroyed = 0;
     int started = 0;
@@ -112,70 +110,72 @@ bool OwnershipPrecedesStartAndTokensAreInitiallyClosed()
         auto object = std::make_unique<Object>(&destroyed, &started, 17);
         auto owned = context.Own(std::move(object),
                                  ScopeHooks<Object>{.Start = Start, .RequestStop = Stop, .PollStopped = Poll});
-        if (!owned || object || started != 0 || destroyed != 0 || owned->TryBorrow() || context.Scope().Slot != 2)
-        {
-            return false;
-        }
+        ASSERT_TRUE(owned);
+        EXPECT_FALSE(object);
+        EXPECT_EQ(started, 0);
+        EXPECT_EQ(destroyed, 0);
+        EXPECT_FALSE(owned->TryBorrow());
+        EXPECT_EQ(context.Scope().Slot, 2);
         token = *owned;
-        if (!sink.Object->Start() || started != 1)
-        {
-            return false;
-        }
+        ASSERT_TRUE(sink.Object);
+        EXPECT_TRUE(sink.Object->Start());
+        EXPECT_EQ(started, 1);
         sink.Control->Module->Open();
         sink.Control->Scope->Open();
         sink.Control->Gate.Open();
         auto borrow = token.TryBorrow();
-        if (!borrow || (*borrow)->Value != 17)
-        {
-            return false;
-        }
+        ASSERT_TRUE(borrow);
+        EXPECT_EQ((*borrow)->Value, 17);
         borrow->Release();
         sink.Control->Gate.Close();
         sink.Object.reset();
         sink.Control->Object = nullptr;
-        if (destroyed != 1)
-        {
-            return false;
-        }
+        EXPECT_EQ(destroyed, 1);
     }
-    return !token.TryBorrow() && destroyed == 1;
+    EXPECT_FALSE(token.TryBorrow());
+    EXPECT_EQ(destroyed, 1);
 }
 
-bool InvalidOwnershipAndTypeErrorsAreSticky()
+TEST(ScopeBuild, InvalidOwnershipAndTypeErrorsAreSticky)
 {
     int destroyed = 0;
     int started = 0;
     Sink sink;
     ScopeBuildContext context(sink);
     const auto invalid = context.Own(std::unique_ptr<Object>());
+    ASSERT_FALSE(invalid);
+    EXPECT_EQ(invalid.error(), MakeModuleError(ModuleError::kInvalidDeclaration));
     const auto next = context.Own(std::make_unique<Object>(&destroyed, &started, 1));
-    if (invalid || next || invalid.error() != next.error() || destroyed != 1 || sink.Object)
-    {
-        return false;
-    }
+    ASSERT_FALSE(next);
+    EXPECT_EQ(invalid.error(), next.error());
+    EXPECT_EQ(destroyed, 1);
+    EXPECT_FALSE(sink.Object);
     Sink second;
     ScopeBuildContext other(second);
     const auto badHooks =
         other.Own(std::make_unique<Object>(&destroyed, &started, 2), ScopeHooks<Object>{.RequestStop = Stop});
-    if (badHooks || second.Object || destroyed != 2)
-    {
-        return false;
-    }
+    ASSERT_FALSE(badHooks);
+    EXPECT_EQ(badHooks.error(), MakeModuleError(ModuleError::kInvalidDeclaration));
+    EXPECT_FALSE(second.Object);
+    EXPECT_EQ(destroyed, 2);
     Sink third;
     ScopeBuildContext dependency(third);
     third.Provider = std::make_unique<detail::ScopeObjectModel<int, std::default_delete<int>>>(std::make_unique<int>(7),
                                                                                                ScopeHooks<int>{});
     const auto wrong = dependency.Dependency<double>(kDependency);
+    ASSERT_FALSE(wrong);
+    EXPECT_EQ(wrong.error(), MakeModuleError(ModuleError::kTypeMismatch));
     const auto sticky = dependency.Dependency<int>(kDependency);
+    ASSERT_FALSE(sticky);
+    EXPECT_EQ(sticky.error(), wrong.error());
     Sink missing;
     ScopeBuildContext undeclared(missing);
     const auto rejected = undeclared.Dependency<int>(kFirst);
-    return !wrong && wrong.error() == MakeModuleError(ModuleError::kTypeMismatch) && !sticky &&
-           sticky.error() == wrong.error() && !rejected &&
-           rejected.error() == MakeModuleError(ModuleError::kUndeclaredDependency);
+    ASSERT_FALSE(rejected);
+    EXPECT_EQ(rejected.error(), MakeModuleError(ModuleError::kUndeclaredDependency));
 }
 
-bool FactoryIsReusableAndCreatesSeparateObjects()
+TEST(ScopeBuild, FactoryIsReusableAndCreatesSeparateObjects)
 {
     int destroyed = 0;
     int started = 0;
@@ -198,42 +198,19 @@ bool FactoryIsReusableAndCreatesSeparateObjects()
     Sink secondSink;
     ScopeBuildContext firstContext(firstSink);
     ScopeBuildContext secondContext(secondSink);
-    if (!factory(firstContext))
-    {
-        return false;
-    }
+    ASSERT_TRUE(factory(firstContext));
     destination = &second;
-    if (!factory(secondContext))
-    {
-        return false;
-    }
-    return firstSink.Object->Get() != secondSink.Object->Get() && firstSink.Object && secondSink.Object && started == 0;
+    ASSERT_TRUE(factory(secondContext));
+    ASSERT_TRUE(firstSink.Object);
+    ASSERT_TRUE(secondSink.Object);
+    EXPECT_NE(firstSink.Object->Get(), secondSink.Object->Get());
+    EXPECT_EQ(started, 0);
 }
-bool NullFunctionPointerIsAnEmptyFactory()
+
+TEST(ScopeBuild, NullFunctionPointerIsAnEmptyFactory)
 {
     using Function = pg::Status (*)(ScopeBuildContext&) noexcept;
     ScopeFactory const factory(static_cast<Function>(nullptr));
-    return !factory;
+    EXPECT_FALSE(factory);
 }
 } // namespace
-
-int main()
-{
-    const std::array tests{
-        std::pair{"null function pointer is an empty factory", NullFunctionPointerIsAnEmptyFactory},
-        std::pair{"ownership precedes start and tokens initially closed",
-                  OwnershipPrecedesStartAndTokensAreInitiallyClosed},
-        std::pair{"invalid ownership and type errors are sticky", InvalidOwnershipAndTypeErrorsAreSticky},
-        std::pair{"factory is reusable and creates separate objects", FactoryIsReusableAndCreatesSeparateObjects},
-    };
-    int failures = 0;
-    for (const auto& [name, test] : tests)
-    {
-        if (!test())
-        {
-            std::cerr << "FAIL: " << name << '\n';
-            ++failures;
-        }
-    }
-    return failures == 0 ? 0 : 1;
-}

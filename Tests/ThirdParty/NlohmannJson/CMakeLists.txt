@@ -1,15 +1,18 @@
 cmake_minimum_required(VERSION 4.0)
 
-add_executable(PanguJsonExtrasTests JsonExtrasTests.cpp)
-target_link_libraries(PanguJsonExtrasTests PRIVATE PanguBuildOptions ThirdParty::NlohmannJson)
-set_target_properties(PanguJsonExtrasTests PROPERTIES
+include("${PROJECT_SOURCE_DIR}/cmake/PanguTestDependencies.cmake")
+pangu_require_googletest(RTTI ON)
+add_executable(PanguJsonUnitTests JsonExtrasTests.cpp)
+target_link_libraries(PanguJsonUnitTests PRIVATE PanguBuildOptions ThirdParty::NlohmannJson ThirdParty::GoogleTestMain)
+set_target_properties(PanguJsonUnitTests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin"
 )
-add_test(NAME JsonExtras COMMAND PanguJsonExtrasTests)
+pangu_register_gtest(TARGET PanguJsonUnitTests BOUNDARY unit AREA thirdparty TIER fast)
 
-add_test(NAME NlohmannSubmoduleRequired
+pangu_register_test(NAME NlohmannSubmoduleRequired
     COMMAND "${CMAKE_COMMAND}"
         "-DPANGU_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
-        "-DPANGU_TEST_ROOT=${CMAKE_CURRENT_BINARY_DIR}/MissingHeaders"
+        "-DPANGU_TEST_ROOT=${CMAKE_BINARY_DIR}/Tests/Work/NlohmannSubmoduleRequired"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/MissingHeaders.cmake"
+    BOUNDARY system AREA thirdparty TIER full TYPES regression REQUIRES subprocess
 )

@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 4.0)
+add_executable(PanguModuleBenchmarks ModuleIdentityBenchmarks.cpp ScopeAccessBenchmarks.cpp StaticModuleHostBenchmarks.cpp)
+target_include_directories(PanguModuleBenchmarks PRIVATE "${PROJECT_SOURCE_DIR}/Source/Runtime/Module/Private")
+target_link_libraries(PanguModuleBenchmarks PRIVATE PanguModule PanguBuildOptions ThirdParty::GoogleBenchmarkMain)
+set_target_properties(PanguModuleBenchmarks PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")

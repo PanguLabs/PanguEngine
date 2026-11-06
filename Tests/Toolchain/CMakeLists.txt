@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 4.0)
 # 真实 ThirdParty 库与 Pangu Module 使用相同平台工具链、不同目标策略。
 add_subdirectory(ThirdParty)
 add_subdirectory(Module)
+pangu_test_build_dependencies(TIER full TARGETS ThirdPartyCompiledProbe PanguToolchainProbe)
 
 get_target_property(_pangu_third_party_type ThirdPartyCompiledProbe TYPE)
 get_target_property(_pangu_third_party_links ThirdPartyCompiledProbe LINK_LIBRARIES)
@@ -22,5 +23,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     set_target_properties(PanguToolchainLinkTests PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin"
     )
-    add_test(NAME ToolchainLibraryLink COMMAND PanguToolchainLinkTests)
+    pangu_register_test(NAME ToolchainLibraryLink COMMAND PanguToolchainLinkTests
+        BOUNDARY integration AREA toolchain TIER precommit
+        BUILD_TARGETS PanguToolchainLinkTests TYPES contract)
 endif()

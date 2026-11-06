@@ -2,8 +2,8 @@
 
 #include <ModuleIdentity.h>
 
-#include <array>
 #include <cstddef>
+#include <gtest/gtest.h>
 #include <string_view>
 #include <type_traits>
 
@@ -29,56 +29,55 @@ constexpr auto kCompileTimeHex = pg::module::FormatModuleId(kCompileTimeId);
 static_assert(std::string_view{kCompileTimeHex.data(), kCompileTimeHex.size()}.starts_with("12ab"));
 static_assert(kCompileTimeHex.back() == '0');
 
-bool TestParseAndFormat()
+TEST(ModuleIdentity, ParseAndFormat)
 {
     constexpr std::string_view kHex = "00112233445566778899aabbccddeeff";
     const auto parsed = pg::module::detail::ParseModuleId(kHex);
-    if (!parsed || !parsed->IsValid())
-    {
-        return false;
-    }
-
+    ASSERT_TRUE(parsed);
+    EXPECT_TRUE(parsed->IsValid());
     const auto formatted = pg::module::FormatModuleId(*parsed);
-    if (std::string_view{formatted.data(), formatted.size()} != kHex)
-    {
-        return false;
-    }
-
+    EXPECT_EQ((std::string_view{formatted.data(), formatted.size()}), kHex);
+    EXPECT_EQ(parsed->Bytes.front(), std::byte{0x00});
+    EXPECT_EQ(parsed->Bytes.back(), std::byte{0xff});
     const auto secondParse = pg::module::detail::ParseModuleId(kHex);
-    return parsed->Bytes.front() == std::byte{0x00} && parsed->Bytes.back() == std::byte{0xff} && secondParse &&
-           *secondParse == *parsed;
+    ASSERT_TRUE(secondParse);
+    EXPECT_EQ(*secondParse, *parsed);
 }
 
-bool TestInvalidIdentities()
+TEST(ModuleIdentity, RejectsInvalidLength)
 {
-    constexpr std::string_view kShort = "001122";
-    constexpr std::string_view kUppercase = "00112233445566778899AABBCCDDEEFF";
-    constexpr std::string_view kNonHex = "00112233445566778899aabbccddeefg";
-    constexpr std::string_view kZero = "00000000000000000000000000000000";
-
-    const auto shortId = pg::module::detail::ParseModuleId(kShort);
-    const auto upperId = pg::module::detail::ParseModuleId(kUppercase);
-    const auto nonHexId = pg::module::detail::ParseModuleId(kNonHex);
-    const auto zeroId = pg::module::detail::ParseModuleId(kZero);
-
-    return !shortId && shortId.error() == ModuleIdParseError::kInvalidLength && !upperId &&
-           upperId.error() == ModuleIdParseError::kInvalidCharacter && !nonHexId &&
-           nonHexId.error() == ModuleIdParseError::kInvalidCharacter && !zeroId &&
-           zeroId.error() == ModuleIdParseError::kZeroId;
+    const auto result = pg::module::detail::ParseModuleId("001122");
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error(), ModuleIdParseError::kInvalidLength);
 }
 
-bool TestRoundTrip()
+TEST(ModuleIdentity, RejectsUppercase)
+{
+    const auto result = pg::module::detail::ParseModuleId("00112233445566778899AABBCCDDEEFF");
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error(), ModuleIdParseError::kInvalidCharacter);
+}
+
+TEST(ModuleIdentity, RejectsNonHexCharacter)
+{
+    const auto result = pg::module::detail::ParseModuleId("00112233445566778899aabbccddeefg");
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error(), ModuleIdParseError::kInvalidCharacter);
+}
+
+TEST(ModuleIdentity, RejectsZero)
+{
+    const auto result = pg::module::detail::ParseModuleId("00000000000000000000000000000000");
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error(), ModuleIdParseError::kZeroId);
+}
+
+TEST(ModuleIdentity, RoundTrip)
 {
     constexpr std::string_view kHex = "0123456789abcdef0123456789abcdef";
     const auto parsed = pg::module::detail::ParseModuleId(kHex);
-    if (!parsed)
-    {
-        return false;
-    }
-
+    ASSERT_TRUE(parsed);
     const auto roundTrip = pg::module::FormatModuleId(*parsed);
-    return std::string_view{roundTrip.data(), roundTrip.size()} == kHex;
+    EXPECT_EQ((std::string_view{roundTrip.data(), roundTrip.size()}), kHex);
 }
 } // namespace
-
-int main() { return TestParseAndFormat() && TestInvalidIdentities() && TestRoundTrip() ? 0 : 1; }

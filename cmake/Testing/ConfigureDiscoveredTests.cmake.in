@@ -1,0 +1,12 @@
+# 未构建时保留 GoogleTest 原生的 NOT_BUILT 失败条目，不能静默忽略。
+if(DEFINED @testList@)
+    if(NOT @testList@)
+        message(FATAL_ERROR "GoogleTest discovery found no cases for @testTarget@")
+    endif()
+    foreach(name IN LISTS @testList@)
+        string(SHA256 hash "${name}")
+        set(work "@testRoot@/Work/@testTarget@/${hash}")
+        file(MAKE_DIRECTORY "${work}")
+        set_tests_properties("${name}" PROPERTIES WORKING_DIRECTORY "${work}")
+    endforeach()
+endif()

@@ -24,6 +24,30 @@
     {
       "name": "windows",
       "configurePreset": "windows"
+    },
+    {
+      "name": "windows-fast",
+      "configurePreset": "windows",
+      "targets": [
+        "PanguTestsFast"
+      ],
+      "jobs": 1
+    },
+    {
+      "name": "windows-precommit",
+      "configurePreset": "windows",
+      "targets": [
+        "PanguTestsPrecommit"
+      ],
+      "jobs": 1
+    },
+    {
+      "name": "windows-full",
+      "configurePreset": "windows",
+      "targets": [
+        "PanguTestsFull"
+      ],
+      "jobs": 1
     }
   ],
   "testPresets": [
@@ -32,7 +56,103 @@
       "configurePreset": "windows",
       "output": {
         "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
       }
+    },
+    {
+      "name": "windows-fast",
+      "configurePreset": "windows",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      },
+      "filter": {
+        "include": {
+          "label": "^run\\.fast$"
+        }
+      }
+    },
+    {
+      "name": "windows-precommit",
+      "configurePreset": "windows",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      },
+      "filter": {
+        "include": {
+          "label": "^run\\.precommit$"
+        }
+      }
+    },
+    {
+      "name": "windows-full",
+      "configurePreset": "windows",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "windows-fast",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "windows"
+        },
+        {
+          "type": "build",
+          "name": "windows-fast"
+        },
+        {
+          "type": "test",
+          "name": "windows-fast"
+        }
+      ]
+    },
+    {
+      "name": "windows-precommit",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "windows"
+        },
+        {
+          "type": "build",
+          "name": "windows-precommit"
+        },
+        {
+          "type": "test",
+          "name": "windows-precommit"
+        }
+      ]
+    },
+    {
+      "name": "windows-full",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "windows"
+        },
+        {
+          "type": "build",
+          "name": "windows-full"
+        },
+        {
+          "type": "test",
+          "name": "windows-full"
+        }
+      ]
     }
   ]
 }

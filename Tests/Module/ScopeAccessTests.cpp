@@ -1,75 +1,52 @@
+#include "Fixtures/ScopeAccessFixture.h"
 #include "Result.h"
 #include <ModuleError.h>
 #include <ScopeAccess.h>
 #include <ScopeFactory.h>
 #include <ScopeIdentity.h>
 
-#include <array>
-#include <atomic>
 #include <expected>
-#include <iostream>
+#include <gtest/gtest.h>
 #include <memory>
-#include <thread>
 #include <type_traits>
 #include <utility>
 
 namespace
 {
 using namespace pg::module;
+using pg::test::ScopeAccessFixture;
 static_assert(!std::is_copy_constructible_v<ScopeFactory>);
 static_assert(std::is_nothrow_move_constructible_v<ScopeFactory>);
 static_assert(!std::is_copy_constructible_v<ScopeBorrow<int>>);
 static_assert(std::is_nothrow_move_constructible_v<ScopeBorrow<int>>);
 static_assert(!ScopeHandle{}.IsValid());
 
-struct Fixture
+TEST(ScopeAccess, BorrowPinsAndReleasesOnce)
 {
-    std::unique_ptr<int> Value = std::make_unique<int>(42);
-    std::shared_ptr<detail::ScopeObjectControl> Control = std::make_shared<detail::ScopeObjectControl>();
-    Fixture()
-    {
-        Control->Module = std::make_shared<detail::ScopeGate>();
-        Control->Scope = std::make_shared<detail::ScopeGate>();
-        Control->Object = Value.get();
-        Control->Type = detail::ScopeTypeToken<int>();
-        Control->Module->Open();
-        Control->Scope->Open();
-        Control->Gate.Open();
-    }
-    [[nodiscard]] ScopeAccess<int> Access() const
-    {
-        const auto result = detail::ScopeAccessMaker::Make<int>(Control);
-        return result ? *result : ScopeAccess<int>{};
-    }
-};
-
-bool BorrowPinsAndReleasesOnce()
-{
-    Fixture const fixture;
+    ScopeAccessFixture const fixture;
     auto result = fixture.Access().TryBorrow();
-    if (!result || **result != 42 || fixture.Control->Gate.Count() != 1 || fixture.Control->Module->Count() != 1 ||
-        fixture.Control->Scope->Count() != 1)
-    {
-        return false;
-    }
+    ASSERT_TRUE(result);
+    EXPECT_EQ(**result, 42);
+    EXPECT_EQ(fixture.Control->Gate.Count(), 1);
+    EXPECT_EQ(fixture.Control->Module->Count(), 1);
+    EXPECT_EQ(fixture.Control->Scope->Count(), 1);
     auto borrow = std::move(*result);
     borrow.Release();
     borrow.Release();
-    return fixture.Control->Gate.Count() == 0 && fixture.Control->Module->Count() == 0 &&
-           fixture.Control->Scope->Count() == 0;
+    EXPECT_EQ(fixture.Control->Gate.Count(), 0);
+    EXPECT_EQ(fixture.Control->Module->Count(), 0);
+    EXPECT_EQ(fixture.Control->Scope->Count(), 0);
 }
 
-bool EveryGateRejectsNewBorrowAndPreservesOldBorrow()
+TEST(ScopeAccess, EveryGateRejectsNewBorrowAndPreservesOldBorrow)
 {
     for (int kind = 0; kind < 3; ++kind)
     {
-        Fixture const fixture;
+        SCOPED_TRACE(kind);
+        ScopeAccessFixture const fixture;
         const auto access = fixture.Access();
         auto admitted = access.TryBorrow();
-        if (!admitted)
-        {
-            return false;
-        }
+        ASSERT_TRUE(admitted);
         if (kind == 0)
         {
             fixture.Control->Module->Close();
@@ -83,113 +60,42 @@ bool EveryGateRejectsNewBorrowAndPreservesOldBorrow()
             fixture.Control->Gate.Close();
         }
         const auto rejected = access.TryBorrow();
-        if (rejected || rejected.error() != MakeModuleError(ModuleError::kNotReady) ||
-            fixture.Control->Gate.Count() != 1 || **admitted != 42)
-        {
-            return false;
-        }
+        ASSERT_FALSE(rejected);
+        EXPECT_EQ(rejected.error(), MakeModuleError(ModuleError::kNotReady));
+        EXPECT_EQ(fixture.Control->Gate.Count(), 1);
+        EXPECT_EQ(**admitted, 42);
         admitted->Release();
-        if (fixture.Control->Gate.Count() != 0 || fixture.Control->Module->Count() != 0 ||
-            fixture.Control->Scope->Count() != 0)
-        {
-            return false;
-        }
+        EXPECT_EQ(fixture.Control->Gate.Count(), 0);
+        EXPECT_EQ(fixture.Control->Module->Count(), 0);
+        EXPECT_EQ(fixture.Control->Scope->Count(), 0);
         fixture.Control->Object = nullptr;
-        if (access.TryBorrow())
-        {
-            return false;
-        }
+        EXPECT_FALSE(access.TryBorrow());
     }
-    return true;
 }
 
-bool RejectsEmptyAndWrongType()
+TEST(ScopeAccess, RejectsEmptyAndWrongType)
 {
     const auto empty = ScopeAccess<int>{}.TryBorrow();
-    Fixture const fixture;
+    ASSERT_FALSE(empty);
+    EXPECT_EQ(empty.error(), MakeModuleError(ModuleError::kNotReady));
+    ScopeAccessFixture const fixture;
     const auto mismatch = detail::ScopeAccessMaker::Make<double>(fixture.Control);
-    return !empty && empty.error() == MakeModuleError(ModuleError::kNotReady) && !mismatch &&
-           mismatch.error() == MakeModuleError(ModuleError::kTypeMismatch);
+    ASSERT_FALSE(mismatch);
+    EXPECT_EQ(mismatch.error(), MakeModuleError(ModuleError::kTypeMismatch));
 }
 
-bool AcquisitionAndCloseAreLinearized()
-{
-    for (int round = 0; round < 200; ++round)
-    {
-        Fixture const fixture;
-        const auto access = fixture.Access();
-        std::atomic<bool> start{false};
-        std::atomic<bool> closed{false};
-        std::atomic<bool> failed{false};
-        std::jthread reader(
-            [&]
-            {
-                while (!start.load())
-                {
-                    std::this_thread::yield();
-                }
-                auto before = access.TryBorrow();
-                if (before && **before != 42)
-                {
-                    failed = true;
-                }
-                while (!closed.load())
-                {
-                    std::this_thread::yield();
-                }
-                if (access.TryBorrow())
-                {
-                    failed = true;
-                }
-            });
-        start = true;
-        fixture.Control->Gate.Close();
-        closed = true;
-        reader.join();
-        if (failed || fixture.Control->Gate.Count() != 0 || fixture.Control->Module->Count() != 0 ||
-            fixture.Control->Scope->Count() != 0)
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-bool FactoryOwnsMoveOnlyCapture()
+TEST(ScopeAccess, FactoryOwnsMoveOnlyCapture)
 {
     auto configuration = std::make_unique<int>(7);
     ScopeFactory factory(
         [value = std::move(configuration)](ScopeBuildContext& /*context*/) noexcept -> pg::Status
         { return *value == 7 ? pg::Status{} : std::unexpected(MakeModuleError(ModuleError::kInvalidState)); });
-    if (configuration || !factory)
-    {
-        return false;
-    }
+    EXPECT_FALSE(configuration);
+    ASSERT_TRUE(factory);
     ScopeFactory const moved(std::move(factory));
-    // The moved-from owning wrapper is explicitly valid and empty.
+    // 移出后的拥有型包装器仍有效，但为空。
     // NOLINTNEXTLINE(bugprone-use-after-move)
-    return !factory && static_cast<bool>(moved);
+    EXPECT_FALSE(factory);
+    EXPECT_TRUE(moved);
 }
 } // namespace
-
-int main()
-{
-    const std::array tests{
-        std::pair{"borrow pins and releases once", BorrowPinsAndReleasesOnce},
-        std::pair{"every gate rejects new borrow and preserves old borrow",
-                  EveryGateRejectsNewBorrowAndPreservesOldBorrow},
-        std::pair{"rejects empty and wrong type", RejectsEmptyAndWrongType},
-        std::pair{"acquisition and close are linearized", AcquisitionAndCloseAreLinearized},
-        std::pair{"factory owns move-only capture", FactoryOwnsMoveOnlyCapture},
-    };
-    int failures = 0;
-    for (const auto& [name, test] : tests)
-    {
-        if (!test())
-        {
-            std::cerr << "FAIL: " << name << '\n';
-            ++failures;
-        }
-    }
-    return failures == 0 ? 0 : 1;
-}

@@ -102,7 +102,7 @@ namespace fs = std::filesystem;
 }
 
 [[nodiscard]] std::expected<void, std::string> ScanRoot(const fs::path& root, const fs::path& canonicalRoot,
-                                                        std::vector<PluginEntry>& output,
+                                                        PluginOrigin origin, std::vector<PluginEntry>& output,
                                                         std::map<std::string, fs::path>& ids,
                                                         std::set<fs::path>& visited)
 {
@@ -219,6 +219,7 @@ namespace fs = std::filesystem;
             return std::unexpected(configureInputs.error());
         }
         output.push_back(PluginEntry{.Metadata = std::move(*metadata),
+                                     .Origin = origin,
                                      .SourceDir = std::move(*realDirectory),
                                      .ManifestPath = std::move(*realManifest),
                                      .ConfigureInputs = std::move(*configureInputs)});
@@ -263,7 +264,7 @@ DiscoverPlugins(const std::filesystem::path& engineRoot,
     {
         return Error(engineRoot, error.message());
     }
-    if (auto result = ScanRoot(engineInput, *realEngine, plugins, ids, visited); !result)
+    if (auto result = ScanRoot(engineInput, *realEngine, PluginOrigin::kEngine, plugins, ids, visited); !result)
     {
         return std::unexpected(result.error());
     }
@@ -274,7 +275,7 @@ DiscoverPlugins(const std::filesystem::path& engineRoot,
         {
             return Error(*projectRoot, error.message());
         }
-        if (auto result = ScanRoot(projectInput, *realProject, plugins, ids, visited); !result)
+        if (auto result = ScanRoot(projectInput, *realProject, PluginOrigin::kProject, plugins, ids, visited); !result)
         {
             return std::unexpected(result.error());
         }

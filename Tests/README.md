@@ -4,6 +4,8 @@
 
 本文件规定测试维护与验收记录要求；具体功能契约以对应 `wiki/` 规范为准。下文区分维护要求与当前构建入口的实现状态，不将测试规划表述为已有平台覆盖。
 
+测试分类、标签和运行集合的权威契约见[测试分类与运行契约](../wiki/foundation/testing.md)。本文件维护实际命令与测试生命周期。
+
 ## 保留范围与测试准入
 
 正式测试包括以下类型；类型可以重叠，目录按功能领域组织，无需为每种类型复制测试或建立独立目录。
@@ -59,21 +61,36 @@
 | 快速验证 | 提供日常高频反馈，优先选择稳定且依赖少的测试 | 不能替代相关集成、契约和平台验证 |
 | 完整验证 | 执行该配置下注册的完整 CTest 集，并完成需要的构建验收 | 只代表实际执行的配置与平台 |
 
-当前通过 `BUILD_TESTING` 接入测试，桌面平台可在对应宿主的仓库根目录执行：
+桌面平台推荐从仓库根目录运行 workflow，分别覆盖累计的 fast、precommit 和 full 集合：
+
+```sh
+cmake --workflow --preset windows-fast
+cmake --workflow --preset windows-precommit
+cmake --workflow --preset windows-full
+```
+
+Linux/macOS 使用对应的 `linux` / `macos` 前缀和约定源码挂载路径。workflow 依次配置、构建所选集合及运行测试；空选择报错。正式 Engine full 要求 `BUILD_TESTING`、`PANGU_BUILD_ENGINE_TESTS` 均为 ON；接入 Engine 测试后始终配置 Toolchain。Project 自有 full 不继承 Engine 的开关前提。
+
+直接运行 test preset 前，必须先完成对应的 build preset，例如：
 
 ```sh
 cmake --preset windows
-cmake --build --preset windows
-ctest --preset windows --output-on-failure
+cmake --build --preset windows-precommit
+ctest --preset windows-precommit
 ```
 
-Linux/macOS 使用各自的 `linux` / `macos` Preset 和约定源码挂载路径。当前尚未配置统一的快速测试 Preset 或分类标签；可以用现有测试名进行定向选择，例如：
+基础 `windows` build preset 仍是普通 ALL 构建，不保证独立宿主工具测试已准备；基础 test preset 与 full 选择一致。定向筛选可在完成相应构建后附加 CTest 的 `-R` 参数。
 
-```sh
-ctest --preset windows -R '^(FoundationError|ModuleIdentity)$' --output-on-failure
+以下示例先构建 precommit 集合，再用多个 `-L` 取交集；单个 `-L` 中的 `|` 取标签并集。两者都限定在已构建的 precommit 集合内：
+
+```powershell
+cmake --preset windows
+cmake --build --preset windows-precommit
+ctest --preset windows-precommit -L '^area\.module$' -L '^boundary\.integration$'
+ctest --preset windows-precommit -L '^area\.(module|foundation)$'
 ```
 
-上述命令仅执行两个具名测试。以后增加分类标签或快速入口时，应同步接线和说明，且保留完整验证入口。
+Module 基准的三桌面配置、采样与恢复命令见 [Benchmark 说明](Module/Benchmarks/README.md)。
 
 慢测试应评估隔离、重复准备、进程启动和运行条件，按需要调整执行频率。偶发失败应调查同步、资源竞争、时限及环境依赖，优先构造能够稳定识别问题的回归。
 

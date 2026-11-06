@@ -1,3 +1,5 @@
+#include <gtest/gtest.h>
+
 #include "ModuleDeclaration.h"
 #include <Error.h>
 #include <ModuleDescriptor.h>
@@ -10,12 +12,10 @@
 #include <array>
 #include <cstddef>
 #include <expected>
-#include <iostream>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
-#include <utility>
 
 namespace
 {
@@ -27,9 +27,16 @@ constexpr DeclarationId kDeclarationSecond{.Bytes = {std::byte{2}}};
 constexpr pg::Error kOriginal{pg::ErrorDomainId::Constant<0x746573742e726567ULL>(), 91,
                               pg::NativeErrorCode{.Source = pg::NativeErrorSourceId{17}, .Value = 123}};
 
-// Serial callback/Query fixture, not a production global registry.
+// 串行回调/Query 夹具，只在测试期间借用局部数据。
 struct Fixture
 {
+    Fixture() { Reset(); }
+    ~Fixture() { Reset(); }
+    Fixture(const Fixture&) = delete;
+    Fixture& operator=(const Fixture&) = delete;
+    Fixture(Fixture&&) = delete;
+    Fixture& operator=(Fixture&&) = delete;
+
     inline static const ModuleDefinition* gFirst{};
     inline static const ModuleDefinition* gSecond{};
     inline static const RegistrationScope* gScope{};
@@ -40,6 +47,19 @@ struct Fixture
     inline static bool gFailAfterNested{};
     inline static ModuleOperationReport* gReport{};
     inline static int gCalls{};
+    static void Reset() noexcept
+    {
+        gFirst = nullptr;
+        gSecond = nullptr;
+        gScope = nullptr;
+        gNestedHost = nullptr;
+        gName = {};
+        gObservedAtomic = false;
+        gObservedBusy = false;
+        gFailAfterNested = false;
+        gReport = nullptr;
+        gCalls = 0;
+    }
     static const ModuleDefinition* QueryFirst() noexcept { return gFirst; }
     static const ModuleDefinition* QuerySecond() noexcept { return gSecond; }
     static pg::Status DeclareFirst(RegistrationContext& context) noexcept
@@ -78,8 +98,9 @@ pg::Status DeclareSecond(RegistrationContext& context) noexcept
     return context.Declare(kDeclarationSecond, "second");
 }
 
-bool RegistersOnceInDependencyOrderAndPublishesAtomically()
+TEST(Registration, RegistersOnceInDependencyOrderAndPublishesAtomically)
 {
+    const Fixture callbackState;
     RegistrationScope scope;
     Fixture::gScope = &scope;
     Fixture::gCalls = 0;
@@ -91,34 +112,35 @@ bool RegistersOnceInDependencyOrderAndPublishesAtomically()
     Fixture::gSecond = &second;
     ModuleOperationReport report;
     auto host = StaticModuleHost::Create({kEntries}, scope, {}, report);
-    if (!host)
-    {
-        return false;
-    }
+    ASSERT_TRUE(host);
     const auto early = host->Register(kFirst, report);
-    if (early || early.error() != MakeModuleError(ModuleError::kDependencyNotRegistered) || Fixture::gCalls != 0 ||
-        report.Progress != ModuleOperationProgress::kUnchanged || report.RelatedModule != kSecond ||
-        host->Modules().front().State != StaticModuleState::kLoaded)
-    {
-        return false;
-    }
+    ASSERT_FALSE(early);
+    ASSERT_EQ(early.error(), MakeModuleError(ModuleError::kDependencyNotRegistered));
+    ASSERT_EQ(Fixture::gCalls, 0);
+    ASSERT_EQ(report.Progress, ModuleOperationProgress::kUnchanged);
+    ASSERT_EQ(report.RelatedModule, kSecond);
+    ASSERT_EQ(host->Modules().front().State, StaticModuleState::kLoaded);
     for (const auto id : host->RegistrationOrder())
     {
-        if (!host->Register(id, report) || report.PrimaryError ||
-            report.Progress != ModuleOperationProgress::kRegistered)
-        {
-            return false;
-        }
+        ASSERT_TRUE(host->Register(id, report));
+        ASSERT_FALSE(report.PrimaryError);
+        ASSERT_EQ(report.Progress, ModuleOperationProgress::kRegistered);
     }
     const auto repeated = host->Register(kFirst, report);
-    return !repeated && repeated.error() == MakeModuleError(ModuleError::kInvalidState) && Fixture::gCalls == 1 &&
-           Fixture::gObservedAtomic && scope.Declarations().size() == 2 &&
-           scope.Declarations().front().Owner == kSecond && scope.Declarations().back().Owner == kFirst &&
-           scope.Declarations().back().DisplayName == "first" && report.Progress == ModuleOperationProgress::kUnchanged;
+    ASSERT_FALSE(repeated);
+    ASSERT_EQ(repeated.error(), MakeModuleError(ModuleError::kInvalidState));
+    ASSERT_EQ(Fixture::gCalls, 1);
+    ASSERT_TRUE(Fixture::gObservedAtomic);
+    ASSERT_EQ(scope.Declarations().size(), 2);
+    ASSERT_EQ(scope.Declarations().front().Owner, kSecond);
+    ASSERT_EQ(scope.Declarations().back().Owner, kFirst);
+    ASSERT_EQ(scope.Declarations().back().DisplayName, "first");
+    ASSERT_EQ(report.Progress, ModuleOperationProgress::kUnchanged);
 }
 
-bool RollsBackAndPreservesOriginalErrorAndProgress()
+TEST(Registration, RollsBackAndPreservesOriginalErrorAndProgress)
 {
+    const Fixture callbackState;
     RegistrationScope scope;
     const auto failing = [](RegistrationContext& context) noexcept -> pg::Status
     {
@@ -135,44 +157,44 @@ bool RollsBackAndPreservesOriginalErrorAndProgress()
     Fixture::gSecond = &second;
     ModuleOperationReport report;
     auto host = StaticModuleHost::Create({kEntries}, scope, {}, report);
-    if (!host || !host->Register(kSecond, report))
-    {
-        return false;
-    }
+    ASSERT_TRUE(host);
+    ASSERT_TRUE(host->Register(kSecond, report));
     const auto failed = host->Register(kFirst, report);
     const auto snapshot = report;
     const auto retry = host->Register(kFirst, report);
-    if (failed || failed.error() != kOriginal || snapshot.PrimaryError != kOriginal ||
-        snapshot.Progress != ModuleOperationProgress::kCleanupPending ||
-        host->Modules().front().State != StaticModuleState::kRegistrationFailed || retry ||
-        report.Progress != ModuleOperationProgress::kUnchanged || scope.Declarations().size() != 1 ||
-        scope.Declarations().front().Owner != kSecond)
-    {
-        return false;
-    }
-    // Equal Error values must not erase whether the callback was entered.
+    ASSERT_FALSE(failed);
+    ASSERT_EQ(failed.error(), kOriginal);
+    ASSERT_EQ(snapshot.PrimaryError, kOriginal);
+    ASSERT_EQ(snapshot.Progress, ModuleOperationProgress::kCleanupPending);
+    ASSERT_EQ(host->Modules().front().State, StaticModuleState::kRegistrationFailed);
+    ASSERT_FALSE(retry);
+    ASSERT_EQ(report.Progress, ModuleOperationProgress::kUnchanged);
+    ASSERT_EQ(scope.Declarations().size(), 1);
+    ASSERT_EQ(scope.Declarations().front().Owner, kSecond);
+    // 相同 Error 值仍须区分是否进入回调。
     RegistrationScope otherScope;
     const auto identicalError = [](RegistrationContext&) noexcept -> pg::Status
     { return std::unexpected(MakeModuleError(ModuleError::kNotFound)); };
     const auto other = Definition(kFirst, identicalError);
     Fixture::gFirst = &other;
     auto otherHost = StaticModuleHost::Create({std::span(kEntries).first<1>()}, otherScope, {}, report);
-    if (!otherHost)
-    {
-        return false;
-    }
+    ASSERT_TRUE(otherHost);
     const auto absent = otherHost->Register(kSecond, report);
     const auto before = report;
     const auto callback = otherHost->Register(kFirst, report);
-    return !absent && !callback && absent.error() == callback.error() &&
-           before.Progress == ModuleOperationProgress::kUnchanged &&
-           report.Progress == ModuleOperationProgress::kCleanupPending;
+    ASSERT_FALSE(absent);
+    ASSERT_FALSE(callback);
+    ASSERT_EQ(absent.error(), callback.error());
+    ASSERT_EQ(before.Progress, ModuleOperationProgress::kUnchanged);
+    ASSERT_EQ(report.Progress, ModuleOperationProgress::kCleanupPending);
 }
 
-bool IgnoredDeclarationFailureCannotCommit()
+TEST(Registration, IgnoredDeclarationFailureCannotCommit)
 {
+    const Fixture callbackState;
     for (const bool existing : {false, true})
     {
+        SCOPED_TRACE(existing);
         RegistrationScope scope;
         const auto duplicate = [](RegistrationContext& context) noexcept -> pg::Status
         {
@@ -181,7 +203,7 @@ bool IgnoredDeclarationFailureCannotCommit()
             {
                 return first;
             }
-            // Intentionally misbehaving callback: production must retain this error.
+            // 故意忽略声明错误，验证事务仍锁存原错。
             [[maybe_unused]] const auto ignoredConflict = context.Declare(kDeclarationSecond, "conflict");
             [[maybe_unused]] const auto ignoredDuplicate = context.Declare(kDeclarationSecond, "duplicate pending");
             return {};
@@ -192,23 +214,22 @@ bool IgnoredDeclarationFailureCannotCommit()
         Fixture::gSecond = &second;
         ModuleOperationReport report;
         auto host = StaticModuleHost::Create({kEntries}, scope, {}, report);
-        if (!host || (existing && !host->Register(kSecond, report)))
+        ASSERT_TRUE(host);
+        if (existing)
         {
-            return false;
+            ASSERT_TRUE(host->Register(kSecond, report));
         }
         const auto result = host->Register(kFirst, report);
-        if (result || result.error() != MakeModuleError(ModuleError::kDeclarationConflict) ||
-            scope.Declarations().size() != (existing ? 1U : 0U) ||
-            report.Progress != ModuleOperationProgress::kCleanupPending)
-        {
-            return false;
-        }
+        ASSERT_FALSE(result);
+        ASSERT_EQ(result.error(), MakeModuleError(ModuleError::kDeclarationConflict));
+        ASSERT_EQ(scope.Declarations().size(), (existing ? 1U : 0U));
+        ASSERT_EQ(report.Progress, ModuleOperationProgress::kCleanupPending);
     }
-    return true;
 }
 
-bool RejectsInvalidAndOversizedDeclarations()
+TEST(Registration, RejectsInvalidAndOversizedDeclarations)
 {
+    const Fixture callbackState;
     const std::array<RegisterModuleFn, 3> callbacks{
         [](RegistrationContext& context) noexcept -> pg::Status { return context.Declare(DeclarationId(), "zero"); },
         [](RegistrationContext& context) noexcept -> pg::Status
@@ -231,27 +252,24 @@ bool RejectsInvalidAndOversizedDeclarations()
     };
     for (std::size_t index = 0; index < callbacks.size(); ++index)
     {
+        SCOPED_TRACE(index);
         RegistrationScope scope;
         const auto first = Definition(kFirst, callbacks.at(index));
         Fixture::gFirst = &first;
         ModuleOperationReport report;
         auto host = StaticModuleHost::Create({std::span(kEntries).first<1>()}, scope, {}, report);
-        if (!host)
-        {
-            return false;
-        }
+        ASSERT_TRUE(host);
         const auto result = host->Register(kFirst, report);
         const auto expected = index == 0 ? ModuleError::kInvalidDeclaration : ModuleError::kLimitExceeded;
-        if (result || result.error() != MakeModuleError(expected) || !scope.Declarations().empty())
-        {
-            return false;
-        }
+        ASSERT_FALSE(result);
+        ASSERT_EQ(result.error(), MakeModuleError(expected));
+        ASSERT_TRUE(scope.Declarations().empty());
     }
-    return true;
 }
 
-bool ConcreteScopesOwnIndependentCopies()
+TEST(Registration, ConcreteScopesOwnIndependentCopies)
 {
+    const Fixture callbackState;
     RegistrationScope firstScope;
     RegistrationScope secondScope;
     ModuleOperationReport report;
@@ -262,37 +280,30 @@ bool ConcreteScopesOwnIndependentCopies()
         Fixture::gFirst = &first;
         auto firstHost = StaticModuleHost::Create({std::span(kEntries).first<1>()}, firstScope, {}, report);
         auto secondHost = StaticModuleHost::Create({std::span(kEntries).first<1>()}, secondScope, {}, report);
-        if (!firstHost || !secondHost)
-        {
-            return false;
-        }
+        ASSERT_TRUE(firstHost);
+        ASSERT_TRUE(secondHost);
         Fixture::gScope = &firstScope;
-        if (!firstHost->Register(kFirst, report))
-        {
-            return false;
-        }
+        ASSERT_TRUE(firstHost->Register(kFirst, report));
         name.assign("second scope");
         Fixture::gName = name;
         Fixture::gScope = &secondScope;
-        if (!secondHost->Register(kFirst, report))
-        {
-            return false;
-        }
-        if (firstScope.Declarations().size() != 1 ||
-            firstScope.Declarations().front().DisplayName != std::string(256, 'a') ||
-            secondScope.Declarations().size() != 1 || secondScope.Declarations().front().DisplayName != "second scope")
-        {
-            return false;
-        }
-        // Shutdown revokes the Host's declarations after these deep-copy checks.
+        ASSERT_TRUE(secondHost->Register(kFirst, report));
+        ASSERT_EQ(firstScope.Declarations().size(), 1);
+        ASSERT_EQ(firstScope.Declarations().front().DisplayName, std::string(256, 'a'));
+        ASSERT_EQ(secondScope.Declarations().size(), 1);
+        ASSERT_EQ(secondScope.Declarations().front().DisplayName, "second scope");
+        // 深复制检查完成后，Shutdown 撤销本 Host 的声明。
     }
-    return firstScope.Declarations().empty() && secondScope.Declarations().empty();
+    ASSERT_TRUE(firstScope.Declarations().empty());
+    ASSERT_TRUE(secondScope.Declarations().empty());
 }
 
-bool RejectsCrossHostScopeReentry()
+TEST(Registration, RejectsCrossHostScopeReentry)
 {
+    const Fixture callbackState;
     for (const bool fail : {false, true})
     {
+        SCOPED_TRACE(fail);
         RegistrationScope scope;
         const auto first = Definition(kFirst, Fixture::Reenter);
         const auto second = Definition(kSecond, DeclareSecond);
@@ -304,31 +315,31 @@ bool RejectsCrossHostScopeReentry()
         Fixture::gReport = &report;
         auto outer = StaticModuleHost::Create({std::span(kEntries).first<1>()}, scope, {}, report);
         auto inner = StaticModuleHost::Create({std::span(kEntries).subspan<1>()}, scope, {}, report);
-        if (!outer || !inner)
-        {
-            return false;
-        }
+        ASSERT_TRUE(outer);
+        ASSERT_TRUE(inner);
         Fixture::gNestedHost = &*inner;
         const auto result = outer->Register(kFirst, report);
-        if (result.has_value() == fail || !Fixture::gObservedBusy || report.Module != kFirst ||
-            report.RelatedModule != ModuleId() ||
-            report.PrimaryError != (fail ? std::optional(kOriginal) : std::nullopt) ||
-            report.Progress !=
-                (fail ? ModuleOperationProgress::kCleanupPending : ModuleOperationProgress::kRegistered) ||
-            scope.Declarations().size() != (fail ? 0U : 1U) ||
-            inner->Modules().front().State != StaticModuleState::kLoaded || !inner->Register(kSecond, report))
-        {
-            return false;
-        }
+        ASSERT_NE(result.has_value(), fail);
+        ASSERT_TRUE(Fixture::gObservedBusy);
+        ASSERT_EQ(report.Module, kFirst);
+        ASSERT_EQ(report.RelatedModule, ModuleId());
+        ASSERT_EQ(report.PrimaryError, (fail ? std::optional(kOriginal) : std::nullopt));
+        ASSERT_EQ(report.Progress,
+                  (fail ? ModuleOperationProgress::kCleanupPending : ModuleOperationProgress::kRegistered));
+        ASSERT_EQ(scope.Declarations().size(), (fail ? 0U : 1U));
+        ASSERT_EQ(inner->Modules().front().State, StaticModuleState::kLoaded);
+        ASSERT_TRUE(inner->Register(kSecond, report));
     }
     Fixture::gFailAfterNested = false;
-    return true;
 }
 
-bool CrossScopeNestedReportBelongsToOuterOperation()
+TEST(Registration, CrossScopeNestedReportBelongsToOuterOperation)
 {
+    const Fixture callbackState;
+    Fixture::gFailAfterNested = false;
     for (const bool ready : {false, true})
     {
+        SCOPED_TRACE(ready);
         RegistrationScope outerScope;
         RegistrationScope innerScope;
         const std::array dependencies{ModuleDependency{.Id = kFirst}};
@@ -343,46 +354,18 @@ bool CrossScopeNestedReportBelongsToOuterOperation()
         const auto outerFirst = Definition(kFirst, Fixture::Reenter);
         Fixture::gFirst = &outerFirst;
         auto outer = StaticModuleHost::Create({std::span(kEntries).first<1>()}, outerScope, {}, report);
-        if (!inner || !outer)
-        {
-            return false;
-        }
+        ASSERT_TRUE(inner);
+        ASSERT_TRUE(outer);
         Fixture::gNestedHost = &*inner;
         Fixture::gReport = &report;
         const auto result = outer->Register(kFirst, report);
-        if (!result || report.PrimaryError || report.Module != kFirst || report.RelatedModule != ModuleId() ||
-            report.Progress != ModuleOperationProgress::kRegistered || outerScope.Declarations().size() != 1 ||
-            innerScope.Declarations().size() != (ready ? 1U : 0U))
-        {
-            return false;
-        }
+        ASSERT_TRUE(result);
+        ASSERT_FALSE(report.PrimaryError);
+        ASSERT_EQ(report.Module, kFirst);
+        ASSERT_EQ(report.RelatedModule, ModuleId());
+        ASSERT_EQ(report.Progress, ModuleOperationProgress::kRegistered);
+        ASSERT_EQ(outerScope.Declarations().size(), 1);
+        ASSERT_EQ(innerScope.Declarations().size(), (ready ? 1U : 0U));
     }
-    return true;
 }
 } // namespace
-
-int main()
-{
-    const std::array tests{
-        std::pair{"cross Scope nested report belongs to outer operation",
-                  CrossScopeNestedReportBelongsToOuterOperation},
-        std::pair{"registers once in dependency order and publishes atomically",
-                  RegistersOnceInDependencyOrderAndPublishesAtomically},
-        std::pair{"rolls back and preserves original error and progress",
-                  RollsBackAndPreservesOriginalErrorAndProgress},
-        std::pair{"ignored declaration failure cannot commit", IgnoredDeclarationFailureCannotCommit},
-        std::pair{"rejects invalid and oversized declarations", RejectsInvalidAndOversizedDeclarations},
-        std::pair{"concrete scopes own independent copies", ConcreteScopesOwnIndependentCopies},
-        std::pair{"rejects cross host scope reentry", RejectsCrossHostScopeReentry},
-    };
-    int failures = 0;
-    for (const auto& [name, test] : tests)
-    {
-        if (!test())
-        {
-            std::cerr << "FAIL: " << name << '\n';
-            ++failures;
-        }
-    }
-    return failures == 0 ? 0 : 1;
-}

@@ -67,6 +67,8 @@ vcpkg_installed/
 
 # test output & cache
 Testing/
+!/Tests/CMake/Testing/
+!/cmake/Testing/
 .cache/
 
 # Local agent skill directory mapping (Windows Junction / POSIX symlink)

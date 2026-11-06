@@ -1,0 +1,106 @@
+cmake_minimum_required(VERSION 4.0)
+include("${CMAKE_CURRENT_LIST_DIR}/TestingTestHelpers.cmake")
+
+# Engine 验证树决定归属范围；顶层 BuildRoot 仍决定工作目录与产物位置。
+# 不按已有 owner 标签过滤，否则漏标的 Engine 回归会被静默忽略。
+if(NOT DEFINED PANGU_TEST_ENGINE_BINARY_DIR OR NOT IS_DIRECTORY "${PANGU_TEST_ENGINE_BINARY_DIR}")
+    message(FATAL_ERROR "Engine classification requires PANGU_TEST_ENGINE_BINARY_DIR")
+endif()
+TestingListTests(BINARY "${PANGU_TEST_ENGINE_BINARY_DIR}" OUTPUT tests)
+string(JSON count LENGTH "${tests}" tests)
+if(count EQUAL 0)
+    message(FATAL_ERROR "Engine testing graph is empty")
+endif()
+math(EXPR last "${count} - 1")
+set(seen)
+set(mutableRoots)
+foreach(index RANGE 0 ${last})
+    string(JSON name GET "${tests}" tests ${index} name)
+    string(JSON properties GET "${tests}" tests ${index} properties)
+    string(JSON propertyCount LENGTH "${properties}")
+    math(EXPR lastProperty "${propertyCount} - 1")
+    set(labels)
+    set(work)
+    set(processors 1)
+    foreach(property RANGE 0 ${lastProperty})
+        string(JSON key GET "${properties}" ${property} name)
+        string(JSON value GET "${properties}" ${property} value)
+        if(key STREQUAL "LABELS")
+            string(JSON labelCount LENGTH "${value}")
+            math(EXPR lastLabel "${labelCount} - 1")
+            foreach(label RANGE 0 ${lastLabel})
+                string(JSON item GET "${value}" ${label})
+                list(APPEND labels "${item}")
+            endforeach()
+        elseif(key STREQUAL "WORKING_DIRECTORY")
+            set(work "${value}")
+        elseif(key STREQUAL "PROCESSORS")
+            set(processors "${value}")
+        endif()
+    endforeach()
+    if(NOT "run.full" IN_LIST labels OR NOT "owner.engine" IN_LIST labels OR
+       NOT "${labels}" MATCHES "boundary[.](unit|integration|system)" OR
+       NOT "${labels}" MATCHES "area[.][a-z0-9-]+")
+        message(FATAL_ERROR "${name}: an existing Engine regression is missing classification/full ownership: ${labels}")
+    endif()
+    if(name MATCHES "^(BuildEnvironment|ToolchainLibraryLink)$" AND
+       (NOT "run.precommit" IN_LIST labels OR "run.fast" IN_LIST labels))
+        message(FATAL_ERROR "${name} must enter precommit")
+    endif()
+    if(name MATCHES "^SourcePlugin" AND ("run.fast" IN_LIST labels OR "run.precommit" IN_LIST labels))
+        message(FATAL_ERROR "${name} must remain full")
+    endif()
+    string(FIND "${work}/" "${PANGU_TEST_BUILD_ROOT}/Tests/Work/" inWorkRoot)
+    if(NOT inWorkRoot EQUAL 0)
+        message(FATAL_ERROR "${name} has no isolated Tests/Work working directory: ${work}")
+    endif()
+    string(JSON command GET "${tests}" tests ${index} command)
+    string(JSON argumentCount LENGTH "${command}")
+    math(EXPR lastArgument "${argumentCount} - 1")
+    set(arguments)
+    foreach(argument RANGE 0 ${lastArgument})
+        string(JSON value GET "${command}" ${argument})
+        list(APPEND arguments "${value}")
+        if(value MATCHES "^-DPANGU_TEST_ROOT=(.*)$")
+            set(root "${CMAKE_MATCH_1}")
+            string(FIND "${root}/" "${PANGU_TEST_BUILD_ROOT}/Tests/Work/" inWorkRoot)
+            if(NOT inWorkRoot EQUAL 0 OR root IN_LIST mutableRoots)
+                message(FATAL_ERROR "${name}: parallel scripts must not share mutable fixture roots: ${root}")
+            endif()
+            list(APPEND mutableRoots "${root}")
+        endif()
+    endforeach()
+    if(name MATCHES "^(SourcePlugin|BuildTools[.]|Testing)" AND NOT processors EQUAL PANGU_TEST_BUILD_JOBS)
+        message(FATAL_ERROR "${name} PROCESSORS=${processors} differs from nested-build budget ${PANGU_TEST_BUILD_JOBS}")
+    endif()
+    if(name MATCHES "^(SourcePlugin|BuildTools[.]|Testing)" AND
+       NOT "CMAKE_BUILD_PARALLEL_LEVEL=${PANGU_TEST_BUILD_JOBS}" IN_LIST arguments)
+        message(FATAL_ERROR "${name} does not propagate the nested-build environment budget")
+    endif()
+    list(APPEND seen "${name}")
+endforeach()
+foreach(required IN ITEMS BuildEnvironment ToolchainLibraryLink NlohmannSubmoduleRequired
+        SourcePluginBuildTool SourcePluginBuildToolInvalidation SourcePluginBuildToolFileLinks
+        SourcePluginBuildToolDirectoryLinks SourcePluginEngineRevision SourcePluginProject
+        SourcePluginEnable SourcePluginStaticCatalog SourcePluginSharedDeploy SourcePluginIncremental
+        TestingRegistration TestingDependencyIsolation TestingBuildToolsTests
+        TestingBuildToolsFailurePropagation TestingScriptClassification ScopeDestructor)
+    if(NOT required IN_LIST seen)
+        message(FATAL_ERROR "Missing original regression or explicit capability scenario: ${required}")
+    endif()
+endforeach()
+if(CMAKE_HOST_WIN32 AND NOT "SourcePluginBuildToolSourceChange" IN_LIST seen)
+    message(FATAL_ERROR "Windows tool source invalidation/compile-failure recovery regression is missing")
+endif()
+
+# 首轮生成错误输入并失败，同一工作根重跑必须重建输入，不能依赖上次残留。
+set(retryRoot "${PANGU_TEST_ROOT}/retry")
+set(script "${PANGU_ENGINE_ROOT}/Tests/CMake/SourcePlugins/BuildToolConfigureTests.cmake")
+TestingRun(EXPECT fail DIAGNOSTIC "Empty-root configure failed" COMMAND "${CMAKE_COMMAND}"
+    "-DPANGU_ENGINE_SOURCE_DIR=${retryRoot}/missing-engine" "-DPANGU_TEST_ROOT=${retryRoot}"
+    "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
+    -P "${script}")
+TestingRun(EXPECT pass COMMAND "${CMAKE_COMMAND}"
+    "-DPANGU_ENGINE_SOURCE_DIR=${PANGU_ENGINE_ROOT}" "-DPANGU_TEST_ROOT=${retryRoot}"
+    "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
+    -P "${script}")

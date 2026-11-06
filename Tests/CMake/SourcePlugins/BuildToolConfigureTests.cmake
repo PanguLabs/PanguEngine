@@ -11,6 +11,7 @@ file(MAKE_DIRECTORY "${source}/Engine/Plugins")
 set(content [=[
 cmake_minimum_required(VERSION 4.0)
 project(SourcePluginBuildToolSmoke LANGUAGES NONE)
+file(WRITE "${CMAKE_BINARY_DIR}/nested-build-budget.txt" "$ENV{CMAKE_BUILD_PARALLEL_LEVEL}")
 include("@ENGINE_SOURCE@/cmake/PanguPlugins.cmake")
 pangu_discover_plugins(ENGINE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/Engine" OUTPUT_JSON result)
 string(JSON count LENGTH "${result}" plugins)
@@ -25,6 +26,10 @@ execute_process(COMMAND "${CMAKE_COMMAND}" -S "${source}" -B "${binary}" -G Ninj
     RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE error)
 if(NOT status EQUAL 0)
     message(FATAL_ERROR "Empty-root configure failed: ${status}\n${output}\n${error}")
+endif()
+file(READ "${binary}/nested-build-budget.txt" inheritedBudget)
+if(NOT inheritedBudget STREQUAL "${PANGU_TEST_BUILD_JOBS}")
+    message(FATAL_ERROR "Nested configure did not inherit processor budget: ${inheritedBudget} vs ${PANGU_TEST_BUILD_JOBS}")
 endif()
 
 if(WIN32)
@@ -49,7 +54,7 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
     endif()
 endif()
 
-execute_process(COMMAND "${CMAKE_COMMAND}" --build "${binary}"
+execute_process(COMMAND "${CMAKE_COMMAND}" --build "${binary}" --parallel "${PANGU_TEST_BUILD_JOBS}"
     RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE error)
 if(NOT status EQUAL 0 OR NOT output MATCHES "no work to do")
     message(FATAL_ERROR "No-change Ninja should do no work: ${status}\n${output}\n${error}")

@@ -1,7 +1,7 @@
 # Pangu C++23 开发原则与最佳实践
 
-> 状态：Partially Frozen（C++23、工具链、无异常、命名空间、编译期优先及受控 ABI 的既有原则已确定；本文新增的领域级实践大多为 SHOULD，具体 API、调度与协议尚待子系统冻结）
-> 更新：2026-10-21
+> 状态：Partially Frozen（C++23、工具链、无异常、保留 RTTI、命名空间、编译期优先及受控 ABI 的既有原则已确定；本文新增的领域级实践大多为 SHOULD，具体 API、调度与协议尚待子系统冻结）
+> 更新：2026-11-05
 > 规范配置：仓库根目录 [`.clang-format`](../../.clang-format) 和 [`.clang-tidy`](../../.clang-tidy)
 > 关联：[总体架构](../architecture.md)、[工具链](toolchain.md)、[构建系统](build-system.md)、[ABI](abi.md)、[错误与诊断](error-diagnostics.md)、[内存所有权](../core/memory-management.md)
 
@@ -21,7 +21,7 @@ PanguEngine 的工程取向：
 
 1. **C++23 + Clang**；五平台具体编译器和 C++ 标准库见 [Toolchain](toolchain.md)。不得把各平台理解为同一 C++ 二进制 ABI。
 2. 引擎 C++ 命名空间以 `pg` 开头；自定义 Clang 属性使用 `pga` 属性命名空间。
-3. 引擎不使用 C++ Exception 进行错误传播；对外失败行为见 [错误与诊断](error-diagnostics.md)。
+3. Pangu 自有 Runtime、BuildTools、测试和基准保留 RTTI，不主动禁用；引擎不使用 C++ Exception 进行错误传播；对外失败行为见 [错误与诊断](error-diagnostics.md)。
 4. **Compile-Time First**：能在类型系统、Concept、`constexpr` 或静态分发中安全合理确定的，不无故留给运行时查找。
 5. **Zero-Overhead Abstraction**：抽象的额外成本必须可解释；声称消除成本需通过生成代码、Profile 或 Benchmark 验证。
 6. **受控 C++ Module ABI 可传递 STL 类型**，不一刀切禁止；同时必须满足 ABI、Allocator、销毁代码驻留及借用生命周期契约。
@@ -213,4 +213,4 @@ UseTexture(*result);
 
 ## 13. 尚未冻结（不得由本文件推定）
 
-`Result/Error` 的具体 C++ 签名和布局、ABI Profile/Fingerprint 的实际采集工具与运行时接线、RTTI 全局编译策略、C++ Modules 的采用范围、Module 的 Public/Internal/Private 目录细节、事件与 Delegate API、ECS Query/Read/Write 标注、Scheduler 依赖推导与线程调度 API、序列化格式、统一 Schema / `pga` Taxonomy、Platform HAL、Callback 借用包装类型等仍待各专题文档冻结。错误与基础诊断、内存所有权、Module 单库和 Service 三模式的**现有已冻结语义不因此重新开放**。
+`Result/Error` 的具体 C++ 签名和布局、ABI Profile/Fingerprint 的实际采集工具与运行时接线、C++ Modules 的采用范围、Module 的 Public/Internal/Private 目录细节、事件与 Delegate API、ECS Query/Read/Write 标注、Scheduler 依赖推导与线程调度 API、序列化格式、统一 Schema / `pga` Taxonomy、Platform HAL、Callback 借用包装类型等仍待各专题文档冻结。错误与基础诊断、内存所有权、Module 单库和 Service 三模式的**现有已冻结语义不因此重新开放**。
