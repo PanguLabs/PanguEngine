@@ -24,6 +24,7 @@
 | [0013](0013-native-build-abi-boundary.md) | 原生增量构建与独立二进制 ABI 交付边界 | Accepted（独立 Pangu Plugin/SDK 交付范围由 ADR-0014 替代） | [Build System](../foundation/build-system.md)、[ABI](../foundation/abi.md) |
 | [0014](0014-source-plugins-project-build.md) | 源码 Plugin 与独立 Project 构建边界 | Accepted（设计；实施验收进行中） | [Plugin / Module](../core/plugin-module.md)、[Build System](../foundation/build-system.md) |
 | [0015](0015-unified-link-modes-module-manager.md) | 统一链接模式与 ModuleManager | Accepted（Public API/ABI 未冻结） | [Module API](../core/module-api.md)、[Build System](../foundation/build-system.md) |
+| [0016](0016-engine-host-lifecycle.md) | 单次 EngineHost 生命周期与只读具名服务访问 | Accepted（Public API/ABI 未冻结） | [EngineHost](../core/engine-host.md)、[Service](../core/service.md) |
 
 ## 推荐格式
 

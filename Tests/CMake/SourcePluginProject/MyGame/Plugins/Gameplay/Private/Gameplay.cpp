@@ -1,13 +1,18 @@
 #include "FixtureModules.h"
 #include "GameplayModule.h"
+#include "GameplayService.h"
 #include "ModuleDeclaration.h"
 #include "ModuleDescriptor.h"
 #include "Result.h"
 
 #include <RegistrationContext.h>
+#include <ScopeBuildContext.h>
+#include <memory>
 
+#include <ScopeFactory.h>
+#include <ScopeIdentity.h>
 #include <array>
-#include <cstddef>
+#include <expected>
 
 namespace pg::fixture
 {
@@ -15,7 +20,14 @@ namespace
 {
 [[nodiscard]] pg::Status RegisterGameplay(module::RegistrationContext& context) noexcept
 {
-    return context.Declare(module::DeclarationId{.Bytes = {std::byte{0x12}}}, "Gameplay");
+    return context.DeclareFactory(kGameplayDeclaration, service::Scope::kContext,
+                                  module::ScopeFactory(
+                                      [](module::ScopeBuildContext& build) noexcept -> Status
+                                      {
+                                          const auto value = build.Own(std::make_unique<GameplaySession>());
+                                          return value ? Status{} : Status{std::unexpected(value.error())};
+                                      }),
+                                  {}, "Gameplay");
 }
 } // namespace
 

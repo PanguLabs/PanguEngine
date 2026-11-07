@@ -29,6 +29,7 @@
 #include <mutex>
 #include <optional>
 #include <span>
+#include <typeinfo>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -864,6 +865,19 @@ Status ModuleManager::TryFinishUnload(ModuleHandle handle, ModuleOperationReport
     return result;
 }
 ScopeHandle ModuleManager::HostScope() const noexcept { return Data ? Data->Runtime->HostScope() : ScopeHandle{}; }
+Result<std::shared_ptr<detail::ScopeObjectControl>>
+ModuleManager::AcquireScopeResource(const detail::ScopeResourceQuery& query, const std::type_info& type) const noexcept
+{
+    if (Data && Data->Operating)
+    {
+        return std::unexpected(MakeModuleError(ModuleError::kBusy));
+    }
+    if (!Data || Data->Closed || Data->Runtime->IsShuttingDown())
+    {
+        return std::unexpected(MakeModuleError(ModuleError::kInvalidState));
+    }
+    return Data->Runtime->AcquireScopeResource(query, type);
+}
 Result<ScopeHandle> ModuleManager::CreateScope(pg::service::Scope kind, ScopeHandle parent,
                                                ModuleOperationReport& report) noexcept
 {

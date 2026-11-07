@@ -1,71 +1,158 @@
 #pragma once
 
+#include "EditorService.h"
 #include "FixtureModules.h"
+#include "GameplayService.h"
 
+#include <EngineHost.h>
+#include <EngineHostModule.h>
+#include <FoundationModule.h>
+#include <HostOperation.h>
+#include <HostStartupConfig.h>
 #include <ModuleBuiltin.h>
 #include <ModuleManager.h>
 #include <RegistrationContext.h>
-#include <ranges>
+#include <cstdio>
+#include <iostream>
 #include <span>
 #include <vector>
 
 namespace pg::fixture
 {
+template <class T>
+[[nodiscard]] bool VerifyContexts(engine::EngineHost& host,
+                                  Result<module::ScopeAccess<T>> (*acquire)(const engine::EngineHost&,
+                                                                            module::ScopeHandle) noexcept,
+                                  int initial, const char* name) noexcept
+{
+    engine::HostOperationReport report;
+    const auto first = host.CreateContext(report);
+    const auto second = host.CreateContext(report);
+    if (!first || !second || !host.CreateWorld(*first, report) || !host.CreateWorld(*second, report))
+    {
+        return false;
+    }
+    const auto firstAccess = acquire(host, *first);
+    const auto secondAccess = acquire(host, *second);
+    if (!firstAccess || !secondAccess)
+    {
+        return false;
+    }
+    {
+        auto firstBorrow = firstAccess->TryBorrow();
+        auto secondBorrow = secondAccess->TryBorrow();
+        if (!firstBorrow || !secondBorrow || (*firstBorrow)->Value != initial || (*secondBorrow)->Value != initial)
+        {
+            return false;
+        }
+        ++(*firstBorrow)->Value;
+        if ((*firstBorrow)->Value != initial + 1 || (*secondBorrow)->Value != initial)
+        {
+            return false;
+        }
+        std::cout << name << " Context values: " << initial << " -> " << (*firstBorrow)->Value
+                  << "; isolated=" << (*secondBorrow)->Value << '\n';
+    }
+    if (!host.BeginCloseScope(*first, report) || !host.TryFinishCloseScope(*first, report) || firstAccess->TryBorrow())
+    {
+        return false;
+    }
+    auto remaining = secondAccess->TryBorrow();
+    return remaining && (*remaining)->Value == initial;
+}
+
 [[nodiscard]] inline int VerifyCandidates(std::span<const module::ModuleLoadCandidate> candidates,
                                           module::ModuleId dependent, bool shared) noexcept
 {
-    module::RegistrationScope scope;
-    module::ModuleOperationReport report;
-    auto host = module::ModuleManager::Create(scope, module::BuiltinResidentQueries(), {}, report);
-    if (!host || host->Modules().size() != 2)
+    engine::EngineHost host;
+    engine::HostOperationReport report;
+    pg::engine::HostStartupConfig config;
+    config.Modules = candidates;
+    if (!host.Start(config, report))
     {
-        return 1;
-    }
-    for (const auto root : host->RegistrationOrder())
-    {
-        if (!host->Register(root, report) || !host->Activate(root, report))
+        const bool failureReported = report.StartupFailure.has_value() && report.PrimaryError.has_value();
+        std::cerr << "EngineHost Start failed: stage=" << static_cast<unsigned>(report.Stage) << '\n';
+        if (!host.BeginShutdown(report) || !host.TryFinishShutdown(report))
         {
-            return 2;
+            std::fputs("EngineHost startup cleanup incomplete\n", stderr);
+            return 8;
         }
+        return failureReported ? 3 : 1;
     }
-    const auto loaded = host->Load(candidates, {}, report);
-    if (!loaded || loaded->Modules.size() != 2 || host->Inspect(loaded->Modules.front())->Descriptor.Id != kPhysicsId ||
-        host->Inspect(loaded->Modules.back())->Descriptor.Id != dependent)
+    const int result = [&]
     {
-        return 3;
-    }
-    for (const auto handle : loaded->Modules)
-    {
-        const auto before = host->Inspect(handle);
-        if (!before || before->Resident || before->State != module::ModuleState::kLoaded ||
-            !host->Register(handle, report) || !host->Activate(handle, report))
+        const auto modules = host.InspectModules();
+        if (!modules || modules->size() != 5)
+        {
+            return 1;
+        }
+        std::size_t residents{};
+        bool physicsFound{};
+        bool dependentFound{};
+        for (const auto& snapshot : *modules)
+        {
+            if (snapshot.State != module::ModuleState::kActive)
+            {
+                return 5;
+            }
+            if (snapshot.Resident)
+            {
+                ++residents;
+                if (snapshot.Descriptor.Id != module::kFoundationModuleId &&
+                    snapshot.Descriptor.Id != module::kModuleRuntimeModuleId &&
+                    snapshot.Descriptor.Id != engine::kEngineHostModuleId)
+                {
+                    return 2;
+                }
+            }
+            else if (snapshot.Descriptor.Id == kPhysicsId)
+            {
+                physicsFound = true;
+            }
+            else if (snapshot.Descriptor.Id == dependent)
+            {
+                dependentFound = true;
+            }
+            else
+            {
+                return 4;
+            }
+        }
+        if (residents != 3 || !physicsFound || !dependentFound)
         {
             return 4;
         }
-        const auto after = host->Inspect(handle);
-        if (!after || after->State != module::ModuleState::kActive)
+        const auto declarations = host.InspectDeclarations();
+        const auto expected = dependent == kGameplayId ? kGameplayDeclaration : kEditorDeclaration;
+        // 拥有型快照保留原声明数、身份及 Physics 优先发布的顺序断言。
+        if (!declarations || declarations->size() != 2 || declarations->front().Owner != kPhysicsId ||
+            declarations->front().Id != kPhysicsDeclaration || declarations->back().Owner != dependent ||
+            declarations->back().Id != expected)
         {
-            return 5;
+            return 6;
         }
-    }
-    if (scope.Declarations().size() != 2)
-    {
-        return 6;
-    }
-    // 业务沿 Manager 返回的依赖顺序逆序关闭，最后才关闭基础常驻根。
-    for (const auto handle : loaded->Modules | std::views::reverse)
-    {
-        if (!host->BeginUnload(handle, report) || !host->TryFinishUnload(handle, report))
+        if (candidates.empty() || shared != std::holds_alternative<module::SharedModuleCandidate>(candidates.front()))
         {
-            return 7;
+            return 9;
         }
+        const bool serviceValid = dependent == kGameplayId
+                                      ? VerifyContexts(host, AcquireGameplaySession, 7, "Gameplay")
+                                      : VerifyContexts(host, AcquireEditorSession, 11, "EditorExtras");
+        return serviceValid ? 0 : 10;
+    }();
+    // Ready 后集合固定；Scope 借用已全部结束，整体 Shutdown 替代逐业务 Unload。
+    if (!host.BeginShutdown(report) || !host.TryFinishShutdown(report) || host.GetState() != engine::HostState::kClosed)
+    {
+        std::fputs("EngineHost shutdown incomplete\n", stderr);
+        return 8;
     }
-    if (!host->BeginShutdown(report) || !host->TryFinishShutdown(report) || !scope.Declarations().empty())
+    const auto remainingModules = host.InspectModules();
+    const auto remainingDeclarations = host.InspectDeclarations();
+    if (!remainingModules || !remainingModules->empty() || !remainingDeclarations || !remainingDeclarations->empty())
     {
         return 8;
     }
-    // 源形式也由调用者明确选择；不会把 OS 隐式加载当作 Manager 已接纳。
-    return shared == std::holds_alternative<module::SharedModuleCandidate>(candidates.front()) ? 0 : 9;
+    return result;
 }
 
 [[nodiscard]] inline int VerifyCatalog(const module::StaticModuleCatalog& catalog, module::ModuleId dependent) noexcept

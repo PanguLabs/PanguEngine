@@ -11,9 +11,12 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <typeinfo>
 
 namespace pg::module::detail
 {
+struct ScopeResourceQuery;
+struct ScopeObjectControl;
 [[nodiscard]] pg::Result<std::uint64_t> AllocateScopeDomain() noexcept;
 
 class ScopeRuntime final
@@ -33,6 +36,8 @@ public:
     [[nodiscard]] std::optional<pg::Error> PendingFailure() const noexcept;
     void RegistrationFailed(ModuleId id, pg::Error error) noexcept;
     [[nodiscard]] ScopeHandle HostScope() const noexcept;
+    [[nodiscard]] Result<std::shared_ptr<ScopeObjectControl>>
+    AcquireScopeResource(const ScopeResourceQuery& query, const std::type_info& type) const noexcept;
     [[nodiscard]] pg::Result<ScopeHandle> CreateScope(pg::service::Scope kind, ScopeHandle parent,
                                                       ModuleOperationReport& report);
     [[nodiscard]] pg::Status Activate(ModuleId id, ModuleOperationReport& report);

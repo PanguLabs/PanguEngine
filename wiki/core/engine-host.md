@@ -1,53 +1,47 @@
-# Pangu EngineHost 设计基线
+# Pangu EngineHost 启动与生命周期
 
-> 状态：Partially Frozen（宿主职责、与三种 Service 模式的边界冻结；启动与生命周期 API 未冻结）
+> 状态：Partially Frozen（宿主职责、单次启动、Scope 与安全关闭行为已确定；Public C++ API/ABI 未冻结）
 > 更新：2026-11-07
-> 决策：[ADR-0002](../decisions/0002-name-engine-host.md)
+> 决策：[ADR-0002](../decisions/0002-name-engine-host.md)、[ADR-0016](../decisions/0016-engine-host-lifecycle.md)
 
-## 背景
+## 职责与所有权
 
-PanguEngine 需要同时支持 Game、Editor 以及工具型宿主。早期使用 `RuntimeHost` 命名，但它可能被误解为只负责 Game Runtime，未来存在 Editor Runtime 时容易产生歧义。
+Application 拥有 `pg::engine::EngineHost`。它不可复制、不可移动，构造不执行 Query、Load 或 Register；内部声明域比 ModuleManager 活得更久。同一进程可拥有多个独立宿主。Game、Editor、Tool 共用此协议，窗口、渲染和主循环仍由 Application 负责。
 
-## 已确定
+`PanguEngineHost` / `Pangu::EngineHost` 是独立第三常驻 Module，单一真实 STATIC/SHARED Target 跟随统一链接模式。身份为 `8b07b8da6c9647469f8a31608f7e2193`，版本 1.0.0、协议 1，Required 依赖 Module Runtime 1.0.0。`BuiltinResidentQueries()` 仍只返回 Foundation/Module 两项，EngineHost 自行组合自己的 Query；不反向依赖业务 Module。
 
-1. 顶层宿主概念使用 **`EngineHost`**；不以 `RuntimeHost` 作为统一抽象名称。
-2. `EngineHost` 应表达**引擎宿主职责**，而不是把 Editor 自身视为另一套不兼容的引擎基础设施。
-3. EngineHost 所依赖的 Module / Plugin 系统应能区分 Module 的安装/发现、加载、初始化、执行及停止/卸载等生命周期阶段。
-4. 具体 Game / Editor 应用可以为不同运行场景选择不同能力、服务和启动策略；不能据此推断必须使用不同的宿主核心。
-5. Host 负责或协调依赖对象的生命周期闭包：Module 代码、Task、Callback、Resource、Allocator 及 GPU 工作都可能影响关闭或卸载的完成时机。
-6. 不采用**强制 C Bootstrap** 作为整套引擎架构的基础；必要的 ABI 边界互操作仍可使用 C 接口。
+EngineHost 复用 [ModuleManager](module-api.md) 的资源 DAG、Scope、原生持有与清理器，不引入第二套加载/资源管理系统。Plugin 仍管理发现和分发，Module 管理代码与能力声明；Module 可以完全没有 Service。三种 [Service](service.md) 模式的既有语义不变。
 
-源码 Plugin 与独立 Project 的构建边界由 [ADR-0014](../decisions/0014-source-plugins-project-build.md) 规定。Game/Editor fixture 已接入双模式：Mono Catalog 保留根引用，Modular 显式 Load/Register/Activate 真实业务库并关闭，消费集合与部署分离；Foundation/Module 宿主常驻仍显式启动，失败整体 Shutdown。当前 ModuleManager 不等于完整 EngineHost；平台/模式与限制见[正式验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。
+## 单次启动
 
-以上不意味着每一个生命周期阶段都有固定枚举名或必须由单个类直接执行。
+状态依次为 Cold → Starting → Ready → Closing → Closed。`Start(config, report)` 只在 Cold 接纳一次，同步执行六阶段：常驻接纳、常驻注册、常驻激活、业务整批接纳、业务注册、业务激活。业务空批次跳过 Load；启动 Busy 也是失败，任何阶段失败均请求整体关闭，不交付部分 Ready 宿主。Closed 不重启，重新启动创建新的 EngineHost。
 
-ELF 可执行宿主若参与跨 DSO 公共类型 RTTI（例如宿主常驻 Factory 消费业务 DLL 的类型），除了类型本身正确的可见性，还需将相关公开符号放入主程序动态符号表，可通过 CMake `ENABLE_EXPORTS` 实现。当前 Linux Modular 的 `PanguModuleUnloadTests` 按此设置，其它没有同类参与的 Host 不强行开启。该设置不替代 Module 的最小导出/私有隐藏，也不引入逐类型锚点；公共符号的名称冲突与插入风险仍须受受控 ABI/ODR 约束。
+`HostStartupConfig` 的四个 span 借用额外常驻 Query/Bindings 与业务 Candidates/Bindings，仅在调用期间使用。Ready 后业务集合固定；首版不提供增量加载、通用构造参数注入、ConfigureInstance 或额外 Register 回调。
 
-## 概念关系
+`HostOperationReport` 是拥有型值快照，区分当前阶段/错误与 `StartupFailure` 的首次启动阶段/错误/Module 报告。清理重试返回非 Busy 错误也不能覆盖首错或丢失所有者。回调重入管理操作返回 Host Busy，局部报告在外部代码返回后整体发布，复用同一 report 不污染外层结果。
 
-```text
-Game / Editor / Tool Application
-             |
-         EngineHost
-             |
-   Plugin / Module Coordination
-             |
-Engine Services and Runtime Modules
-```
+## Scope 与具名 Concrete Service 访问
 
-这是依赖与职责示意，**不是已经冻结的类图**。EngineHost 不应被假定具有无限的职责；核心静态服务通过宿主/Context 直接强类型访问；动态扩展能力通过 Scoped ServiceRegistry 注册和借用。具体对象成员、工厂签名和依赖布局仍需要在 API 设计阶段讨论，见 [Service 架构](service.md)。
+Ready 后可创建 Context，以及指定 Context 下的 World。创建失败只回滚该 Scope；已有 Scope 与服务继续有效。失败槽位复用受 Domain/Slot/Generation 保护，不能使旧句柄访问新对象。Host 根 Scope 不单独关闭；子 Scope 显式 BeginClose/TryFinishClose，失败装配的残留由 PollCleanup 继续推进。
 
-## 与 Plugin / Module 的关系
+Module 自有头内具名入口接收 `const EngineHost&` 和 `ScopeHandle`，固定自己的 Owner、DeclarationId、Kind 和具体 T，通过 `detail::HostResourceAccess` 与 Module 内部只读查询获得 `ScopeAccess<T>`。只在 Ready 且宿主未执行管理操作时接纳；不返回 Manager 指针，不允许调用方自行 adopt 控制块。
 
-- EngineHost 按运行场景协调 Module 能力、依赖及安全收尾。
-- Plugin 是发现、启用、分发和扩展的单元；Module 是代码组织、依赖和执行生命周期的单元，见 [Plugin/Module](plugin-module.md)。
-- 每个 Module 对应一个实际 CMake STATIC/SHARED Library Target、一个主要库产物；Module 是否采用 SHARED 不等于它的 Service 必须运行时动态绑定，详见 [Plugin/Module](plugin-module.md)。
-- EngineHost / EngineContext / WorldContext 对 Concrete Service 强类型持有；Contract Service 的动态 Provider 由 Scoped Registry 管理；Registry Service 是业务 Module 自己提供的多 Contributor Registry，不引入 ExtensionManager。
-- Module 的加载、注册与 Service 的 Ready 是不同阶段；Host 负责或协调依赖闭包，不把它们统统交给一个万能 ServiceManager。
-- 动态库句柄和 CodePin 由现有 Module 机制维护，不另建 BinaryImage 管理层；卸载必须满足 [内存所有权规范](memory-management.md) 的 Module 卸载前置条件。
+查询精确匹配宿主、句柄、Module、声明、Scope Kind 和 RTTI 类型值。它只读取已有 Ready 实例，不执行 Factory、不自动搜索祖先、不选择 Provider；同类型的不同声明相互独立，纯元数据声明和无 Service Module 不产生可访问对象。需要祖先实例时显式传祖先句柄。业务服务无需共同基类、虚方法或 Manager 命名。
 
-## 尚未冻结
+`ScopeAccess` 仅拥有常驻控制块，`ScopeBorrow` 才保护实例及其代码。查询和管理操作由调用方串行协调；已发出的令牌可并发 TryBorrow/Release，与关闭闸门线性化。服务自身数据访问仍遵循业务线程契约。RTTI 只在受保护的查询期间按值比较，不进入残留令牌。
 
-`EngineHost` C++ 类签名、HostConfig、Bootstrap 流程、初始化图的具体节点与编排、ServiceRegistry 的具体 C++ API 与 Host 集成、Host 与 Application 的所有权方向、多个 EngineHost 实例、Editor 与 Game 的宿主差异、错误传播和停机接口、Hot Reload 的完整状态机。Service 依赖 DAG、Scope 方向及逆序销毁语义已由 [Service](service.md) 冻结，不属于此处待决事项。
+## 关闭与诊断
 
-**实现准则**：如果设计需要新增上述约束，应先在规范或 ADR 中说明，而不能将本文件解读为已批准某个具体 API。
+Application 显式调用 BeginShutdown，然后在 Borrow/Pin、异步工作等排空后重试 TryFinishShutdown。Closing 拒绝新查询和 Borrow，保留已有保护以及清理所需资源、声明和代码；停止错误或原生释放失败均可重试。没有 ForceUnload、超时强毁或后台清理线程。析构只做有限同步兜底，仍不能安全完成时走所有配置有效的终止路径。
+
+GetState/HostScope 为无副作用观察，Cold/Closed 无有效 HostScope。InspectModules/InspectDeclarations 返回拥有型快照，操作重入返回 Busy；成功关闭后为空。清理责任升级为 ManagerShutdown 时，宿主同步进入 Closing。
+
+真实物理卸载须由无额外导入持有的业务夹具库事件证明。新具名入口产生的 ScopeAccess 在业务库真实卸载后仍可复制、失败 TryBorrow 和最终释放，其控制块及释放实现位于常驻 Runtime。系统仍持有某库时不承诺它物理移除。
+
+ELF 可执行宿主参与跨 DSO 公共 RTTI 时需要正确的类型可见性及可执行文件动态符号导出（CMake `ENABLE_EXPORTS`）。这不替代受控 ABI/ODR 约束或最小公共导出，也不采用逐类型身份锚点。
+
+## 实现与验收边界
+
+最小生命周期、Concrete 查询、[MinimalHost](../../Samples/MinimalHost/README.md) 以及独立 Project Game/Editor/MobileHost 消费已实现。正式回归保留在 `Tests/EngineHost` 和 `Tests/Module`；实际平台、模式、失败与重跑记录见[本轮验收](../../docs/superpowers/plans/2026-11-07-engine-host-lifecycle-validation.md)。设计规格见[生命周期规格](../../docs/superpowers/specs/2026-11-07-engine-host-lifecycle-design.md)。实现存在不等于平台已验收。
+
+完整 Contract Provider 选择、Registry Contribution、TaskScheduler/GPU 排空集成、热更新、窗口/渲染/主循环、设备运行、打包和签名仍未交付。Public C++ 签名、布局与 ABI 不作为长期冻结接口；现有三种 Service 模式、依赖方向和安全销毁语义继续有效。

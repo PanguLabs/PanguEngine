@@ -1,13 +1,18 @@
 #include "EditorExtrasModule.h"
+#include "EditorService.h"
 #include "FixtureModules.h"
 #include "ModuleDeclaration.h"
 #include "ModuleDescriptor.h"
 #include "Result.h"
 
 #include <RegistrationContext.h>
+#include <ScopeBuildContext.h>
+#include <memory>
 
+#include <ScopeFactory.h>
+#include <ScopeIdentity.h>
 #include <array>
-#include <cstddef>
+#include <expected>
 
 namespace pg::fixture
 {
@@ -15,7 +20,14 @@ namespace
 {
 [[nodiscard]] pg::Status RegisterEditorExtras(module::RegistrationContext& context) noexcept
 {
-    return context.Declare(module::DeclarationId{.Bytes = {std::byte{0x13}}}, "EditorExtras");
+    return context.DeclareFactory(kEditorDeclaration, service::Scope::kContext,
+                                  module::ScopeFactory(
+                                      [](module::ScopeBuildContext& build) noexcept -> Status
+                                      {
+                                          const auto value = build.Own(std::make_unique<EditorSession>());
+                                          return value ? Status{} : Status{std::unexpected(value.error())};
+                                      }),
+                                  {}, "EditorExtras");
 }
 } // namespace
 

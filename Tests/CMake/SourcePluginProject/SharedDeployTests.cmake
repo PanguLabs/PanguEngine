@@ -15,8 +15,8 @@ file(RENAME "${gameplayDeploy}" "${gameplayDeploy}.missing")
 if(CMAKE_HOST_WIN32)
     set(executableSuffix .exe)
 endif()
-# DLL 缺失必须使 Manager Load 失败，证明激活来自明确部署候选。
-ProjectCommand(FAIL "Manager candidate load failed" "${binary}/Bin/MyGame${executableSuffix}")
+# DLL 缺失必须使宿主 Start 失败，证明激活来自明确部署候选。
+ProjectCommand(FAIL "EngineHost candidate start failed" "${binary}/Bin/MyGame${executableSuffix}")
 file(RENAME "${gameplayDeploy}.missing" "${gameplayDeploy}")
 CheckConsumer(MyGame Modular Gameplay EditorExtras)
 BuildFixture(MyGameDeployShared)

@@ -45,7 +45,7 @@
 
 | 文档 | 决策范围 | 状态 |
 | --- | --- | --- |
-| [Engine Host](core/engine-host.md) | 采用 EngineHost 命名与宿主职责方向 | Partially Frozen |
+| [Engine Host](core/engine-host.md) | Application 所有权、单次启动、精确 Scope/Concrete 访问与可重试关闭 | Partially Frozen |
 | [Plugin 与 Module](core/plugin-module.md) | Plugin/Module 职责、单 Module 单库、CodePin 与安全卸载 | Partially Frozen |
 | [Module 注册与生命周期 v1](core/module-registration-lifetime.md) | STATIC/SHARED 统一注册、可回滚事务、生命周期与 CodePin | Frozen（设计语义）；具体 API 未冻结 |
 | [ModuleDescriptor & Registration API v1](core/module-api.md) | 身份/依赖、统一 C++ 入口、ModuleManager、强类型 RTTI、Scope 装配、Pin 与清理契约 | Partially Frozen（现行行为见 ADR-0015；Public API/ABI 未冻结） |
@@ -84,3 +84,5 @@
 6. 此索引不代表实现完成清单；源码、测试和跨平台验证应单独追踪。
 
 现行统一链接模式、常驻根与动态 ModuleManager 以 [ADR-0015](decisions/0015-unified-link-modes-module-manager.md) 和 [Module API](core/module-api.md) 为准；Public C++ ABI 未冻结。实际平台矩阵见[验收记录](../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。
+
+EngineHost 最小生命周期与具名 Concrete 查询由 [ADR-0016](decisions/0016-engine-host-lifecycle.md) 和 [EngineHost 规范](core/engine-host.md) 记录；三种 Service 模式不变，Public C++ API/ABI 未冻结。实际平台与模式结果见[本轮验收](../docs/superpowers/plans/2026-11-07-engine-host-lifecycle-validation.md)。

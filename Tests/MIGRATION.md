@@ -406,3 +406,18 @@ Task 4 新增 `ModuleManagerTests.cpp`、`ResidentModuleTests.cpp`、`BatchLoadT
 Task 4/5 首轮 review 的四项 Important 均经正式回归修复并限定复评关闭；Task 6 首轮真实动态行为已正确，只修正 Busy 子进程进程退出回调的观察阶段。永久结论及执行裁决、延期 Minor 见[正式验收](../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。测试长期保留，未删除旧有效行为。整分支最终 Review/cleanup 由控制器完成后另行归档。
 
 Task 8 的真实平台失败保留为新增回归：独立无原生互导的 ScopeProvider/ScopeConsumer 继续验证合法 RTTI 值匹配，POSIX LOCAL 改 GLOBAL，不通过互导或类型锚点掩盖；ExternalPin/NativeClose 的物理顺序用例固定 Provider 先显式装载，全部 Pin/资源/故障/物理断言保留，新增 NativeLoader 双顺序持有释放回归补足可移植语义。SourcePluginEnable 在独立 fresh binary dirs 显式验证两模式，Lib/Bin 均检查未消费与消费产物，负例保留。ModeMatrix/Switch 的 ThirdParty 仍 STATIC、不受 Pangu 策略影响，空 TU 改实际返回23的函数并由 ModeConsumer 消费；保留真实最终链接，不调整全局 AR/ranlib。
+
+
+## 2026-11-07：EngineHost 独立 Project 与最小服务样例
+
+独立 Project 的 Game、Editor、MobileHost 从直接管理 ModuleManager 迁移为拥有 EngineHost；业务集合在 Ready 后固定，因此原 HostCheck 逐业务 BeginUnload/TryFinishUnload 改为整体 BeginShutdown/TryFinishShutdown。此处不再验证 Application 手动卸载业务项；旧 ModuleUnload、ModuleCodePin、SharedScopeLifecycle 等 Manager 正式回归完整保留，单项卸载、依赖阻挡和失败清理契约未废弃。
+
+| 原覆盖 | 当前验证与边界 |
+| --- | --- |
+| 两个常驻根、Physics 优先、业务 Active | 三个常驻根（增加 EngineHost），InspectModules 校验身份、数量、状态与业务消费集合；InspectDeclarations 拥有型快照校验 Physics 优先、两个原声明 ID/Owner |
+| Gameplay/EditorExtras 纯元数据声明 | 同一 DeclarationId 改为 Context Factory，声明数量不变；Physics 保留无 Service 行为；真实读取/修改 Gameplay 7→8、Editor 11→12，另一个 Context 保持初值 |
+| 显式 Catalog Query 根引用与动态候选 | StaticCatalog/SharedDeploy 保留双模式独立消费、无业务 DLL 隐式导入、部署缺失失败、无变化构建；Incremental 保留模式往返并校验服务值 |
+| 关闭后的声明撤销 | 整体 Shutdown 后状态 Closed、Module/声明快照均为空；先释放 Borrow，单 Context 关闭后旧令牌不可借用、另一 Context 仍可访问 |
+| MobileHost 对 ModuleManager::Create 直接引用 | MobileHost 改验证 EngineHost::Start；Modular 在真实 EngineHost 动态库验证 Create 引用与 Start 定义，Mono 在最终 MobileHost 验证两者定义；仍保留架构、平台、Query、依赖和非设备执行边界 |
+
+新增 MinimalHostSmoke 仅在 PANGU_BUILD_SAMPLES=ON 时登记为 system / engine-host / precommit；运行程序本身断言两个 Context/World、真实服务值、隔离及显式关闭。Project 正式验收必须使用干净锁定提交和 override OFF，开发 override 轮次只作反馈。

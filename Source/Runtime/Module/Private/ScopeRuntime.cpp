@@ -1,5 +1,7 @@
 #include "ScopeRuntime.h"
 #include "Error.h"
+#include <ScopeResourceAccess.h>
+#include <typeinfo>
 
 #include "ModuleRecord.h"
 #include <ModuleDeclaration.h>
@@ -90,6 +92,8 @@ struct ScopeRuntime::State
         DeclarationId Id{};
         std::uint64_t Serial{};
         std::unique_ptr<ErasedScopeObject> Object;
+        // 仅活资源持有业务 RTTI；残留访问控制块不保存 DLL 元数据。
+        const std::type_info* TypeInfo{};
         std::shared_ptr<ScopeObjectControl> Control;
         std::vector<Resource*> Dependencies;
         bool Ready{};
@@ -446,6 +450,7 @@ struct ScopeRuntime::State
             resource->Id = Definition->Id;
             resource->Serial = Runtime->NextResource++;
             resource->Object = std::move(object);
+            resource->TypeInfo = &resource->Object->Type();
             resource->Dependencies = Providers;
             resource->Control = MakeScopeObjectControl(Runtime->Find(Definition->Owner)->Gate, TargetScope->Gate,
                                                        resource->Object->Get());
@@ -808,6 +813,7 @@ struct ScopeRuntime::State
                 }
                 resource.Control->Object = nullptr;
                 resource.Object.reset();
+                resource.TypeInfo = nullptr;
                 resource.Dependencies.clear();
                 resource.Destroyed = true;
                 resource.Error.reset();
@@ -991,6 +997,43 @@ void ScopeRuntime::RegistrationFailed(ModuleId id, pg::Error error) noexcept
 ScopeHandle ScopeRuntime::HostScope() const noexcept
 {
     return Data->Slots.front().Owner ? Data->Slots.front().Owner->Handle : ScopeHandle{};
+}
+
+Result<std::shared_ptr<ScopeObjectControl>>
+ScopeRuntime::AcquireScopeResource(const ScopeResourceQuery& query, const std::type_info& type) const noexcept
+{
+    if (query.Kind != Kind::kHost && query.Kind != Kind::kContext && query.Kind != Kind::kWorld)
+    {
+        return std::unexpected(MakeModuleError(ModuleError::kInvalidScope));
+    }
+    auto* scope = Data->Find(query.Scope);
+    if (scope == nullptr)
+    {
+        return std::unexpected(MakeModuleError(ModuleError::kScopeNotFound));
+    }
+    if (scope->Type != query.Kind)
+    {
+        return std::unexpected(MakeModuleError(ModuleError::kInvalidScope));
+    }
+    if (!scope->Delivered || !scope->Ready || scope->Closing)
+    {
+        return std::unexpected(MakeModuleError(ModuleError::kNotReady));
+    }
+    const auto* resource = State::FindResource(*scope, query.Declaration);
+    if (resource == nullptr || resource->Owner != query.Owner)
+    {
+        return std::unexpected(MakeModuleError(ModuleError::kNotFound));
+    }
+    const auto* module = Data->Find(resource->Owner);
+    if (module == nullptr || module->Record->State != ModuleState::kActive || !resource->Ready || resource->Closing)
+    {
+        return std::unexpected(MakeModuleError(ModuleError::kNotReady));
+    }
+    if (resource->TypeInfo == nullptr || *resource->TypeInfo != type)
+    {
+        return std::unexpected(MakeModuleError(ModuleError::kTypeMismatch));
+    }
+    return resource->Control;
 }
 
 pg::Result<ScopeHandle> ScopeRuntime::CreateScope(Kind kind, ScopeHandle parent, ModuleOperationReport& report)

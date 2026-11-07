@@ -114,3 +114,9 @@ Module 基准的三桌面配置、采样与恢复命令见 [Benchmark 说明](Mo
 正式矩阵以[当前验收记录](../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)为准。桌面默认 Modular；Monolithic 的旧有效 Module 覆盖保留，Modular 的 ModuleRegression 在独立子图自动执行，子标记只防递归。ModuleLinkModeMatrix/Switch 验证父模式、目标类型、非法值/中途改值和往返；真实 DLL 的 RTTI/Pin/Scope/物理卸载不能由静态归档替代。同根模式切换须等上一会话结束，最终 format/tidy/build/CTest 也串行。
 
 Android/iOS 两模式除正式根编译，还须显式运行 SourcePluginProject/CrossCompileTests.cmake，检查真实 Runtime/业务 Query、动态依赖、目标架构和最小宿主最终链接；不运行交叉目标 GTest，不宣称设备 RTTI/动态卸载、打包或签名。两模式六场景 benchmark 单独显式开启/dry run，完成恢复 OFF，新增常驻根成本保留在原计时区间，不混旧基线。
+
+## EngineHost 生命周期验收
+
+正式用例位于 `Tests/EngineHost`，覆盖 Startup、Failure、Shutdown、Scope、ServiceAccess、Concurrency 和 Modular 真实物理卸载；`Tests/Module/ScopeResourceAccessTests.cpp` 覆盖底层精确查询。样例开启时另运行 MinimalHostSmoke，独立 Project 保留消费集合/部署/增量/双模式测试。Modular 的 ModuleRegression 运行旧 Module Mono 和新增 EngineHost Mono，不能仅以根 Modular 用例替代。
+
+失败阶段测试配置真实可观测业务候选，确认常驻失败不继续业务 Query；并发测试检查每次竞态 TryBorrow 的成功值或失败错误，若竞态成功则保留 Borrow 至关闭后，确认其独立阻止完成，不要求调度必然产生成功。规格补强对应 `NonBusyStopFailurePreservesStartupFailure` 与 `QueriedAccessSurvivesPhysicalUnload`，分别验证 E1/E2 分离和新具名令牌跨真实卸载。实际三桌面双模式和两移动双模式证据统一记录于[EngineHost 验收](../docs/superpowers/plans/2026-11-07-engine-host-lifecycle-validation.md)，移动仅最终链接/宿主检查，不运行交叉 GTest。

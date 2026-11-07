@@ -9,6 +9,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <typeinfo>
 #include <variant>
 #include <vector>
 namespace pg::module
@@ -17,7 +18,10 @@ class RegistrationScope;
 namespace detail
 {
 struct ModuleManagerTestAccess;
-}
+class ScopeResourceAccess;
+struct ScopeResourceQuery;
+struct ScopeObjectControl;
+} // namespace detail
 enum class DependencyBindingReason : std::uint8_t
 {
     kRequired,
@@ -115,6 +119,9 @@ public:
 
 private:
     friend struct detail::ModuleManagerTestAccess;
+    friend class detail::ScopeResourceAccess;
+    [[nodiscard]] Result<std::shared_ptr<detail::ScopeObjectControl>>
+    AcquireScopeResource(const detail::ScopeResourceQuery& query, const std::type_info& type) const noexcept;
     struct State;
     explicit ModuleManager(std::unique_ptr<State> state) noexcept;
     [[nodiscard]] Status FinishRecord(ModuleHandle handle, ModuleOperationReport& report) noexcept;

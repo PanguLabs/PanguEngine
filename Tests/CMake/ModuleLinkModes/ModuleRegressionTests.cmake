@@ -5,6 +5,7 @@ Run(PASS "" "${CMAKE_COMMAND}"
     -DPANGU_TEST_MODULE_MATRIX_CHILD=ON -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON)
 Run(PASS "" "${CMAKE_COMMAND}" --build "${PANGU_TEST_ROOT}/Monolithic"
     --parallel "${PANGU_TEST_BUILD_JOBS}" --target PanguModuleUnitTests PanguModuleConcurrencyTests
-    PanguScopeBuildMockTests PanguModuleIntegrationTests PanguModuleUnloadTests PanguScopeDestructorFixture PanguStaticCatalogTests)
+    PanguScopeBuildMockTests PanguModuleIntegrationTests PanguModuleUnloadTests PanguScopeDestructorFixture PanguStaticCatalogTests
+    PanguEngineHostTests PanguEngineHostDestructorFixture PanguEngineHostConcurrencyTests)
 Run(PASS "100% tests passed" "${CMAKE_CTEST_COMMAND}" --test-dir "${PANGU_TEST_ROOT}/Monolithic"
-    -L "^area.module$" -L "^run.precommit$" --output-on-failure --no-tests=error)
+    -L "^area[.](module|engine-host)$" -L "^run.precommit$" --output-on-failure --no-tests=error)

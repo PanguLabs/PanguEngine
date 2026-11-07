@@ -19,6 +19,7 @@ ConfigureFixture(Incremental "${enabled}" PASS "" -DPANGU_FIXTURE_BUILD_HOSTS=ON
     -DPANGU_LINK_MODE=Modular
     "-DPANGU_FIXTURE_PLUGIN_CMAKE_DIR:PATH=${mirror}/cmake")
 BuildFixture(MyGame)
+CheckConsumer(MyGame Modular Gameplay EditorExtras)
 BuildFixture(MyGame)
 RequireText("${commandOutput}" "no work to do")
 file(APPEND "${source}/Plugins/EditorExtras/Private/EditorExtras.cpp" "\n// 已启用但未消费的 Plugin 变化不触发构建\n")

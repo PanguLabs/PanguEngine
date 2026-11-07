@@ -1,7 +1,7 @@
 # Pangu Service / Context 架构 v1
 
-> 设计状态：Frozen（Scope、生命周期及 Concrete / Contract / Registry 三种 Service 模式的语义契约）；C++ API 未冻结；已有 ModuleManager 与双模式 Scope 资源生命周期，完整业务 Service API 仍待实现
-> 更新：2026-10-29
+> 设计状态：Frozen（Scope、生命周期及 Concrete / Contract / Registry 三种 Service 模式的语义契约）；C++ API 未冻结；已实现 ModuleManager、EngineHost 最小生命周期与 Concrete 精确 Scope 查询；完整 Contract/Registry API 待实现
+> 更新：2026-11-07
 > 决策：[ADR-0003](../decisions/0003-no-subsystem-service-context.md)、[ADR-0006](../decisions/0006-three-service-modes.md)
 > 本地参考探针：`.probe/service-lifecycle`（Git 忽略，不随仓库分发；与正式设计的差异见下文）
 
@@ -95,11 +95,11 @@ class ServiceRef;
 
 ## 当前 PoC 与生产边界
 
-### 当前正式 STATIC 实现（2026-10-29）
+### 当前正式实现（2026-11-07）
 
 `PanguModule` 已实现可重复仅移动 `ScopeFactory`、明确 Host/Context/World Owner 句柄、具体 Scope 资源日志、工厂先追踪后 Start、局部装配回滚、Borrow/Busy 排空与依赖逆序清理。`ScopeAccess<T>` 只拥有稳定访问控制块，`ScopeBorrow<T>` 才保护实际 T；已导出令牌的获取与关闭通过原子闸门线性化。工厂和资源不要求业务类型继承统一 Service 基类；装配期显式 `Dependency<T>` 不作为全局 ServiceLocator。实现及限制见 [Scope 生命周期设计](../../docs/superpowers/specs/2026-10-28-module-scope-lifecycle-design.md) 和[验收计划](../../docs/superpowers/plans/2026-10-28-module-scope-lifecycle.md)。
 
-`ModuleManager` 已替代旧 StaticModuleHost，统一管理显式静态候选/真实动态库、常驻根与增量 Scope；不是完整 EngineHost。`RegistrationScope` 是声明注册域，运行时 Scope Owner 分开持有实例；Shutdown 撤销本 Host 的声明。管理操作需外部串行化；实际 Service 的并发数据访问由其业务线程契约保证。完整 Contract Provider 选择、业务 Registry、TaskScheduler/GPU 排空、设备运行仍属后续；真实动态 Pin/Loader 与 Scope 的平台范围见[正式验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。
+`ModuleManager` 已替代旧 StaticModuleHost，统一管理显式静态候选/真实动态库、常驻根与增量 Scope；其上已交付最小 EngineHost 生命周期。`RegistrationScope` 是声明注册域，运行时 Scope Owner 分开持有实例；Shutdown 撤销本 Host 的声明。管理操作需外部串行化；实际 Service 的并发数据访问由其业务线程契约保证。完整 Contract Provider 选择、业务 Registry、TaskScheduler/GPU 排空、设备运行仍属后续；真实动态 Pin/Loader 与 Scope 的平台范围见[正式验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。
 
 ### 历史 PoC
 
@@ -107,7 +107,7 @@ class ServiceRef;
 
 该本地原型将所有 Provider 放入 Registry，并用名为 `BinaryImage` 的辅助对象提供 Code Guard；这些是原型实现手段，不属于正式设计。生产设计仍遵循静态服务直接访问、Module 机制管理 CodePin、不建立独立 BinaryImage 架构层的约束。
 
-**未完成**：统一 EngineHost 启动状态机、ModuleManager 的真实 CodePin 接口、TaskGroup/Async Drain、Provider Hot Swap、异常/致命 OOM 策略整合、完整的并发 register/start/stop、正式的 Actor/World Ownership、Android/iOS 运行验证。本 PoC 的 Registration 与辅助状态字段不能当作最终 Public ABI。
+**该历史 PoC 当时未完成**（前两项现已由正式实现交付）：统一 EngineHost 启动状态机、ModuleManager 的真实 CodePin 接口、TaskGroup/Async Drain、Provider Hot Swap、异常/致命 OOM 策略整合、完整的并发 register/start/stop、正式的 Actor/World Ownership、Android/iOS 运行验证。本 PoC 的 Registration 与辅助状态字段不能当作最终 Public ABI。
 
 尤其注意：PoC 中 `Registry::StopAll()` 是非阻塞的 `Busy` 检查，正式 EngineHost 必须先安排 Scoped TaskGroup、回调撤销及 Content/GPU 退休，之后重试 Drain；不得直接强制释放。
 
@@ -116,3 +116,9 @@ class ServiceRef;
 冻结：No Subsystems；Concrete / Contract / Registry Service 三种模式；静态访问优先；Host/Context/World 作用域；单 Provider Contract 唯一性与业务 Registry 多 Provider 原则；Module 与 Service 独立职责；依赖 Borrow/Lease 和有序撤销；不自动 Tick；CodePin 与实例销毁顺序。
 
 未冻结：C++ Public API 签名、Registry 的匹配/优先级与 Contribution 身份、物理容器、线程同步策略、错误枚举、Factory 函数签名、PanguMeta 注册生成协议、Hot Swap / Hot Reload。
+
+## EngineHost Concrete 访问实现范围
+
+[EngineHost](engine-host.md) 已贯通业务 Module 自有具名访问器 → 宿主 Ready 校验 → Module 已有资源只读查询 → ScopeAccess/ScopeBorrow。查询固定 Owner、DeclarationId、Kind、具体类型及显式 Scope，不执行 Factory、不按类型全局搜索或自动选择祖先/Provider。纯元数据声明不可访问；同类型多声明、多 Context 和多宿主互不混淆。Module 可无 Service，普通服务无需基类/虚方法/Manager 命名。
+
+三种模式的设计语义保持不变；完整 Contract Provider 选择及 Registry Contribution 尚未交付，不能把 Concrete 桥接当作通用 ServiceRegistry。桌面双模式运行与移动最终链接的实际范围见[本轮验收](../../docs/superpowers/plans/2026-11-07-engine-host-lifecycle-validation.md)。

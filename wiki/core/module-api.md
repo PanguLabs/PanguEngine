@@ -59,9 +59,15 @@ Concrete Service 可由 Owner 强类型持有/注入，不强迫注册。Host/Co
 
 交付的 ScopeAccess<T> 热路径只做闸门与计数，不重复查询 RTTI。业务 DLL 的 type_info/type_index、名字视图、对象/Factory/捕获/Deleter 和回调必须在卸载前解除或销毁。控制块、闸门与 shared_ptr 最终释放入口在宿主常驻 Runtime 分配/实现，残留 ScopeAccess 可在业务 DLL 真正卸载后复制、TryBorrow 失败及最终释放，不读取其 RTTI 或执行其释放代码。
 
+### 5.2 已有资源的精确只读访问
+
+内部 `ScopeResourceAccess::Acquire<T>` 接收 Manager 与包含 ScopeHandle、Owner、DeclarationId、Kind 的查询，仅访问已交付 Ready Scope 中的对应活资源。错误优先级：Manager 操作中 Busy；无效/关闭 Manager InvalidState；Kind 不符 InvalidScope；Domain/槽位/generation 不符 ScopeNotFound；未交付或 Closing Scope NotReady；无资源/Owner 错/纯元数据 NotFound；Module 或资源未 Ready 则 NotReady；RTTI 值不符 TypeMismatch。
+
+控制块只有校验成功后才能包装为 ScopeAccess，不提供公开 unchecked/adopt 入口。查询不执行用户代码、不缓存 Manager 地址、不搜索祖先；新令牌只持常驻控制块，不保存业务 RTTI。上层业务具名入口与 Ready 门槛见 [EngineHost](engine-host.md) 和 [ADR-0016](../decisions/0016-engine-host-lifecycle.md)。
+
 ## 6. ModuleManager 操作与清理
 
-生产公共协调器仅 `ModuleManager`，旧 StaticModuleHost 已删除。Manager 仅移动，内部 State 地址稳定；管理操作和查询由调用方串行协调，回调不得移动/销毁 Manager 或保留借用 Context；同 Manager 重入在副作用前 Busy。业务 Pin/Borrow 支持并发接纳、释放和关闭。
+Module 层公共协调器为 `ModuleManager`，上层由独立 `EngineHost` 编排，旧 StaticModuleHost 已删除。Manager 仅移动，内部 State 地址稳定；管理操作和查询由调用方串行协调，回调不得移动/销毁 Manager 或保留借用 Context；同 Manager 重入在副作用前 Busy。业务 Pin/Borrow 支持并发接纳、释放和关闭。
 
 `RegistrationScope` 声明注册域必须比 Manager 活得更久；Shutdown 撤销本 Manager 的声明，撤销也使原 `Declarations()` 借用视图失效。需要跨清理保留诊断时复制拥有型快照。
 
@@ -111,7 +117,7 @@ CleanupOwner 表示继续清理的协调责任，调用方仍依据原操作与 
 
 ADR-0015 替代混合类型、同库 Catalog 和常驻执行失败的旧规则，身份/精确版本、显式依赖、声明事务、Scope 局部回滚、所有权和安全清理继续有效。本文叙述现有实现 API，**不冻结 Public C++ 布局、符号 ABI、长期 CMake API 或跨配置二进制兼容性**。未来 PanguMeta 可生成显式 Query/Catalog，但不得改变单库和强类型边界；本实现不依赖 Meta。
 
-完整 EngineHost、Contract/Registry Service、TaskScheduler/GPU 集成、Hot Reload/状态迁移、安装/发布和移动设备政策仍属后续。历史独立二进制插件 Preflight 已由 ADR-0014 取消，不是当前冻结待办。
+EngineHost 最小生命周期已实现；完整 Contract/Registry Service、TaskScheduler/GPU 集成、Hot Reload/状态迁移、安装/发布和移动设备政策仍属后续。历史独立二进制插件 Preflight 已由 ADR-0014 取消，不是当前冻结待办。
 
 ## 9. 本轮验证证据与限制
 

@@ -22,6 +22,7 @@ class ScopeBuildContext;
 
 namespace detail
 {
+class ScopeResourceAccess;
 class ScopeGate final
 {
 public:
@@ -156,6 +157,7 @@ public:
 
 private:
     friend class ScopeBuildContext;
+    friend class detail::ScopeResourceAccess;
     explicit ScopeAccess(std::shared_ptr<detail::ScopeObjectControl> control) noexcept
         : Control(std::move(control))
     {

@@ -8,6 +8,7 @@ add_library(PanguModule ${moduleType}
     Private/ModuleIdentity.cpp
     Private/RegistrationContext.cpp
     Private/ScopeAccess.cpp
+    Private/ScopeResourceAccess.cpp
     Private/ScopeBuildContext.cpp
     Private/ScopeRuntime.cpp
     Private/ModuleManager.cpp

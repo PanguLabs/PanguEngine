@@ -41,10 +41,23 @@ set_target_properties(PanguScopeBuildMockTests PROPERTIES RUNTIME_OUTPUT_DIRECTO
 pangu_register_gtest(TARGET PanguScopeBuildMockTests BOUNDARY unit AREA module TIER fast)
 
 add_executable(PanguModuleIntegrationTests
+    ScopeResourceAccessTests.cpp
     ModuleManagerTests.cpp
     ResidentModuleTests.cpp
     BatchLoadTests.cpp
 )
+add_subdirectory(Fixtures/ResourceAccess)
+target_include_directories(PanguModuleIntegrationTests PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/Fixtures/ResourceAccess" "${CMAKE_CURRENT_BINARY_DIR}/Fixtures/ResourceAccess")
+if(PANGU_LINK_MODE STREQUAL "Monolithic")
+    target_link_libraries(PanguModuleIntegrationTests PRIVATE PanguScopeResourceFixture)
+else()
+    add_dependencies(PanguModuleIntegrationTests PanguScopeResourceFixture)
+endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND PANGU_LINK_MODE STREQUAL "Modular")
+    # EXE 参与跨 DSO 的公开类型 RTTI 值比较。
+    set_target_properties(PanguModuleIntegrationTests PROPERTIES ENABLE_EXPORTS ON)
+endif()
 if(PANGU_LINK_MODE STREQUAL "Monolithic")
     target_sources(PanguModuleIntegrationTests PRIVATE StaticModuleHostTests.cpp RegistrationTests.cpp ScopeLifecycleTests.cpp)
 else()

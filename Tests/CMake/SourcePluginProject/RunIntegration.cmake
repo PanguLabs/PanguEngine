@@ -11,7 +11,7 @@ file(MAKE_DIRECTORY "${PANGU_TEST_ROOT}")
 file(COPY "${projectFixture}" DESTINATION "${PANGU_TEST_ROOT}")
 set(source "${PANGU_TEST_ROOT}/MyGame")
 if(NOT DEFINED PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE)
-    set(PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE ON)
+    set(PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE OFF)
 endif()
 execute_process(COMMAND git -C "${PANGU_ENGINE_SOURCE_DIR}" rev-parse HEAD
     RESULT_VARIABLE revResult OUTPUT_VARIABLE engineHead OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -19,6 +19,7 @@ if(NOT revResult EQUAL 0)
     message(FATAL_ERROR "Cannot resolve current Engine HEAD for MyGame fixture")
 endif()
 file(WRITE "${source}/Engine.commit" "${engineHead}\n")
+message(STATUS "Project Engine lock: ${engineHead}; local override=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}")
 
 if(CMAKE_HOST_WIN32)
     set(compiler "$ENV{LLVM_ROOT}/bin/clang++.exe")
@@ -31,6 +32,10 @@ endif()
 
 function(ConfigureProject name testing engineTests)
     set(binary "${PANGU_TEST_ROOT}/${name}")
+    set(servicePlugins "")
+    if(name STREQUAL "ServiceHosts")
+        set(servicePlugins "pangu.physics;mygame.gameplay;mygame.editor-extras")
+    endif()
     execute_process(
         COMMAND "${CMAKE_COMMAND}" -S "${source}" -B "${binary}" -G Ninja
             "${compilerArgs}"
@@ -40,6 +45,7 @@ function(ConfigureProject name testing engineTests)
             "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
             "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
             -DPANGU_FIXTURE_UNCLASSIFIED_ENGINE_TEST=OFF
+            "-DPANGU_ENABLED_PLUGINS=${servicePlugins}"
             ${ARGN}
         RESULT_VARIABLE rc OUTPUT_VARIABLE output ERROR_VARIABLE error)
     if(NOT rc EQUAL 0)
@@ -138,6 +144,40 @@ string(JSON disabledCount LENGTH "${Disabled_CTEST_LIST}" tests)
 if(NOT disabledCount EQUAL 0)
     message(FATAL_ERROR "Project BUILD_TESTING=OFF must register no tests:\n${Disabled_CTEST_LIST}")
 endif()
+
+file(MAKE_DIRECTORY "${PANGU_TEST_ROOT}/FixtureEngine/Plugins")
+file(COPY "${CMAKE_CURRENT_LIST_DIR}/FixtureEnginePlugins/"
+    DESTINATION "${PANGU_TEST_ROOT}/FixtureEngine/Plugins")
+ConfigureProject(ServiceHosts OFF OFF -DPANGU_LINK_MODE=Monolithic
+    -DPANGU_FIXTURE_BUILD_HOSTS=ON
+    -DPANGU_BUILD_SAMPLES=ON
+    "-DPANGU_FIXTURE_ENGINE_ROOT=${PANGU_TEST_ROOT}/FixtureEngine")
+execute_process(COMMAND "${CMAKE_COMMAND}" --build "${PANGU_TEST_ROOT}/ServiceHosts"
+    --parallel "${PANGU_TEST_BUILD_JOBS}" --target MyGame MyEditor PanguMinimalHost RESULT_VARIABLE hostBuild)
+if(NOT hostBuild EQUAL 0)
+    message(FATAL_ERROR "Service hosts build failed")
+endif()
+if(CMAKE_HOST_WIN32)
+    set(hostSuffix .exe)
+endif()
+execute_process(COMMAND "${PANGU_TEST_ROOT}/ServiceHosts/Bin/PanguMinimalHost${hostSuffix}"
+    RESULT_VARIABLE sampleResult OUTPUT_VARIABLE sampleOutput ERROR_VARIABLE sampleError)
+if(NOT sampleResult EQUAL 0 OR NOT sampleOutput MATCHES "Counter Context values: 7 -> 8; isolated=7")
+    message(FATAL_ERROR "Monolithic sample failed: ${sampleResult}\n${sampleOutput}\n${sampleError}")
+endif()
+foreach(host IN ITEMS MyGame MyEditor)
+    execute_process(COMMAND "${PANGU_TEST_ROOT}/ServiceHosts/Bin/${host}${hostSuffix}"
+        RESULT_VARIABLE hostResult OUTPUT_VARIABLE hostOutput ERROR_VARIABLE hostError)
+    if(host STREQUAL "MyGame")
+        set(expected "Gameplay Context values: 7 -> 8; isolated=7")
+    else()
+        set(expected "EditorExtras Context values: 11 -> 12; isolated=11")
+    endif()
+    string(FIND "${hostOutput}" "${expected}" found)
+    if(NOT hostResult EQUAL 0 OR found LESS 0)
+        message(FATAL_ERROR "Missing service isolation result '${expected}': ${hostResult}\n${hostOutput}\n${hostError}")
+    endif()
+endforeach()
 
 ConfigureProject(EngineOptIn ON ON)
 CheckEmbeddedClassification(valid PASS)

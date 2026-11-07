@@ -17,5 +17,9 @@ int main()
     {
         std::puts("Activated Physics EditorExtras; shutdown complete");
     }
+    else if (result == 3)
+    {
+        std::puts("EngineHost candidate start failed");
+    }
     return result;
 }

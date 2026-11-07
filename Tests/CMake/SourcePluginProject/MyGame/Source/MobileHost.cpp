@@ -7,6 +7,7 @@
 
 namespace
 {
+// 复用真实 EngineHost 启动、Context 服务访问和显式关闭，参与移动端最终链接。
 [[nodiscard]] int CheckMobileModules()
 {
     const auto error = pg::MakeError(pg::ErrorDomainId::Constant<0x741>(), 7);

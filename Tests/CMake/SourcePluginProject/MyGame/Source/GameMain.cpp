@@ -18,7 +18,7 @@ int main()
     }
     else if (result == 3)
     {
-        std::puts("Manager candidate load failed");
+        std::puts("EngineHost candidate start failed");
     }
     return result;
 }

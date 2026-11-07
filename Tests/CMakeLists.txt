@@ -18,6 +18,7 @@ pangu_register_test(NAME BuildEnvironment
 add_subdirectory(ThirdParty/NlohmannJson)
 add_subdirectory(Foundation)
 add_subdirectory(Module)
+add_subdirectory(EngineHost)
 add_subdirectory(CMake/SourcePlugins)
 add_subdirectory(CMake/Testing)
 add_subdirectory(CMake/ModuleLinkModes)

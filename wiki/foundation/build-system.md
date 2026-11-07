@@ -118,7 +118,7 @@ cmake/
 - `pangu_configure_module(<existing-target>)` 仅为现有 `add_library(... STATIC|SHARED ...)` Target **PRIVATE** 应用 Pangu 编译策略，并设置 PIC 和输出目录；必须**先创建**真实 Module Target，不隐式生成 Library、Manifest、Catalog 或 ModuleId。当前 `PanguModule` 通过 `pangu_module_library_type` 得到统一模式类型后创建，`Pangu::Module` 仅是 Alias。
 - 平台 Settings 负责目标特殊规则：Windows 使用 Clang + MSVC STL（Windows ARM 不在 v1）；Linux Toolchain 在 `project()` 前选择并核对匹配 LLVM 的 libc++ 头文件、`__config_site`、运行库及 RPATH；缺失时拒绝，不退回 `libstdc++`，不同安装布局可用 `PANGU_LIBCXX_ROOT` 显式覆盖；macOS Toolchain 统一选择 MacPorts Clang 23 与 libc++；Android 采用 NDK Clang；iOS 采用 MacPorts Clang 23 + 独立 iPhoneOS SDK。
 - `cmake/` 不写死本机工具链安装路径。Windows、Linux、macOS、iOS 从 `LLVM_ROOT` 派生编译器和 `clang-scan-deps` 路径，并校验编译器位于该安装目录内；Android 从 `ANDROID_HOME` 读取 SDK 目录、从 `ANDROID_NDK_HOME` 选择官方 NDK Toolchain，并校验实际使用的 NDK 与环境变量一致。
-- `Lib/` 存放 STATIC Library（以及平台归档产物）；`Bin/` 存放动态库/可执行程序。当前 Runtime 含 Foundation 错误值/纯协议、ModuleManager、原生 Loader、Pin、增量 Scope 与声明事务；不意味着完整 EngineHost、ServiceRegistry 或 Shader/Asset Pipeline 已实现。
+- `Lib/` 存放 STATIC Library（以及平台归档产物）；`Bin/` 存放动态库/可执行程序。当前 Runtime 含 Foundation 错误值/纯协议、ModuleManager、原生 Loader、Pin、增量 Scope 与声明事务；另已交付 EngineHost 最小生命周期及 Concrete 资源查询；完整 ServiceRegistry 或 Shader/Asset Pipeline 未实现。
 - CMake Preset 默认 Ninja + Release，配置并导出 `compile_commands.json` 供 IDE/clang-tidy 使用；根目录通过 `BUILD_TESTING` 控制 `Tests/` 总入口。`BUILD_TESTING=OFF` 完整排除测试目标；交叉编译开启测试时保留编译型 Toolchain 验证，不创建需要设备运行的测试程序。Android ARM64/API29 与 iOS arm64/iOS18.0 是当前验收参数，**不是永久支持下限**。
 
 先在启动 CMake 的环境中设置下列变量；目录值由本机配置提供，不写入共享 Preset：
@@ -219,3 +219,9 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 旧分支曾为受管 STATIC Module 实现逐 TU 宏审计、Compiler Launcher、Guard/Collect、完整收据及闭包检查，历史 CTest 记录为 Windows 36/36、Linux 34/34、macOS 34/34；这些是 **2026-10-27 的旧实现成绩，不是当前测试数量或构建性能**。旧工具及仅验证其机制的 Tests 均已删除，不再将 `complete.json`、`Abi/compile-evidence.json` 作为活动产物。
 
 历史设计与验收仍可在 [2026-10-23 ABI Collection 实施计划](../../docs/superpowers/plans/2026-10-23-abi-collection.md) 和 [v1 历史协议](abi-profile-fingerprint.md) 中查阅；源码如需追溯使用历史 Git 提交，当前目录已不再有该工具。现行边界以 [ADR-0013](../decisions/0013-native-build-abi-boundary.md) 为准。
+
+## EngineHost 与样例验收入口
+
+`PanguEngineHost`（`Pangu::EngineHost`）为跟随统一链接模式的第三常驻 Module；不修改基础两项 BuiltinResidentQueries。根 `PANGU_BUILD_SAMPLES` 默认 OFF，开启后构建 MinimalHost 与独立服务 Module，并将 MinimalHostSmoke 接入 precommit/full。Project 的 Game/Editor/MobileHost 消费同一宿主协议；Modular 不通过隐式业务导入替代显式候选，部署集合仍与消费集合分开。
+
+正式桌面矩阵逐宿主按 Monolithic → Modular 配置 Samples ON，构建并执行对应 full；Modular ModuleRegression 保留旧 Mono 与 Host Mono 覆盖。完成后恢复桌面 Modular、Samples/Benchmark OFF、测试 ON 并验证 fast；移动根恢复 Monolithic、Samples/Benchmark/测试 OFF，构建 EngineHost，另用隔离 Project 的 CrossCompileTests 重验 MobileHost 最终链接。BuildRoot/共享源码规则不变。精确 SHA、完整命令、结果与局限见[EngineHost 验收](../../docs/superpowers/plans/2026-11-07-engine-host-lifecycle-validation.md)。
