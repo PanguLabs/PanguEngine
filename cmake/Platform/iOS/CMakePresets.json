@@ -16,6 +16,7 @@
       },
       "toolchainFile": "${sourceDir}/cmake/Platform/iOS/Toolchain.cmake",
       "cacheVariables": {
+        "PANGU_LINK_MODE": "Monolithic",
         "CMAKE_OSX_ARCHITECTURES": "arm64",
         "CMAKE_OSX_DEPLOYMENT_TARGET": "18.0",
         "BUILD_TESTING": false

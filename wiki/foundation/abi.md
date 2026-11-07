@@ -3,8 +3,8 @@
 > 状态：Partially Frozen（普通同树构建不经 AbiProfile 由 ADR-0013 冻结；Pangu 原生 Plugin 改为源码交付由 ADR-0014 冻结；历史 strict-v1 已退役）
 > 当前边界：[ADR-0013](../decisions/0013-native-build-abi-boundary.md)、[ADR-0014](../decisions/0014-source-plugins-project-build.md)；历史协议：[ADR-0009](../decisions/0009-abi-profile-fingerprint.md)
 
-源码 Plugin/独立 Project 最小接线的编译、链接和显式部署证据见[2026-11-04 验收](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md)。这些构建验证不证明生产 SHARED Loader、设备运行或跨进程二进制 ABI 兼容。
-> 更新：2026-11-04
+源码 Plugin/独立 Project 最小接线的编译、链接和显式部署证据见[2026-11-04 验收](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md)。这些历史构建验证不证明本轮 ModuleManager/Loader 矩阵、设备运行或跨进程二进制 ABI 兼容。
+> 更新：2026-11-07
 
 ## 范围
 
@@ -54,6 +54,16 @@
 
 ## 未冻结的内容
 
-Pangu SHARED Loader 的实际 Module Query/运行时检查、跨平台插件部署与热重载、Runtime/ABI 类型细节仍待验收；**独立 Pangu SDK/Plugin 的 config-v2、可信装载前 Preflight、产物绑定与 TOCTOU 方案不再规划**。普通第三方 SDK 的兼容性由其引入方审核。五平台工具链/标准库仍遵循 Toolchain 规范；strict-v1 已退役。
+当前已实现 ModuleManager 的 Query/运行时检查和配套部署；平台证据分别记录，热重载及 Runtime/Public ABI 细节仍未冻结；**独立 Pangu SDK/Plugin 的 config-v2、可信装载前 Preflight、产物绑定与 TOCTOU 方案不再规划**。普通第三方 SDK 的兼容性由其引入方审核。五平台工具链/标准库仍遵循 Toolchain 规范；strict-v1 已退役。
 
 后续若记录这些决策，需要更新本文件并提交相应 ADR；不得直接从过往示例代码认定已经生效。
+
+## ModuleManager 的代码与控制块寿命（2026-11-06）
+
+依据 [ADR-0015](../decisions/0015-unified-link-modes-module-manager.md)，保留 RTTI 并在内部擦除处比较 type_info 值；不能使用地址、仅名字/hash 或人工类型身份代替。业务 DLL RTTI、对象、匹配 Deleter、Factory/捕获和回调在卸载前解除；ScopeAccess/Pin 控制块、闸门与最终释放入口位于宿主常驻 Runtime，残留访问不延长实例寿命，关闭后 TryBorrow 不读取 DLL 数据。
+
+ModuleManager 自身原生持有与外部 Pin、Borrow、内部资源依赖分别记账；最后业务线程 Release 不执行 OS 卸载。先按有效资源依赖排空/销毁，再退休工厂并等待对应 Pin，原生释放成功才失效记录；释放未确认前保留 Provider。常驻记录最后统一确认且不释放宿主原生持有。成功不保证额外 OS 引用也消失。实际 RTTI、真实物理卸载和移动端链接层次见[正式验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)，不推导设备或跨配置 ABI 已通过。
+
+POSIX 受控同配置 Module 使用 RTLD_NOW|RTLD_GLOBAL，使独立装载组的公开 RTTI 可参与同一进程符号解析；LOCAL 下两桌面真实合法依赖已失败，GLOBAL 对照恢复。仍比较 std::type_info 值，保留最小公共导出/私有隐藏。公开符号进入全局作用域会增加名称冲突和符号插入风险，须遵守 ABI/ODR，不能作为插件隔离。依据 [libc++ 可见性](https://libcxx.llvm.org/DesignDocs/VisibilityMacros.html)、[POSIX dlopen](https://pubs.opengroup.org/onlinepubs/9799919799/functions/dlopen.html)及 [dlclose](https://pubs.opengroup.org/onlinepubs/9799919799/functions/dlclose.html)；实际平台比较与物理卸载结果按各自矩阵记录，不扩大为任意工具链或外部预编译库保证。
+
+ELF 可执行宿主参与同类 RTTI 匹配时，仅类型 visibility(default) 不保证符号进入主程序动态符号表；可用 CMake `ENABLE_EXPORTS` 建立公开符号的动态导出前提。Linux Modular 常驻 Factory 回归在同一实际链接命令增加 export-dynamic 后恢复；只对该测试 Host 开启，不全局修改其它目标或增加逐类型锚点。宿主是否参与公共类型交互须按实际用途判定，库的显式导出与私有隐藏仍独立保留。

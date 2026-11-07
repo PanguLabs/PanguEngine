@@ -1,9 +1,10 @@
+#include <PanguToolchainProbeExport.h>
 #include <expected>
 
 namespace pg::probe
 {
 [[nodiscard]] std::expected<int, int> ThirdPartyCompiledResult() noexcept;
-[[nodiscard]] std::expected<int, int> PanguPolicyResult() noexcept;
+[[nodiscard]] PG_TOOLCHAIN_PROBE_API std::expected<int, int> PanguPolicyResult() noexcept;
 } // namespace pg::probe
 
 int main()

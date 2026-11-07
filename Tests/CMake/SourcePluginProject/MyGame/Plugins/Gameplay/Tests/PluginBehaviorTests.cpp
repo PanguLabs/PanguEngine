@@ -1,3 +1,4 @@
+#include "GameplayModule.h"
 #include <FixtureModules.h>
 
 #include <gtest/gtest.h>

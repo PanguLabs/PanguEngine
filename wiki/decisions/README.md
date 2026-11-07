@@ -1,7 +1,7 @@
 # Architecture Decision Records (ADR)
 
 > 状态：规范性索引
-> 更新：2026-11-04
+> 更新：2026-11-06
 
 本目录记录影响架构长期演化的重要决策，包括备选方案、选择原因、后果及被替代关系。**ADR 不是子系统的第二份详细规范**；日常实施以相应 Foundation/Core/Runtime 文档为准。
 
@@ -13,16 +13,17 @@
 | [0002](0002-name-engine-host.md) | 采用 EngineHost 名称 | Accepted | [EngineHost](../core/engine-host.md) |
 | [0003](0003-no-subsystem-service-context.md) | 不使用 Subsystem，采用 Service + Context | Accepted | [Service Architecture](../core/service.md) |
 | [0004](0004-platform-clang-toolchains.md) | 按平台选择 Clang（Android NDK 自带）+ 统一 C++23 | Accepted | [Toolchain](../foundation/toolchain.md) |
-| [0005](0005-one-module-one-library.md) | 一个 Module 对应一个静态库或动态库 | Accepted | [Plugin / Module](../core/plugin-module.md)、[Build System](../foundation/build-system.md) |
+| [0005](0005-one-module-one-library.md) | 一个 Module 对应一个静态库或动态库 | Accepted（嵌入范围由 ADR-0015 替代） | [Plugin / Module](../core/plugin-module.md)、[Build System](../foundation/build-system.md) |
 | [0006](0006-three-service-modes.md) | Concrete / Contract / Registry Service 三模式 | Accepted | [Service](../core/service.md) |
 | [0007](0007-error-diagnostics.md) | 错误值、失败报告与基础诊断分离 | Accepted | [错误处理与基础诊断](../foundation/error-diagnostics.md) |
 | [0008](0008-module-registration-lifetime.md) | 统一 Module 注册与生命周期语义（SHARED 入口部分由 ADR-0010 修订） | Accepted | [Module Registration & Lifetime v1](../core/module-registration-lifetime.md) |
 | [0009](0009-abi-profile-fingerprint.md) | 冻结 ABI Profile / Fingerprint v1 | Superseded（生产范围由 ADR-0013 替代） | [历史 ABI Profile / Fingerprint](../foundation/abi-profile-fingerprint.md) |
 | [0010](0010-unified-cpp-module-entry.md) | 统一 STATIC/SHARED 原生 C++23 Module 发现与注册 | Accepted（独立 Pangu 插件 Preflight 范围由 ADR-0014 替代） | [Module API v1](../core/module-api.md) |
-| [0011](0011-module-api-behavior-contract.md) | 冻结 Module API v1 的行为契约 | Accepted（行为；Public API/ABI 待验证） | [Module API v1](../core/module-api.md) |
+| [0011](0011-module-api-behavior-contract.md) | 冻结 Module API v1 的行为契约 | Accepted（同库规则由 ADR-0015 替代；常驻失败新增例外） | [Module API v1](../core/module-api.md) |
 | [0012](0012-host-local-build-trees.md) | 共享源码、按宿主本地文件系统隔离构建树 | Accepted | [Build System](../foundation/build-system.md) |
 | [0013](0013-native-build-abi-boundary.md) | 原生增量构建与独立二进制 ABI 交付边界 | Accepted（独立 Pangu Plugin/SDK 交付范围由 ADR-0014 替代） | [Build System](../foundation/build-system.md)、[ABI](../foundation/abi.md) |
 | [0014](0014-source-plugins-project-build.md) | 源码 Plugin 与独立 Project 构建边界 | Accepted（设计；实施验收进行中） | [Plugin / Module](../core/plugin-module.md)、[Build System](../foundation/build-system.md) |
+| [0015](0015-unified-link-modes-module-manager.md) | 统一链接模式与 ModuleManager | Accepted（Public API/ABI 未冻结） | [Module API](../core/module-api.md)、[Build System](../foundation/build-system.md) |
 
 ## 推荐格式
 

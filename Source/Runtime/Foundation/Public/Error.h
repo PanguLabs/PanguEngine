@@ -1,5 +1,7 @@
 #pragma once
 
+#include <PanguFoundationExport.h>
+
 #include <compare>
 #include <cstdint>
 #include <optional>
@@ -95,5 +97,5 @@ private:
 };
 
 // Implemented in the owning Foundation Module; not required for constexpr usage.
-[[nodiscard]] Error MakeError(ErrorDomainId domain, std::uint32_t code) noexcept;
+[[nodiscard]] PG_FOUNDATION_API Error MakeError(ErrorDomainId domain, std::uint32_t code) noexcept;
 } // namespace pg

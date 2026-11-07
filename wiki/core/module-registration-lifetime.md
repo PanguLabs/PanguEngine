@@ -1,7 +1,8 @@
 # Pangu Module Registration & Lifetime v1
 
 > 设计状态：Frozen（注册、依赖、生命周期与 CodePin 的设计语义）；Public API、二进制入口布局及同步实现未冻结
-> 更新：2026-11-02
+> 更新：2026-11-06
+> 修订：[ADR-0015](../decisions/0015-unified-link-modes-module-manager.md) 统一模式、单库单 Module 与常驻失败例外；实现接口见 [Module API](module-api.md)。
 > 决策：[ADR-0008：统一 Module 注册与生命周期](../decisions/0008-module-registration-lifetime.md)、[ADR-0011：Module API 行为契约](../decisions/0011-module-api-behavior-contract.md)
 > 权威边界：[Plugin / Module](plugin-module.md)、[Service](service.md)、[Memory](memory-management.md)、[EngineHost](engine-host.md)
 > 构建/错误前提：[Build System](../foundation/build-system.md)、[ABI](../foundation/abi.md)、[Error / Diagnostics](../foundation/error-diagnostics.md)、[ADR-0014 源码交付](../decisions/0014-source-plugins-project-build.md)
@@ -37,7 +38,7 @@
 1. 构建/生成阶段显式产生静态 Module Catalog；宿主启动时将确定的 Catalog 项交给 Module 管理器。
 2. Catalog 直接引用每个 Module 的注册入口，强制链接器保留所需代码；不依赖跨 Translation Unit 的静态初始化顺序、全局构造副作用或对所有静态库无条件 `whole-archive`。
 3. Catalog 不需要新的 Module Library Target；PanguMeta 生成代码属于对应 Module 的唯一 Library Target。未引入 PanguMeta 前允许由 CMake/明确编写的桥接入口生成 Catalog 验证探针。
-4. STATIC 库归档本身不可卸载；若静态代码被链接进可卸载动态库，其代码驻留跟随**实际承载它的动态库**，不是归档文件。
+4. STATIC 库归档本身不可卸载；同图所有逻辑 Module 按 Monolithic/Modular 统一为 STATIC/SHARED，不再允许嵌入逻辑 STATIC Module；普通 ThirdParty 的驻留仍跟随实际承载代码。
 
 ### SHARED Module
 
@@ -93,7 +94,7 @@ Discovered -> Verified -> Loaded -> Registered -> Active
 - Quiescing：禁止新的业务进入和新的借用，已合法取得的 Guard/Lease 可以继续完成清理。
 - Draining：协调 Task、Callback、Service Borrow、Registry Contribution、Resource/GPU 与 Allocator 依赖；超时/Busy 不等于停止成功。
 - Stopped/Unregistered：依赖逆序执行清理，在代码和所依赖实例仍有效时析构，之后撤销注册并释放必要 Guard；实际撤销可分为“禁止新访问”和“最终销毁”两步。
-- Unloaded：逻辑 Module 已完成清理并释放自己的代码承载持有。依据 [ADR-0011](../decisions/0011-module-api-behavior-contract.md)，同一 SHARED 承载的其它 Module/CodePin 仍需要代码时，Manager 继续保留实际 OS 句柄；全部持有结束后才实际卸载。最后持有的 OS 卸载未完成仍属清理未完成；STATIC 归档不执行 OS 卸载。详细接纳和退出规则以 [Module API v1 第 3 节](module-api.md#3-static-catalog) 为准。
+- Unloaded：受管生命周期完成且 Manager 自己的原生释放调用成功；系统或额外导入/OS 引用可能仍使库驻留。释放失败仍保留记录/身份/必要持有；常驻记录不走单独卸载，在 TryFinishShutdown 成功时统一失效且不释放宿主原生持有。详见 [Module API 第 6 节](module-api.md#6-modulemanager-操作与清理)。
 
 部分状态可以作为内部子阶段，不需要 Public Enum 暴露。注册阶段失败按已完成步骤逆序回滚；Active 阶段启动失败按 Service DAG/Module 依赖图逆序收尾；失败报告保留首个主错误、清理错误作为次要记录。进入 Quiescing 后若外部 Borrow 未释放，保持拒绝新业务的状态并返回 Busy，**不得假装卸载成功或在仍有借用时重新开放业务入口**。
 
@@ -106,44 +107,23 @@ Draining 与依赖逆序析构必须协同推进，遵循 [Service 的生命周�
 - Quiescing 与新业务 Guard 获取必须有可验证的线性化顺序：进入 Quiescing 后拒绝新的**外部业务**访问，允许先前合法持有者完成，并通过仅供协调器使用的内部清理权限保留 Destroy、撤销与依赖访问所需的 CodePin/Lease。不得将这些内部权限再次开放给新的业务请求。
 - Module 管理器的装载所有权与外部 CodePin/实例借用要区分；不能把加载器的基本持有误当成永远无法归零的外部 Pin，也不得等待本次卸载自身必要的清理 Pin 提前归零。
 - Registry Contribution 的注销要先拒绝新调用、等待所有在途执行结束，再在代码驻留期释放其状态；Service 清理完成后释放持有的依赖 Borrow。
-- 代码在 STATIC Module 中时，Pin 的释放不能错误地对 `.a` / `.lib` 执行卸载；若该代码物理上位于可卸载 SHARED 容器中，必须保护那个实际承载库的驻留。此为 ModuleLoader 内部账本，不新增 BinaryImage 层。
+- 代码在 STATIC Module 中时，Pin 的释放不能错误地对 `.a` / `.lib` 执行卸载；逻辑 STATIC/SHARED 混合承载已取消，普通第三方代码仍须保护其实际承载库。ModuleManager 直接协调原生持有，不新增 BinaryImage 层。
 - 一旦借用、任务、资源或 Callback 有未解除依赖，应保留必要 Module 记录和动态库句柄，向调用者返回未完成/Busy；绝不强制 `dlclose`/`FreeLibrary`。
 
 ## 8. C++23 API 方向（非冻结签名）
 
 [ModuleDescriptor & Registration API v1](module-api.md) 当前为 **Partially Frozen**：依 [ADR-0011](../decisions/0011-module-api-behavior-contract.md) 冻结身份/版本、依赖阶段、Catalog 可达性、Scope 局部回滚与操作后置条件；本文件继续定义基本生命周期边界，具体调用行为以该文档为准。STATIC/SHARED 的统一原生 C++23 路线保持 [ADR-0010](../decisions/0010-unified-cpp-module-entry.md) 约束；精确 ModuleDefinition 布局、Query 符号名、Progress/Report 和方法签名仍未冻结。
 
-```cpp
-namespace pg::module
-{
-struct ModuleId;
-struct ModuleDescriptor;
-struct ModuleLoadOptions;
-struct ModuleHandle;
-class ModuleCodePin;
-class RegistrationContext;
-class ModuleRuntimeContext;
-class ModuleManager;
+当前已提供 ModuleManager、ModuleHandle、ModuleCodePin 和具体操作值报告；详见 [Module API](module-api.md) 的实际接口及后置条件。公共布局/ABI 未冻结。常驻 Register/Activate 执行失败同次请求整体 Shutdown，前置拒绝不触发；Poll 保留原错并推进，TryFinishShutdown 才最终确认，不能调用被禁止的普通卸载绕过。
 
-// 仅示意可恢复失败与显式操作级报告的集成方式：
-// [[nodiscard]] Result<ModuleHandle> Load(ModuleId, ReportContext&) noexcept;
-// [[nodiscard]] Status Activate(ModuleHandle, ReportContext&) noexcept;
-// [[nodiscard]] Status BeginUnload(ModuleHandle, ReportContext&) noexcept;
-// [[nodiscard]] Status TryFinishUnload(ModuleHandle, ReportContext&) noexcept;
-} // namespace pg::module
-```
-
-- Module 入口可以是自由函数/生成函数，不要求实例化统一 `IModule` 或 `IService` 虚基类；Module 发现/注册入口使用动态函数指针，不改变 Contract Service、Registry Contribution 等已有的动态分发契约。
-- `RegistrationContext` 提供带 Owner 的撤销注册与事务能力；Runtime Context 提供已解析的显式依赖、正确 Scope 与停止协调，不通过隐式全局单例获取“当前 Host”。
-- 需要启动/停止工作的 Module 可提供显式钩子，但不能将它推广为每个 Concrete Service 必须实现同一生命周期接口。
-- 可信装载前 ABI/Public API Contract 预检与实际加载产物的绑定、身份的 C++ 对象布局、原生 Status/Error 编码、SHARED 导出符号/C++ 函数签名、ModuleHandle/CodePin 和 Progress/Report 的 API 仍未冻结，不以此示意代码代替工具链验证。
+整体 Shutdown 按实际资源 DAG 和同 Module 后代资源顺序推进，依赖方原生释放未确认前保留 Provider。常驻资源/接纳中计数/外部 Pin 排空后可解除有效依赖边，但常驻句柄最后统一确认；不是先清空所有 Scope 再退出 Module。独立 Scope 关闭仍子先父且父有子记录不能完成。ScopeAccess 控制块/最终释放在常驻 Runtime，业务 RTTI/Factory/Deleter 在原生释放前解除；类型擦除比较 RTTI 值，已交付访问热路径不重查 RTTI。
 
 ## 9. 最小验证矩阵
 
 | 场景 | 验收目标 |
 | --- | --- |
 | STATIC Catalog，链接器裁剪 | 有明确根引用的注册代码保留、无依赖全局构造顺序 |
-| SHARED 模块加载 | 稳定导出名解析出原生 C++23 Query；同树同配置配套插件免 AbiProfile，独立交付插件若预检或产物绑定失败则**不得 OS Load/C++ Query**；装载后接口/身份检查失败不得注册 |
+| SHARED 模块加载 | 稳定导出名解析出原生 C++23 Query；同树同配置配套插件免 AbiProfile，独立 Pangu 二进制插件已由 ADR-0014 取消；装载后接口/身份检查失败不得注册 |
 | 加载器构造副作用 | 验证平台入口/全局构造的实际执行时序，不宣称 Load 后 ABI 检查能阻止 DllMain |
 | 单 Module 单库 | 生成代码归入唯一 CMake STATIC/SHARED Target，无第二个 Module 库 |
 | ModuleId 重复、依赖缺失、图中环 | 拒绝发布，明确错误且可重试/回滚 |
@@ -154,14 +134,12 @@ class ModuleManager;
 | Registered 装配中失败 | 已启动任务和实例完成收尾，未 Active 的 Module 不被业务访问 |
 | Busy/回滚待清理期间重复装载 | 原 ModuleId 保持占用，清理完成前拒绝同身份的新装载 |
 | 在途析构和跨 Module Allocator | 先清理借用与对象，再释放 CodePin 和动态库句柄 |
-| STATIC 被链接进动态承载库 | Pin 正确保护实际承载代码的动态库 |
+| Modular 单库单 Module | Query 仅返回本定义，真实 DLL 卸载后残留凭据安全 |
 | 失败/回滚与报告 | 原始 Error 保留，操作级有界报告可在模块卸载后阅读 |
 | Windows、WSL Linux、macOS | 独立验证代码驻留与原生链接行为；Android/iOS 首先做平台能力和链接验证，不将其等同于设备运行验收 |
 
 ## 10. 冻结范围与后续设计
 
-**已冻结的语义**：身份独立性与单生效版本、显式 Static Catalog、STATIC/SHARED 统一 C++23 ModuleDefinition/Registration（SHARED 通过版本化稳定导出名定位；无额外 C POD）、注册事务/Scope 可见性、双依赖图、生命周期阶段和失败回滚、ModuleCodePin 与 ServiceRef 分工、清理内部权限、不可强制卸载。ABI 接纳依 [ADR-0013](../decisions/0013-native-build-abi-boundary.md) 分层：同树同配置配套插件免 AbiProfile，独立交付插件保留装载前可信 ABI/API 预检与装载后二次复核。
+身份/版本、显式依赖、声明事务、Scope 可见性与局部回滚、有效 DAG、Borrow/CodePin 分工、安全清理继续有效。ADR-0015 替代同库 Catalog/混合类型、旧整体 Scope 清理顺序并增加常驻失败整体 Shutdown 例外。具体 Public C++ API/ABI、完整 EngineHost/ServiceRegistry、Meta、Hot Reload 与移动设备政策仍未冻结。独立 Pangu 二进制 Preflight 不再规划。
 
-**未冻结**：具体 ModuleId/Descriptor C++ 布局、SHARED Query 的稳定符号名/平台调用约定、原生 C++ ModuleDefinition Public API/接口契约、独立交付预检产物绑定技术、PanguMeta 生成协议、CMake 包装 API、生命周期 Enum/公开函数签名、同步实现、下一版独立二进制兼容描述/Loader 接线、Provider 匹配 API、完整 Hot Reload、Plugin Manifest/Packaging。身份/版本、依赖绑定和操作后置条件的进一步冻结见 [Module API v1 第 8 节](module-api.md#8-冻结范围与后续-apiabi-门槛)；历史 strict-v1 见 [ABI Profile / Fingerprint v1](../foundation/abi-profile-fingerprint.md)，不再是当前生产协议。
-
-当前已实现同次构建 STATIC Catalog、宿主元数据快照及同步声明事务的最小切片，见 [Module API 实现状态](module-api.md#当前正式实现切片2026-10-28)。本文件不声称完整 ModuleManager、真实动态装载、Service/工作生命周期或跨平台完整矩阵已验收；仍须以第 9 节逐项检查。
+当前实现与实际平台/模式矩阵见 [Module API](module-api.md) 和[正式验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。旧 STATIC 结果保留为历史，不作为当前 Modular 成绩。

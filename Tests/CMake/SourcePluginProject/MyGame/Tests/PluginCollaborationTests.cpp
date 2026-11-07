@@ -1,8 +1,12 @@
+#include "GameplayModule.h"
+#include "PhysicsModule.h"
 #include <FixtureModules.h>
 
+#include <FoundationModule.h>
+#include <ModuleBuiltin.h>
 #include <ModuleDescriptor.h>
+#include <ModuleManager.h>
 #include <RegistrationContext.h>
-#include <StaticModuleHost.h>
 
 #include <gtest/gtest.h>
 
@@ -11,21 +15,24 @@
 TEST(ProjectPluginCollaboration, RegistersProviderFirst)
 {
     const std::array queries{
-        pg::module::StaticCatalogEntry{pg::fixture::QueryGameplay},
-        pg::module::StaticCatalogEntry{pg::fixture::QueryPhysics},
+        pg::module::QueryFoundationModule,
+        pg::module::QueryModuleRuntime,
+        pg::fixture::QueryGameplay,
+        pg::fixture::QueryPhysics,
     };
     pg::module::RegistrationScope scope;
     pg::module::ModuleOperationReport report;
-    auto host = pg::module::StaticModuleHost::Create({queries}, scope, {}, report);
+    auto host = pg::module::ModuleManager::Create(scope, queries, {}, report);
     ASSERT_TRUE(host);
-    ASSERT_EQ(host->Modules().size(), 2U);
+    ASSERT_EQ(host->Modules().size(), 4U);
     const auto order = host->RegistrationOrder();
-    ASSERT_EQ(order.size(), 2U);
-    EXPECT_EQ(order.front(), pg::fixture::kPhysicsId);
-    EXPECT_EQ(order.back(), pg::fixture::kGameplayId);
+    ASSERT_EQ(order.size(), 4U);
+    EXPECT_EQ(host->Inspect(order.at(2))->Descriptor.Id, pg::fixture::kPhysicsId);
+    EXPECT_EQ(host->Inspect(order.back())->Descriptor.Id, pg::fixture::kGameplayId);
     for (const auto id : order)
     {
         ASSERT_TRUE(host->Register(id, report));
+        ASSERT_TRUE(host->Activate(id, report));
     }
     EXPECT_EQ(scope.Declarations().size(), 2U);
 }

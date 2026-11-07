@@ -1,0 +1,24 @@
+#pragma once
+
+#include "FixtureModules.h"
+#include <ModuleManager.h>
+#include <array>
+#include <filesystem>
+
+namespace pg::fixture
+{
+[[nodiscard]] inline auto ConsumerCandidates()
+{
+    // 这里只装配该 Host 显式选择的身份和部署路径；依赖排序由 Manager 负责。
+    return std::array<module::ModuleLoadCandidate, 2>{
+        module::SharedModuleCandidate{
+            .ExpectedId = @dependentId@,
+            .Path = std::filesystem::path{R"(@dependentPath@)"},
+        },
+        module::SharedModuleCandidate{
+            .ExpectedId = kPhysicsId,
+            .Path = std::filesystem::path{R"(@physicsPath@)"},
+        },
+    };
+}
+} // namespace pg::fixture

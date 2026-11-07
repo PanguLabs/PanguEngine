@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "Fixtures/ManagerFixture.h"
 #include "ModuleDeclaration.h"
 #include <Error.h>
 #include <ModuleDescriptor.h>
@@ -7,7 +8,6 @@
 #include <ModuleIdentity.h>
 #include <RegistrationContext.h>
 #include <Result.h>
-#include <StaticModuleHost.h>
 
 #include <array>
 #include <cstddef>
@@ -40,7 +40,7 @@ struct Fixture
     inline static const ModuleDefinition* gFirst{};
     inline static const ModuleDefinition* gSecond{};
     inline static const RegistrationScope* gScope{};
-    inline static StaticModuleHost* gNestedHost{};
+    inline static ModuleManager* gNestedHost{};
     inline static std::string_view gName;
     inline static bool gObservedAtomic{};
     inline static bool gObservedBusy{};
@@ -72,7 +72,7 @@ struct Fixture
     }
     static pg::Status Reenter(RegistrationContext& context) noexcept
     {
-        const auto nested = gNestedHost->Register(kSecond, *gReport);
+        const auto nested = gNestedHost->Register(gNestedHost->Find(kSecond).value_or(ModuleHandle{}), *gReport);
         gObservedBusy = !nested && nested.error() == MakeModuleError(ModuleError::kBusy) &&
                         gReport->Progress == ModuleOperationProgress::kUnchanged;
         if (gFailAfterNested)
@@ -111,22 +111,22 @@ TEST(Registration, RegistersOnceInDependencyOrderAndPublishesAtomically)
     Fixture::gFirst = &first;
     Fixture::gSecond = &second;
     ModuleOperationReport report;
-    auto host = StaticModuleHost::Create({kEntries}, scope, {}, report);
+    auto host = pg::module::test::CreateManager({kEntries}, scope, {}, report);
     ASSERT_TRUE(host);
-    const auto early = host->Register(kFirst, report);
+    const auto early = host->Register(host->Find(kFirst).value_or(ModuleHandle{}), report);
     ASSERT_FALSE(early);
     ASSERT_EQ(early.error(), MakeModuleError(ModuleError::kDependencyNotRegistered));
     ASSERT_EQ(Fixture::gCalls, 0);
     ASSERT_EQ(report.Progress, ModuleOperationProgress::kUnchanged);
     ASSERT_EQ(report.RelatedModule, kSecond);
-    ASSERT_EQ(host->Modules().front().State, StaticModuleState::kLoaded);
-    for (const auto id : host->RegistrationOrder())
+    ASSERT_EQ(pg::module::test::BusinessSnapshots(*host).front().State, ModuleState::kLoaded);
+    for (const auto id : pg::module::test::BusinessOrder(*host))
     {
-        ASSERT_TRUE(host->Register(id, report));
+        ASSERT_TRUE(host->Register(host->Find(id).value_or(ModuleHandle{}), report));
         ASSERT_FALSE(report.PrimaryError);
         ASSERT_EQ(report.Progress, ModuleOperationProgress::kRegistered);
     }
-    const auto repeated = host->Register(kFirst, report);
+    const auto repeated = host->Register(host->Find(kFirst).value_or(ModuleHandle{}), report);
     ASSERT_FALSE(repeated);
     ASSERT_EQ(repeated.error(), MakeModuleError(ModuleError::kInvalidState));
     ASSERT_EQ(Fixture::gCalls, 1);
@@ -156,17 +156,17 @@ TEST(Registration, RollsBackAndPreservesOriginalErrorAndProgress)
     Fixture::gFirst = &first;
     Fixture::gSecond = &second;
     ModuleOperationReport report;
-    auto host = StaticModuleHost::Create({kEntries}, scope, {}, report);
+    auto host = pg::module::test::CreateManager({kEntries}, scope, {}, report);
     ASSERT_TRUE(host);
-    ASSERT_TRUE(host->Register(kSecond, report));
-    const auto failed = host->Register(kFirst, report);
+    ASSERT_TRUE(host->Register(host->Find(kSecond).value_or(ModuleHandle{}), report));
+    const auto failed = host->Register(host->Find(kFirst).value_or(ModuleHandle{}), report);
     const auto snapshot = report;
-    const auto retry = host->Register(kFirst, report);
+    const auto retry = host->Register(host->Find(kFirst).value_or(ModuleHandle{}), report);
     ASSERT_FALSE(failed);
     ASSERT_EQ(failed.error(), kOriginal);
     ASSERT_EQ(snapshot.PrimaryError, kOriginal);
     ASSERT_EQ(snapshot.Progress, ModuleOperationProgress::kCleanupPending);
-    ASSERT_EQ(host->Modules().front().State, StaticModuleState::kRegistrationFailed);
+    ASSERT_EQ(pg::module::test::BusinessSnapshots(*host).front().State, ModuleState::kCleanupPending);
     ASSERT_FALSE(retry);
     ASSERT_EQ(report.Progress, ModuleOperationProgress::kUnchanged);
     ASSERT_EQ(scope.Declarations().size(), 1);
@@ -174,14 +174,14 @@ TEST(Registration, RollsBackAndPreservesOriginalErrorAndProgress)
     // 相同 Error 值仍须区分是否进入回调。
     RegistrationScope otherScope;
     const auto identicalError = [](RegistrationContext&) noexcept -> pg::Status
-    { return std::unexpected(MakeModuleError(ModuleError::kNotFound)); };
+    { return std::unexpected(MakeModuleError(ModuleError::kInvalidHandle)); };
     const auto other = Definition(kFirst, identicalError);
     Fixture::gFirst = &other;
-    auto otherHost = StaticModuleHost::Create({std::span(kEntries).first<1>()}, otherScope, {}, report);
+    auto otherHost = pg::module::test::CreateManager({std::span(kEntries).first<1>()}, otherScope, {}, report);
     ASSERT_TRUE(otherHost);
-    const auto absent = otherHost->Register(kSecond, report);
+    const auto absent = otherHost->Register(otherHost->Find(kSecond).value_or(ModuleHandle{}), report);
     const auto before = report;
-    const auto callback = otherHost->Register(kFirst, report);
+    const auto callback = otherHost->Register(otherHost->Find(kFirst).value_or(ModuleHandle{}), report);
     ASSERT_FALSE(absent);
     ASSERT_FALSE(callback);
     ASSERT_EQ(absent.error(), callback.error());
@@ -213,13 +213,13 @@ TEST(Registration, IgnoredDeclarationFailureCannotCommit)
         Fixture::gFirst = &first;
         Fixture::gSecond = &second;
         ModuleOperationReport report;
-        auto host = StaticModuleHost::Create({kEntries}, scope, {}, report);
+        auto host = pg::module::test::CreateManager({kEntries}, scope, {}, report);
         ASSERT_TRUE(host);
         if (existing)
         {
-            ASSERT_TRUE(host->Register(kSecond, report));
+            ASSERT_TRUE(host->Register(host->Find(kSecond).value_or(ModuleHandle{}), report));
         }
-        const auto result = host->Register(kFirst, report);
+        const auto result = host->Register(host->Find(kFirst).value_or(ModuleHandle{}), report);
         ASSERT_FALSE(result);
         ASSERT_EQ(result.error(), MakeModuleError(ModuleError::kDeclarationConflict));
         ASSERT_EQ(scope.Declarations().size(), (existing ? 1U : 0U));
@@ -257,9 +257,9 @@ TEST(Registration, RejectsInvalidAndOversizedDeclarations)
         const auto first = Definition(kFirst, callbacks.at(index));
         Fixture::gFirst = &first;
         ModuleOperationReport report;
-        auto host = StaticModuleHost::Create({std::span(kEntries).first<1>()}, scope, {}, report);
+        auto host = pg::module::test::CreateManager({std::span(kEntries).first<1>()}, scope, {}, report);
         ASSERT_TRUE(host);
-        const auto result = host->Register(kFirst, report);
+        const auto result = host->Register(host->Find(kFirst).value_or(ModuleHandle{}), report);
         const auto expected = index == 0 ? ModuleError::kInvalidDeclaration : ModuleError::kLimitExceeded;
         ASSERT_FALSE(result);
         ASSERT_EQ(result.error(), MakeModuleError(expected));
@@ -278,16 +278,16 @@ TEST(Registration, ConcreteScopesOwnIndependentCopies)
         Fixture::gName = name;
         const auto first = Definition(kFirst, Fixture::DeclareFirst);
         Fixture::gFirst = &first;
-        auto firstHost = StaticModuleHost::Create({std::span(kEntries).first<1>()}, firstScope, {}, report);
-        auto secondHost = StaticModuleHost::Create({std::span(kEntries).first<1>()}, secondScope, {}, report);
+        auto firstHost = pg::module::test::CreateManager({std::span(kEntries).first<1>()}, firstScope, {}, report);
+        auto secondHost = pg::module::test::CreateManager({std::span(kEntries).first<1>()}, secondScope, {}, report);
         ASSERT_TRUE(firstHost);
         ASSERT_TRUE(secondHost);
         Fixture::gScope = &firstScope;
-        ASSERT_TRUE(firstHost->Register(kFirst, report));
+        ASSERT_TRUE(firstHost->Register(firstHost->Find(kFirst).value_or(ModuleHandle{}), report));
         name.assign("second scope");
         Fixture::gName = name;
         Fixture::gScope = &secondScope;
-        ASSERT_TRUE(secondHost->Register(kFirst, report));
+        ASSERT_TRUE(secondHost->Register(secondHost->Find(kFirst).value_or(ModuleHandle{}), report));
         ASSERT_EQ(firstScope.Declarations().size(), 1);
         ASSERT_EQ(firstScope.Declarations().front().DisplayName, std::string(256, 'a'));
         ASSERT_EQ(secondScope.Declarations().size(), 1);
@@ -313,12 +313,12 @@ TEST(Registration, RejectsCrossHostScopeReentry)
         Fixture::gFailAfterNested = fail;
         ModuleOperationReport report;
         Fixture::gReport = &report;
-        auto outer = StaticModuleHost::Create({std::span(kEntries).first<1>()}, scope, {}, report);
-        auto inner = StaticModuleHost::Create({std::span(kEntries).subspan<1>()}, scope, {}, report);
+        auto outer = pg::module::test::CreateManager({std::span(kEntries).first<1>()}, scope, {}, report);
+        auto inner = pg::module::test::CreateManager({std::span(kEntries).subspan<1>()}, scope, {}, report);
         ASSERT_TRUE(outer);
         ASSERT_TRUE(inner);
         Fixture::gNestedHost = &*inner;
-        const auto result = outer->Register(kFirst, report);
+        const auto result = outer->Register(outer->Find(kFirst).value_or(ModuleHandle{}), report);
         ASSERT_NE(result.has_value(), fail);
         ASSERT_TRUE(Fixture::gObservedBusy);
         ASSERT_EQ(report.Module, kFirst);
@@ -327,8 +327,8 @@ TEST(Registration, RejectsCrossHostScopeReentry)
         ASSERT_EQ(report.Progress,
                   (fail ? ModuleOperationProgress::kCleanupPending : ModuleOperationProgress::kRegistered));
         ASSERT_EQ(scope.Declarations().size(), (fail ? 0U : 1U));
-        ASSERT_EQ(inner->Modules().front().State, StaticModuleState::kLoaded);
-        ASSERT_TRUE(inner->Register(kSecond, report));
+        ASSERT_EQ(pg::module::test::BusinessSnapshots(*inner).front().State, ModuleState::kLoaded);
+        ASSERT_TRUE(inner->Register(inner->Find(kSecond).value_or(ModuleHandle{}), report));
     }
     Fixture::gFailAfterNested = false;
 }
@@ -350,15 +350,15 @@ TEST(Registration, CrossScopeNestedReportBelongsToOuterOperation)
         Fixture::gFirst = &innerFirst;
         Fixture::gSecond = &innerSecond;
         ModuleOperationReport report;
-        auto inner = StaticModuleHost::Create({kEntries}, innerScope, {}, report);
+        auto inner = pg::module::test::CreateManager({kEntries}, innerScope, {}, report);
         const auto outerFirst = Definition(kFirst, Fixture::Reenter);
         Fixture::gFirst = &outerFirst;
-        auto outer = StaticModuleHost::Create({std::span(kEntries).first<1>()}, outerScope, {}, report);
+        auto outer = pg::module::test::CreateManager({std::span(kEntries).first<1>()}, outerScope, {}, report);
         ASSERT_TRUE(inner);
         ASSERT_TRUE(outer);
         Fixture::gNestedHost = &*inner;
         Fixture::gReport = &report;
-        const auto result = outer->Register(kFirst, report);
+        const auto result = outer->Register(outer->Find(kFirst).value_or(ModuleHandle{}), report);
         ASSERT_TRUE(result);
         ASSERT_FALSE(report.PrimaryError);
         ASSERT_EQ(report.Module, kFirst);

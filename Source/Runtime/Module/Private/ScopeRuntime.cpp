@@ -1,16 +1,19 @@
 #include "ScopeRuntime.h"
 #include "Error.h"
 
+#include "ModuleRecord.h"
 #include <ModuleDeclaration.h>
 #include <ModuleError.h>
+#include <ModuleHandle.h>
 #include <ModuleIdentity.h>
+#include <ModuleManager.h>
+#include <ModuleOperation.h>
 #include <RegistrationContext.h>
 #include <Result.h>
 #include <ScopeAccess.h>
 #include <ScopeBuildContext.h>
 #include <ScopeFactory.h>
 #include <ScopeIdentity.h>
-#include <StaticModuleHost.h>
 
 #include <algorithm>
 #include <atomic>
@@ -76,8 +79,8 @@ struct ScopeRuntime::State
     using Recipe = RegistrationScope::Recipe;
     struct Module
     {
-        StaticModuleRecord* Record{};
-        std::shared_ptr<ScopeGate> Gate = std::make_shared<ScopeGate>();
+        ModuleRecord* Record{};
+        std::shared_ptr<ScopeGate> Gate;
         std::vector<ModuleId> ServiceDependencies;
         std::optional<pg::Error> Original;
     };
@@ -102,7 +105,7 @@ struct ScopeRuntime::State
         ScopeHandle Handle{};
         Kind Type{};
         ScopeHandle Parent{};
-        std::shared_ptr<ScopeGate> Gate = std::make_shared<ScopeGate>();
+        std::shared_ptr<ScopeGate> Gate = MakeScopeGate();
         std::vector<std::unique_ptr<Resource>> Resources;
         bool Ready{};
         bool Closing{};
@@ -148,17 +151,19 @@ struct ScopeRuntime::State
     std::uint64_t NextResource{1};
     bool Operating{};
     bool ShuttingDown{};
+    bool CleanupBlocked{};
     std::optional<pg::Error> ShutdownOriginal;
     DeclarationId BuildDeclaration{};
 
-    State(std::uint64_t domain, RegistrationScope& declarations, std::span<StaticModuleRecord> records)
+    State(std::uint64_t domain, RegistrationScope& declarations, std::span<ModuleRecord* const> records)
         : Domain(domain)
         , Declarations(&declarations)
     {
-        for (auto& record : records)
+        for (auto* record : records)
         {
             Module module;
-            module.Record = &record;
+            module.Record = record;
+            module.Gate = record->Code->Gate;
             Modules.push_back(std::move(module));
         }
         Slot root;
@@ -224,6 +229,17 @@ struct ScopeRuntime::State
         }
         return false;
     }
+    bool HasOwnedDescendants(ScopeHandle handle, ModuleId owner)
+    {
+        return std::ranges::any_of(
+            Slots,
+            [&](const auto& slot)
+            {
+                return slot.Owner && slot.Owner->Handle != handle && Descendant(*slot.Owner, handle) &&
+                       std::ranges::any_of(slot.Owner->Resources, [&](const auto& resource)
+                                           { return resource->Owner == owner && !resource->Destroyed; });
+            });
+    }
     bool HasChildren(ScopeHandle handle)
     {
         return std::ranges::any_of(Slots, [&](const auto& slot) { return slot.Owner && slot.Owner->Parent == handle; });
@@ -231,6 +247,12 @@ struct ScopeRuntime::State
 
     static std::vector<ModuleId> Dependencies(Module& module)
     {
+        // 常驻记录的资源与外部代码使用都排空后，才解除其业务 Provider 保护。
+        // 可卸载记录仍须保留依赖，直到 Manager 成功完成原生释放并 Detach。
+        if (module.Record->Resident && module.Record->ResourcesDrained && !module.Record->Code->HasExternalUsers())
+        {
+            return {};
+        }
         auto result = module.ServiceDependencies;
         for (const auto& binding : module.Record->Bindings)
         {
@@ -263,7 +285,7 @@ struct ScopeRuntime::State
                 }
                 visited.push_back(id);
                 auto* owner = Find(id);
-                if ((owner == nullptr) || owner->Record->State == StaticModuleState::kUnloaded)
+                if ((owner == nullptr) || owner->Record->State == ModuleState::kUnloaded)
                 {
                     continue;
                 }
@@ -323,7 +345,7 @@ struct ScopeRuntime::State
                                    [&](auto& module)
                                    {
                                        if (module.Record->Descriptor.Id == id ||
-                                           module.Record->State == StaticModuleState::kUnloaded)
+                                           module.Record->State == ModuleState::kUnloaded)
                                        {
                                            return false;
                                        }
@@ -337,7 +359,7 @@ struct ScopeRuntime::State
         for (auto const dependency : Dependencies(module))
         {
             const auto* provider = Find(dependency);
-            if ((provider == nullptr) || provider->Record->State != StaticModuleState::kActive)
+            if ((provider == nullptr) || provider->Record->State != ModuleState::kActive)
             {
                 return std::unexpected(MakeModuleError(ModuleError::kDependencyNotActive));
             }
@@ -362,7 +384,7 @@ struct ScopeRuntime::State
                 if (provider->Owner != recipe->Owner)
                 {
                     const auto* owner = Find(provider->Owner);
-                    if ((owner == nullptr) || owner->Record->State != StaticModuleState::kActive)
+                    if ((owner == nullptr) || owner->Record->State != ModuleState::kActive)
                     {
                         return std::unexpected(MakeModuleError(ModuleError::kDependencyNotActive));
                     }
@@ -425,11 +447,8 @@ struct ScopeRuntime::State
             resource->Serial = Runtime->NextResource++;
             resource->Object = std::move(object);
             resource->Dependencies = Providers;
-            resource->Control = std::make_shared<ScopeObjectControl>();
-            resource->Control->Module = Runtime->Find(Definition->Owner)->Gate;
-            resource->Control->Scope = TargetScope->Gate;
-            resource->Control->Object = resource->Object->Get();
-            resource->Control->Type = resource->Object->Type();
+            resource->Control = MakeScopeObjectControl(Runtime->Find(Definition->Owner)->Gate, TargetScope->Gate,
+                                                       resource->Object->Get());
             Owned = resource.get();
             auto control = resource->Control;
             TargetScope->Resources.push_back(std::move(resource));
@@ -565,7 +584,7 @@ struct ScopeRuntime::State
     void CloseModule(Module& module)
     {
         module.Gate->Close();
-        module.Record->State = StaticModuleState::kCleanupPending;
+        module.Record->State = ModuleState::kCleanupPending;
         for (auto const& slot : Slots)
         {
             if (slot.Owner)
@@ -650,7 +669,7 @@ struct ScopeRuntime::State
         }
         return changed;
     }
-    bool FinalizeModules()
+    bool FinalizeModules(ModuleId target)
     {
         if (Declarations->Registering)
         {
@@ -680,7 +699,8 @@ struct ScopeRuntime::State
         for (auto id = order->rbegin(); id != order->rend(); ++id)
         {
             auto* module = Find(*id);
-            if (module->Record->State != StaticModuleState::kCleanupPending || InUse(*id))
+            if ((target.IsValid() && *id != target) || module->Record->ResourcesDrained ||
+                module->Record->State != ModuleState::kCleanupPending || InUse(*id))
             {
                 continue;
             }
@@ -700,14 +720,19 @@ struct ScopeRuntime::State
                           [&](const auto& recipe) { return recipe->HostDomain == Domain && recipe->Owner == *id; });
             std::erase_if(Declarations->Published, [&](const auto& declaration)
                           { return declaration.HostDomain == Domain && declaration.Owner == *id; });
-            module->ServiceDependencies.clear();
-            module->Record->State = StaticModuleState::kUnloaded;
+            // 原生释放完成前保留有效服务依赖，不能提前清理 Provider。
+            module->Record->ResourcesDrained = true;
             changed = true;
         }
         return changed;
     }
-    void Cleanup(bool finalizeModules)
+    void Cleanup(bool finalizeModules, ModuleId target = {})
     {
+        // 包括 CreateScope/Activate 的内部失败回滚，以及无资源 Scope 的槽位回收。
+        if (CleanupBlocked)
+        {
+            return;
+        }
         std::vector<std::uint64_t> polled;
         bool progress = true;
         while (progress)
@@ -725,7 +750,9 @@ struct ScopeRuntime::State
                 {
                     for (auto const& resource : slot.Owner->Resources)
                     {
-                        if (resource->Closing && !resource->Destroyed)
+                        if (resource->Closing && !resource->Destroyed &&
+                            (target.IsValid() ? resource->Owner == target
+                                              : Find(resource->Owner)->Record->State != ModuleState::kCleanupPending))
                         {
                             resources.push_back({.Owner = slot.Owner.get(), .Value = resource.get()});
                         }
@@ -737,7 +764,12 @@ struct ScopeRuntime::State
             for (const auto& entry : resources)
             {
                 auto& resource = *entry.Value;
-                if ((entry.Owner->Closing && HasChildren(entry.Owner->Handle)) ||
+                if (target.IsValid() && InUse(resource.Owner))
+                {
+                    continue;
+                }
+                if ((entry.Owner->Closing && (ShuttingDown ? HasOwnedDescendants(entry.Owner->Handle, resource.Owner)
+                                                           : HasChildren(entry.Owner->Handle))) ||
                     HasDependent(resource, entry.Owner->Handle))
                 {
                     continue;
@@ -783,7 +815,7 @@ struct ScopeRuntime::State
             }
             if (finalizeModules)
             {
-                progress |= FinalizeModules();
+                progress |= FinalizeModules(target);
             }
             progress |= RetireScopes();
         }
@@ -833,7 +865,7 @@ struct ScopeRuntime::State
     {
         for (const auto& module : Modules)
         {
-            if (module.Original && module.Record->State == StaticModuleState::kCleanupPending)
+            if (module.Original && module.Record->State == ModuleState::kCleanupPending)
             {
                 return module.Original;
             }
@@ -871,7 +903,7 @@ struct ScopeRuntime::State
         }
         for (auto& module : Modules)
         {
-            if (module.Record->State != StaticModuleState::kUnloaded)
+            if (module.Record->State != ModuleState::kUnloaded)
             {
                 CloseModule(module);
             }
@@ -880,12 +912,12 @@ struct ScopeRuntime::State
     [[nodiscard]] bool Finished() const
     {
         return std::ranges::none_of(Slots, [](const auto& slot) { return slot.Owner != nullptr; }) &&
-               std::ranges::all_of(Modules, [](const auto& module)
-                                   { return module.Record->State == StaticModuleState::kUnloaded; });
+               std::ranges::all_of(Modules, [](const auto& module) { return module.Record->ResourcesDrained; });
     }
 };
 
-ScopeRuntime::ScopeRuntime(std::uint64_t domain, RegistrationScope& declarations, std::span<StaticModuleRecord> modules)
+ScopeRuntime::ScopeRuntime(std::uint64_t domain, RegistrationScope& declarations,
+                           std::span<ModuleRecord* const> modules)
     : Data(std::make_unique<State>(domain, declarations, modules))
 {
 }
@@ -895,14 +927,28 @@ ScopeRuntime::~ScopeRuntime()
     {
         std::terminate();
     }
-    Data->Operating = true;
-    Data->Shutdown();
-    Data->Cleanup(true);
     if (!Data->Finished())
     {
         std::terminate();
     }
 }
+
+void ScopeRuntime::AttachModules(std::span<ModuleRecord* const> records) noexcept
+{
+    for (auto* record : records)
+    {
+        State::Module module;
+        module.Record = record;
+        module.Gate = record->Code->Gate;
+        Data->Modules.push_back(std::move(module));
+    }
+}
+void ScopeRuntime::DetachModule(ModuleHandle handle) noexcept
+{
+    std::erase_if(Data->Modules, [&](const auto& module) { return module.Record->Handle == handle; });
+}
+void ScopeRuntime::RequestShutdown() noexcept { Data->Shutdown(); }
+void ScopeRuntime::SetCleanupBlocked(bool blocked) noexcept { Data->CleanupBlocked = blocked; }
 bool ScopeRuntime::TryBeginOperation() noexcept
 {
     if (Data->Operating)
@@ -914,6 +960,26 @@ bool ScopeRuntime::TryBeginOperation() noexcept
 }
 void ScopeRuntime::EndOperation() noexcept { Data->Operating = false; }
 bool ScopeRuntime::IsShuttingDown() const noexcept { return Data->ShuttingDown; }
+std::optional<pg::Error> ScopeRuntime::PendingFailure() const noexcept
+{
+    return Data->ShuttingDown ? Data->ShutdownOriginal : Data->OriginalFailure();
+}
+bool ScopeRuntime::HasBusinessDependency(ModuleHandle handle) const noexcept
+{
+    const auto found =
+        std::ranges::find_if(Data->Modules, [&](const auto& module) { return module.Record->Handle == handle; });
+    if (found == Data->Modules.end())
+    {
+        return false;
+    }
+    return std::ranges::any_of(Data->Modules,
+                               [&](const auto& module)
+                               {
+                                   return !module.Record->Resident &&
+                                          Data->ModuleDependsOn(found->Record->Descriptor.Id,
+                                                                module.Record->Descriptor.Id);
+                               });
+}
 void ScopeRuntime::RegistrationFailed(ModuleId id, pg::Error error) noexcept
 {
     if (auto* module = Data->Find(id))
@@ -983,7 +1049,7 @@ pg::Result<ScopeHandle> ScopeRuntime::CreateScope(Kind kind, ScopeHandle parent,
     auto* scope = target.Owner.get();
     for (const auto id : *order)
     {
-        if (Data->Find(id)->Record->State != StaticModuleState::kActive)
+        if (Data->Find(id)->Record->State != ModuleState::kActive)
         {
             continue;
         }
@@ -1025,7 +1091,7 @@ pg::Status ScopeRuntime::Activate(ModuleId id, ModuleOperationReport& report)
     {
         return Fail(report, ModuleError::kNotFound, id);
     }
-    if (Data->ShuttingDown || module->Record->State != StaticModuleState::kRegistered)
+    if (Data->ShuttingDown || module->Record->State != ModuleState::kRegistered)
     {
         return Fail(report, ModuleError::kInvalidState, id);
     }
@@ -1069,7 +1135,7 @@ pg::Status ScopeRuntime::Activate(ModuleId id, ModuleOperationReport& report)
             const auto declaration = Data->BuildDeclaration;
             module->Original = error;
             Data->CloseModule(*module);
-            Data->Cleanup(false);
+            Data->Cleanup(false, id);
             const std::optional<pg::Error> cleanup =
                 Data->OwnsLiveResources(id) ? std::optional(Data->PendingError(id)) : std::nullopt;
             Snapshot(report, ModuleOperationProgress::kCleanupPending, id, handle, cleanup, error, declaration);
@@ -1089,42 +1155,9 @@ pg::Status ScopeRuntime::Activate(ModuleId id, ModuleOperationReport& report)
             }
         }
     }
-    module->Record->State = StaticModuleState::kActive;
+    module->Record->State = ModuleState::kActive;
     module->Gate->Open();
     Snapshot(report, ModuleOperationProgress::kActive, id);
-    return {};
-}
-pg::Status ScopeRuntime::Load(ModuleId id, ModuleOperationReport& report)
-{
-    State::Operation const operation(*Data);
-    if (!operation.Accepted)
-    {
-        return Fail(report, ModuleError::kBusy, id);
-    }
-    auto* module = Data->Find(id);
-    if (module == nullptr)
-    {
-        return Fail(report, ModuleError::kNotFound, id);
-    }
-    if (Data->ShuttingDown || module->Record->State != StaticModuleState::kUnloaded)
-    {
-        return Fail(report, ModuleError::kInvalidState, id);
-    }
-    for (const auto& dependency : module->Record->Bindings)
-    {
-        const auto* provider = Data->Find(dependency.Dependency);
-        if (dependency.IsBound() &&
-            ((provider == nullptr) || provider->Record->State == StaticModuleState::kCleanupPending ||
-             provider->Record->State == StaticModuleState::kUnloaded))
-        {
-            return Fail(report, ModuleError::kDependencyNotRegistered, id, ScopeHandle(), dependency.Dependency);
-        }
-    }
-    module->Gate = std::make_shared<ScopeGate>();
-    module->Original.reset();
-    module->ServiceDependencies.clear();
-    module->Record->State = StaticModuleState::kLoaded;
-    Snapshot(report, ModuleOperationProgress::kLoaded, id);
     return {};
 }
 pg::Status ScopeRuntime::BeginUnload(ModuleId id, ModuleOperationReport& report)
@@ -1139,11 +1172,11 @@ pg::Status ScopeRuntime::BeginUnload(ModuleId id, ModuleOperationReport& report)
     {
         return Fail(report, ModuleError::kNotFound, id);
     }
-    if (module->Record->State == StaticModuleState::kUnloaded)
+    if (module->Record->State == ModuleState::kUnloaded)
     {
         return Fail(report, ModuleError::kInvalidState, id);
     }
-    if (module->Record->State != StaticModuleState::kCleanupPending && Data->InUse(id))
+    if (module->Record->State != ModuleState::kCleanupPending && Data->InUse(id))
     {
         return Fail(report, ModuleError::kDependencyInUse, id);
     }
@@ -1151,8 +1184,15 @@ pg::Status ScopeRuntime::BeginUnload(ModuleId id, ModuleOperationReport& report)
     Snapshot(report, ModuleOperationProgress::kCleanupPending, id, ScopeHandle(), std::nullopt, module->Original);
     return {};
 }
-pg::Status ScopeRuntime::TryFinishUnload(ModuleId id, ModuleOperationReport& report)
+pg::Status ScopeRuntime::TryFinishResources(ModuleHandle handle, ModuleOperationReport& report) noexcept
 {
+    const auto found =
+        std::ranges::find_if(Data->Modules, [&](const auto& module) { return module.Record->Handle == handle; });
+    if (found == Data->Modules.end())
+    {
+        return Fail(report, ModuleError::kInvalidHandle);
+    }
+    const auto id = found->Record->Descriptor.Id;
     State::Operation const operation(*Data);
     if (!operation.Accepted)
     {
@@ -1163,13 +1203,13 @@ pg::Status ScopeRuntime::TryFinishUnload(ModuleId id, ModuleOperationReport& rep
     {
         return Fail(report, ModuleError::kNotFound, id);
     }
-    if (module->Record->State != StaticModuleState::kCleanupPending)
+    if (module->Record->State != ModuleState::kCleanupPending)
     {
         return Fail(report, ModuleError::kInvalidState, id);
     }
     const auto original = module->Original;
-    Data->Cleanup(true);
-    if (module->Record->State != StaticModuleState::kUnloaded)
+    Data->Cleanup(true, id);
+    if (!module->Record->ResourcesDrained)
     {
         const auto error = Data->PendingError(id);
         Snapshot(report, ModuleOperationProgress::kCleanupPending, id, ScopeHandle(), error, original);
@@ -1233,10 +1273,10 @@ pg::Status ScopeRuntime::PollCleanup(ModuleOperationReport& report)
         return Fail(report, ModuleError::kBusy);
     }
     const auto original = Data->ShuttingDown ? Data->ShutdownOriginal : Data->OriginalFailure();
-    Data->Cleanup(true);
+    Data->Cleanup(false);
     const bool pending =
-        std::ranges::any_of(Data->Modules, [](const auto& module)
-                            { return module.Record->State == StaticModuleState::kCleanupPending; }) ||
+        std::ranges::any_of(Data->Modules,
+                            [](const auto& module) { return module.Record->State == ModuleState::kCleanupPending; }) ||
         std::ranges::any_of(Data->Slots, [](const auto& slot) { return slot.Owner && slot.Owner->Closing; });
     if (pending)
     {
@@ -1271,7 +1311,7 @@ pg::Status ScopeRuntime::TryFinishShutdown(ModuleOperationReport& report)
         return Fail(report, ModuleError::kInvalidState);
     }
     const auto original = Data->ShutdownOriginal;
-    Data->Cleanup(true);
+    Data->Cleanup(false);
     if (!Data->Finished())
     {
         const auto error = Data->PendingError();

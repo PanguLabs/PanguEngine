@@ -60,7 +60,7 @@ Foundation (C++23, Clang, CMake, Platform, ABI)
 
 ## 对外边界
 
-- 一个 Module 对应一个实际 STATIC/SHARED Library Target，只产生一个主要库产物；动态库句柄与 CodePin 由 Module 机制管理，不再引入独立 BinaryImage 架构层。STATIC Module 的代码随最终承载它的 EXE/动态库驻留，见 [Plugin / Module](core/plugin-module.md)。
+- 一个 Module 对应一个实际 STATIC/SHARED Library Target，只产生一个主要库产物；动态库句柄与 CodePin 由 Module 机制管理，不再引入独立 BinaryImage 架构层。同图统一 Monolithic/Modular，STATIC 逻辑 Module 不嵌入另一个 SHARED Module；常驻根与真实动态库由 ModuleManager 协调，见 [Plugin / Module](core/plugin-module.md)。
 - 对于跨 C++ Module 的传值，ABI 兼容、分配器来源、对象及析构代码所在 Module 的有效期均为约束，详见 [ABI](foundation/abi.md) 和 [内存管理](core/memory-management.md)。
 - 动态模块卸载前必须停止新的调用并处理任务、回调、资源及 GPU 完成状态；不能直接卸载存活对象仍依赖的代码。
 
@@ -74,3 +74,5 @@ ECS 与 Object/Meta 的组合、Scheduler、Job、Asset、Editor UI、事件体�
 
 - **设计**：上文明确列出的技术方向可作为后续规范的前提；部分子系统文档仍标记为 Partially Frozen。
 - **实现**：本文件不声称存在 EngineHost、构建目标、Renderer 或五平台 CI 实现。检查源码及测试后才能更新实现状态。
+
+现行统一链接模式、常驻根与动态 ModuleManager 以 [ADR-0015](decisions/0015-unified-link-modes-module-manager.md) 和 [Module API](core/module-api.md) 为准；Public C++ ABI 未冻结。实际平台矩阵见[验收记录](../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。

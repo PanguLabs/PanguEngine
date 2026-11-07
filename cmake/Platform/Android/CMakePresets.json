@@ -11,6 +11,7 @@
       "binaryDir": "${sourceDir}/Build/Android",
       "toolchainFile": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
       "cacheVariables": {
+        "PANGU_LINK_MODE": "Monolithic",
         "CMAKE_ANDROID_NDK": "$env{ANDROID_NDK_HOME}",
         "ANDROID_ABI": "arm64-v8a",
         "ANDROID_PLATFORM": "android-29",

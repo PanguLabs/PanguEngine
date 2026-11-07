@@ -48,7 +48,7 @@
 | [Engine Host](core/engine-host.md) | 采用 EngineHost 命名与宿主职责方向 | Partially Frozen |
 | [Plugin 与 Module](core/plugin-module.md) | Plugin/Module 职责、单 Module 单库、CodePin 与安全卸载 | Partially Frozen |
 | [Module 注册与生命周期 v1](core/module-registration-lifetime.md) | STATIC/SHARED 统一注册、可回滚事务、生命周期与 CodePin | Frozen（设计语义）；具体 API 未冻结 |
-| [ModuleDescriptor & Registration API v1](core/module-api.md) | 身份/依赖、统一 C++ 入口、Catalog、Scope 装配、操作进度与清理契约 | Partially Frozen（行为冻结；Public API/ABI 待验证，见 ADR-0011） |
+| [ModuleDescriptor & Registration API v1](core/module-api.md) | 身份/依赖、统一 C++ 入口、ModuleManager、强类型 RTTI、Scope 装配、Pin 与清理契约 | Partially Frozen（现行行为见 ADR-0015；Public API/ABI 未冻结） |
 | [内存管理](core/memory-management.md) | Pangu Memory Ownership Contract v1 | Frozen（规范 v1） |
 | [反射和元数据](core/reflection-meta.md) | pga 属性、禁止反射标记宏、不 Fork LLVM | Partially Frozen |
 | [Service / Context](core/service.md) | No Subsystem、Host/Context/World 与 Concrete / Contract / Registry Service 三模式 | Frozen（设计语义）；API PoC |
@@ -82,3 +82,5 @@
 4. 重大替代性决策写入 ADR，原文档同步更新；不要在旧文档上静默覆盖历史。
 5. 规范正文中的 MUST / SHOULD / MAY 分别表示必须、应该和可以；只有带具体约束的措辞才构成可执行规范。
 6. 此索引不代表实现完成清单；源码、测试和跨平台验证应单独追踪。
+
+现行统一链接模式、常驻根与动态 ModuleManager 以 [ADR-0015](decisions/0015-unified-link-modes-module-manager.md) 和 [Module API](core/module-api.md) 为准；Public C++ ABI 未冻结。实际平台矩阵见[验收记录](../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。

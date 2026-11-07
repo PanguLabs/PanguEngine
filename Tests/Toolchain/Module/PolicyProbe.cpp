@@ -1,3 +1,4 @@
+#include <PanguToolchainProbeExport.h>
 #include <expected>
 
 #ifndef __clang__
@@ -22,5 +23,5 @@
 namespace pg::probe
 {
 // NOLINTNEXTLINE(misc-use-internal-linkage): exported symbol for an inter-library link test.
-std::expected<int, int> PanguPolicyResult() noexcept { return 23; }
+PG_TOOLCHAIN_PROBE_API std::expected<int, int> PanguPolicyResult() noexcept { return 23; }
 } // namespace pg::probe

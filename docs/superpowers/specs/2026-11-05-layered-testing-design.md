@@ -1,5 +1,7 @@
 # PanguEngine 分层测试方案
 
+> 状态修订：Partially Superseded（2026-11-06）。StaticModuleHost、混合/同库承载与整体 Shutdown 顺序以[新批准规格](2026-11-06-module-manager-link-modes-design.md)及 [ADR-0015](../../../wiki/decisions/0015-unified-link-modes-module-manager.md) 为准；其它有效测试/身份/所有权契约保留。以下保留当时设计与结果，不改写为当前 Modular 验收。
+
 > 状态：Approved（用户已审阅通过）。
 > 日期：2026-11-05
 > 审批：2026-11-05，用户确认 spec 已审阅并要求编写实施计划。

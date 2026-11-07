@@ -315,3 +315,94 @@ Project 协作用例只有 `owner.project`。原 `MyGameProbe` 保留零 Plugin 
 当时三桌面完整矩阵及移动端专项留待后续验收；最终结果见[验收记录](../docs/superpowers/plans/2026-11-05-layered-testing-validation.md)。
 
 Task 9 的三桌面完整矩阵及 Android/iOS 编译、最终链接和部署等对应层次已验收，结果见[验收记录](../docs/superpowers/plans/2026-11-05-layered-testing-validation.md)；移动端未进行设备运行。整分支评审、限定复评及本计划临时目录清理均已完成，四项非阻断维护项已归档。此前各任务的局部结果不合并冒充三桌面完整通过。
+
+## 2026-11-06：统一 ModuleManager（Task 4）
+
+| 旧覆盖 | 新位置/行为 | 保留与替代依据 |
+| --- | --- | --- |
+| `StaticModuleHostTests.cpp` 六个元数据场景 | 同文件 `ModuleManager.*`，经真实 `Create` 常驻根 + `Load` 业务批次 | 深复制的全部字段、入口/身份/限制、精确版本、Required/Optional、环、重入报告断言保留；新增句柄域与预算测试 |
+| `RejectsInvalidDefinitionsAndIdentity` 的 `LinkedStaticModules` 拒绝断言 | 移除该字段赋值与唯一拒绝断言 | 批准规格 §4 废弃同库多逻辑 Module 协议，字段从 Foundation 原协议头删除；其它入口/定义/身份拒绝断言保留 |
+| `RegistrationTests.cpp` 与 `ScopeLifecycleTests.cpp` | 改用 ModuleHandle、拥有型 Inspect；同二进制场景明确为 Monolithic | 全部原有效行为场景保留；`kRegistrationFailed` 替换为 `kCleanupPending`；原地 `Load(ModuleId)` 改为重新提交显式候选，新增代际回归 |
+| `StaticCatalogTests`、`ScopeDestructor` | Monolithic 的真实归档和子进程回归 | 保留链接裁剪、Factory、Shutdown、Busy 析构终止断言；Modular 经 `ModuleRegression` 自动执行独立 Mono 子图 |
+| 父子 Scope 与 Module 清理顺序 | `ShutdownConsumerParentDoesNotWaitForProviderChildScope` | 整体 Shutdown 遵循资源有效 DAG、同 Module 后代资源顺序与最终原生确认屏障；独立 Scope 关闭的父子记录后置条件保留 |
+| 独立 Project Game/Editor 与 PluginCollaboration | 两个基础 Query + 显式已链接业务常驻 Query | 更新集合数量和依赖顺序断言；不把 SHARED 伪装为静态 Load 候选；业务动态消费留待 Task 7 |
+| `StaticModuleHostBenchmarks.cpp` | `ModuleManager::Create` 的显式常驻 Query 集合 | 计量边界改为含两个基础根的常驻接纳与 Manager 析构；与旧纯 STATIC Catalog 样本不直接比较 |
+
+Task 4 新增 `ModuleManagerTests.cpp`、`ResidentModuleTests.cpp`、`BatchLoadTests.cpp`。默认 Modular 中仍执行单元/并发 Scope 闸门、原生 Loader、真实基础批次与常驻测试；旧同二进制 Query 集通过 precommit/full 的 `ModuleRegression` 保留。矩阵子标记仅阻止递归登记该跳闸，不禁用其它正式测试。完整动态 Pin、原生失败/并发清理和真实 DLL Scope 行为由 Task 5/6 继续验收，不以 Task 4 阶段门替代。
+
+## 2026-11-06：动态 Scope 与卸载后访问（Task 6）
+
+没有删除、合并或停用旧测试。下表逐项登记旧行为的保留位置，不能把新增动态测试视为覆盖全部旧断言。默认 Modular 的 `ModuleRegression` 仍自动配置独立 Monolithic 子图、构建正式 Module 目标并运行 `area.module` / `run.precommit`；子图标记只防止递归登记矩阵。`ScopeLifecycleTests.cpp`、`ScopeAccessConcurrencyTests.cpp` 和 `ScopeDestructorTests.cmake` 的原有效断言不变。
+
+| 旧 ScopeLifecycle 测试 | 保留与新增动态证据 |
+| --- | --- |
+| ScopeFailureIsLocalAndFactoryRepeats | Mono 原测试保留；SharedScopeLifecycle.LocalRollback 另在真实 DLL 中验证 Factory/Start 两种 B 失败、A/C 可借用及槽位代际 |
+| BorrowAndWorkDelayDestructionIndependently | Mono 原测试保留；动态 Borrow/异步排空仍由 ModuleUnload / ModuleUnloadConcurrency 验证，不以新增同步 Scope 替代 |
+| PartialStartFailureStaysCleanupOnlyAndReloadUsesNewTokens | Mono 原测试保留；SharedScopeLifecycle.ActivationRollback 另验证已有三 Context 中第二项 Start 失败，全 Module 回滚而 Scope Owner 仍存在 |
+| DependenciesPreserveParentAndReverseDestruction | Mono 原测试保留；SharedScopeLifecycle.TypedDependency 另验证真实 Consumer DLL 在 Destroy 时仍可访问 World Provider STL |
+| WrongDependencyTypeCannotCommit | Mono 原测试保留；TypedDependency 的错误类型分支在另一个 DLL 内返回精确 kTypeMismatch，Provider 继续可用 |
+| HandlesAndMovingHostPreserveOwnership | Mono 原测试完整保留，未宣称新的动态测试替代移动/错误域断言 |
+| ManagementReentryAndAliasedReportDoNotCorruptOuterOperation | Mono 原测试完整保留；原生释放重入仍由 ModuleUnload 的原生释放重入用例 补充 |
+| FailedScopeWithoutHandleRemainsTrackedUntilWorkStops | Mono 原测试完整保留；Task 5 的失败批次/未交付 Scope 动态回归继续保留 |
+| RejectsCombinedAndLocalCyclesBeforeFactories | Mono 原测试完整保留，新的直线 DLL 依赖不替代合并图环检测 |
+| ScopeBudgetIsCheckedBeforeCallbacksAndSlotsCanBeReused | Mono 原测试完整保留；LocalRollback 只补充真实 DLL 失败 Scope 的槽位代际，不替代预算边界 |
+| DirectModuleDependencyKeepsProviderWorkAliveDuringBusyCleanup | Mono 原测试完整保留，动态直接原生导入与 Busy 清理由 Task 5 回归补充 |
+| TransitiveModuleDependencyKeepsProviderWorkAliveDuringBusyCleanup | Mono 原测试完整保留，不以两个 DLL 的直接依赖替代传递依赖 |
+| ShutdownRetainsUnreturnedScopeFailure | Mono 原测试完整保留，不以普通显式 unload 替代失败记录的整体关闭 |
+| FactoryRetirementBlocksSharedDeclarationReentry | Mono 原测试完整保留，不以 FactoryDestroy 计数替代重入屏障 |
+| FailedRegistrationRetiresFactoriesBeforeReporting | Mono 原测试完整保留，Scope 注册成功场景不替代失败 Register 的销毁顺序 |
+| ReportSeparatesOriginalFailureFromCleanupResult | Mono 原测试完整保留，新增失败 Scope 精确原错断言仅作为补充 |
+| ActivationReportSeparatesCleanupError | Mono 原测试完整保留，不以同步无 Busy 的 DLL Activate 失败替代双错误报告 |
+| ShutdownCauseSurvivesRetiringFailedScopeAcrossPolls | Mono 原测试完整保留，跨 Poll 原错锁存不被新同步测试替代 |
+| ShutdownDoesNotImportCompletedHistoricalFailure | Mono 原测试完整保留，独立操作不继承历史错误的断言继续运行 |
+| InactiveDeclarationCycleDoesNotBlockUnrelatedActiveScope | Mono 原测试完整保留，不以已有 Scope 普通装配替代 inactive 图场景 |
+| FactoryMustOwnExactlyOneInactiveObject | Mono 原测试完整保留，新 DLL Factory 仍消费同一 Own 路径 |
+| IncrementalLoadAndMoveKeepExistingScopeAccessStable | Mono 原测试完整保留；ExistingOwners 补充真实 DLL 装入前已有 Context/World，新增 B 不重跑 Register，A/B 对象独立 |
+| ShutdownConsumerParentDoesNotWaitForProviderChildScope | Mono 原测试完整保留，保持有效 DAG 与父子 Scope 清理顺序断言 |
+| ShutdownRetainsResidentDeclarationsWhileBusinessIsBusy | Mono 原测试完整保留，不以普通业务卸载替代常驻记录最终确认 |
+| ResidentConsumerDrainsBeforeBusinessProviderAndConfirmsLast | Mono 原测试完整保留；ModuleUnload 的真实 DLL 常驻 Consumer/Pin 屏障继续保留 |
+| ModuleUnloadPollPreservesUnreturnedScopeFailureOnlyUntilCompletion | Mono 原测试完整保留，原错持续范围不被普通成功路径替代 |
+| IndirectResidentConsumerDrainsBeforeBusinessProviderAndConfirmsLast | Mono 原测试完整保留，不以直接 Provider/Consumer 替代间接常驻 DAG |
+
+| 旧注册/元数据/析构测试 | 保留位置与原因 |
+| --- | --- |
+| Registration.RegistersOnceInDependencyOrderAndPublishesAtomically | Mono 原测试完整保留；ExistingOwners 增补真实 DLL Register 一次、多 Scope 装配 |
+| Registration.RollsBackAndPreservesOriginalErrorAndProgress | Mono 原测试完整保留，注册事务回滚不被 Scope Activate 回滚替代 |
+| Registration.IgnoredDeclarationFailureCannotCommit | Mono 原测试完整保留，粘性注册失败仍单独验证 |
+| Registration.RejectsInvalidAndOversizedDeclarations | Mono 原测试完整保留，合法动态声明不替代输入预算拒绝 |
+| Registration.ConcreteScopesOwnIndependentCopies | Mono 原测试完整保留；ExistingOwners 增补真实 DLL 中 STL 对象独立性 |
+| Registration.RejectsCrossHostScopeReentry | Mono 原测试完整保留，串行管理的跨 Host 拒绝条件不变 |
+| Registration.CrossScopeNestedReportBelongsToOuterOperation | Mono 原测试完整保留，不以卸载事件序列替代重入报告归属 |
+| ModuleManager.CopiesMetadataBeforeSourceDestruction | StaticModuleHostTests.cpp 的 Mono 原测试保留，拥有型元数据销毁后访问不被 ScopeAccess 测试替代 |
+| ModuleManager.RejectsInvalidDefinitionsAndIdentity | 同文件 Mono 原测试保留，Task 4 已说明唯一已废弃 Catalog 字段断言 |
+| ModuleManager.EnforcesLimitsBeforeCopying | 同文件 Mono 原测试完整保留，动态合法批次不替代上限边界 |
+| ModuleManager.ValidatesDependencies | 同文件 Mono 原测试完整保留，精确版本与缺失依赖不被 RTTI 匹配替代 |
+| ModuleManager.OptionalSelectionIsExplicitAndRejectsCycles | 同文件 Mono 原测试完整保留，Required DLL 依赖不替代 Optional 绑定 |
+| ModuleManager.NestedQueryCannotPolluteOuterReport | 同文件 Mono 原测试完整保留，Load Query 重入报告仍单独验证 |
+| ModuleManager.IncrementalBatchDoesNotRebindExistingOptionalDependencies | 同文件 Mono 原测试完整保留，Scope 增量装配不替代 Module Optional 绑定稳定性 |
+| ScopeDestructor | 原 Mono 子进程保留 Borrow 未释放时始终有效终止且不销毁 T；ModuleLifetime 的真实 DLL Busy 子进程另要求进入终止前 NativeUnload=0、退出91，准备失败退出2–12不能冒充成功 |
+| ScopeAccessConcurrency.AcquisitionAndCloseAreLinearized | 两种模式均保留原 200 轮竞争，不以同步卸载子进程替代并发闸门 |
+| ScopeAccessConcurrency.SuccessfulAcquisitionPrecedesCloseAndReleaseCrossesThreads | 两种模式均保留跨线程 Release 及三级闸门计数断言 |
+| ScopeAccessConcurrency.ObserverCountsEventsFromMultipleThreads | 两种模式均保留常驻观察器并发计数断言 |
+| StaticCatalogTests | Mono 原归档、裁剪链接、Factory 与 Shutdown 断言完整保留，真实动态入口不替代静态 Catalog 根引用 |
+
+`ModuleLifetime` 的两个正向子进程分别保留公共 `ProbeState` 与只有 ScopeProvider.cpp 完整定义的 `ProviderPrivateState` 令牌。宿主/观察器只传递私有类型的不完整 `ScopeAccess`，不构造、调用成员或执行 typeid。它们先确认真实 NativeUnload、对象/非平凡 deleter/Factory 已销毁，再清空观察器、复制旧凭据、TryBorrow 返回 kNotReady、最后释放控制块并正常退出。Busy 子进程进入 terminate 时写入卸载次数快照，区分 Manager 提前释放与 Windows 进程退出时的 DLL 回收。该证据限于实际运行平台，不能代替其它平台或移动设备运行验收。
+
+## 2026-11-06：Task 7/8 最终覆盖映射
+
+| 旧覆盖/入口 | 现行位置 | 等效性与废弃边界 |
+| --- | --- | --- |
+| 同图逐 Module STATIC/SHARED、LinkedStaticModules | ModuleLinkModeMatrix/Switch；单库 Query | 旧混合承载契约经 ADR-0015 废弃；保留单 Target、第三方独立、非法模式和父 Project 控制，新增往返/no-op，不伪称同库旧断言仍有效 |
+| SourcePluginStaticCatalog | 同名两模式脚本，Mono 保留 Catalog/裁剪；Modular 真实 Load/Register/Activate/Shutdown | 继续检查 Game/Editor 不同消费集合、未消费不构建、基础根启动和真实业务退出；动态用例补充，不替代归档根引用 |
+| SourcePluginSharedDeploy 的旧独立 SHARED Probe | 同名脚本真实 Runtime/业务 Query 与部署 | 保留文件 magic/名称/复制 SHA/no-op；新增宿主不直接导入业务库、真实动态启动和关闭，不以文件存在代替运行 |
+| SourcePluginIncremental/Project/Enable/EngineRevision/TestOwnership | 原同名脚本 + 双模式/锁验证 | 保留原负例、未消费不重编、空 Plugin/owner 隔离；锁当前干净 Engine SHA，local override OFF；往返不得消费旧模式产物 |
+| Toolchain PolicyProbe 固定 STATIC | 同一 Pangu::ToolchainProbe 服从模式 | ThirdParty::CompiledProbe 仍 STATIC 且不继承 Pangu 策略；ToolchainLibraryLink 两库最终链接与 expected 返回保留 |
+| 空 LinkSmoke/未消费 Runtime 的 SharedProbe | SourcePluginProject/CrossCompileTests.cmake | 旧 SDK 冒烟仍保留但不足；新增 Android .a→原生宿主.so、iOS .a→Mach-O executable 与 Modular 真 Runtime/业务 Query/依赖，架构/platform 断言；不等效设备运行 |
+| ModuleIdentity/Descriptor 原 Module/Public 路径 | Foundation/Public 同名纯协议头 | 旧位置删除，无转发头；PUBLIC Foundation 依赖传播，身份/版本断言保留，无新增库或 Module→Foundation 链接环 |
+| ScopeTypeToken 地址比较 | ScopeBuild/SharedScopeLifecycle.TypedDependency、ModuleLifetime | 内部 RTTI 值比较，跨 DLL 公共/私有类型、错误类型与卸载后凭据真实回归；不凭地址/名字/hash 绕过 |
+| Task 4/5 阶段门 | ModuleUnload/Concurrency、SharedScopeLifecycle、ModuleLifetime + 保留 Mono 子图 | 真实资源/Factory/Pin/原生释放失败与重入、失败批次/元数据环/Scope 回滚屏障保留；阶段数量与本轮平台矩阵分别归档 |
+| 六场景旧 StaticModuleHost benchmark | 同一 PanguModuleBenchmarks 名与六个场景 | 身份/借用输入不变，Catalog 的 1/8/32 业务项不变，Create/析构含两个基础常驻根；不移走计时，不混旧基线 |
+
+Task 4/5 首轮 review 的四项 Important 均经正式回归修复并限定复评关闭；Task 6 首轮真实动态行为已正确，只修正 Busy 子进程进程退出回调的观察阶段。永久结论及执行裁决、延期 Minor 见[正式验收](../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。测试长期保留，未删除旧有效行为。整分支最终 Review/cleanup 由控制器完成后另行归档。
+
+Task 8 的真实平台失败保留为新增回归：独立无原生互导的 ScopeProvider/ScopeConsumer 继续验证合法 RTTI 值匹配，POSIX LOCAL 改 GLOBAL，不通过互导或类型锚点掩盖；ExternalPin/NativeClose 的物理顺序用例固定 Provider 先显式装载，全部 Pin/资源/故障/物理断言保留，新增 NativeLoader 双顺序持有释放回归补足可移植语义。SourcePluginEnable 在独立 fresh binary dirs 显式验证两模式，Lib/Bin 均检查未消费与消费产物，负例保留。ModeMatrix/Switch 的 ThirdParty 仍 STATIC、不受 Pangu 策略影响，空 TU 改实际返回23的函数并由 ModeConsumer 消费；保留真实最终链接，不调整全局 AR/ranlib。

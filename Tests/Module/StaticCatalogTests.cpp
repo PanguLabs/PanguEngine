@@ -1,9 +1,9 @@
 #include "FixtureModules.h"
 
+#include "Fixtures/ManagerFixture.h"
 #include <ModuleDescriptor.h>
 #include <RegistrationContext.h>
 #include <ScopeIdentity.h>
-#include <StaticModuleHost.h>
 
 #include <gtest/gtest.h>
 
@@ -13,16 +13,16 @@ TEST(StaticCatalog, RetainsArchiveRootsAndRunsRealFactories)
     RegistrationScope scope;
     ModuleOperationReport report;
     const auto catalog = fixture::GeneratedCatalog();
-    auto host = StaticModuleHost::Create(catalog, scope, {}, report);
+    auto host = pg::module::test::CreateManager(catalog, scope, {}, report);
     ASSERT_TRUE(host);
-    ASSERT_EQ(host->Modules().size(), 2U);
+    ASSERT_EQ(pg::module::test::BusinessSnapshots(*host).size(), 2U);
     ASSERT_EQ(catalog.Entries.size(), 2U);
-    ASSERT_EQ(host->RegistrationOrder().size(), 2U);
-    EXPECT_EQ(host->RegistrationOrder().front(), fixture::kSecondId);
-    EXPECT_EQ(host->RegistrationOrder().back(), fixture::kFirstId);
-    for (const auto id : host->RegistrationOrder())
+    ASSERT_EQ(pg::module::test::BusinessOrder(*host).size(), 2U);
+    EXPECT_EQ(pg::module::test::BusinessOrder(*host).front(), fixture::kSecondId);
+    EXPECT_EQ(pg::module::test::BusinessOrder(*host).back(), fixture::kFirstId);
+    for (const auto id : pg::module::test::BusinessOrder(*host))
     {
-        ASSERT_TRUE(host->Register(id, report));
+        ASSERT_TRUE(host->Register(host->Find(id).value_or(ModuleHandle{}), report));
     }
     const auto declarations = scope.Declarations();
     ASSERT_EQ(declarations.size(), 2U);
@@ -32,9 +32,9 @@ TEST(StaticCatalog, RetainsArchiveRootsAndRunsRealFactories)
     EXPECT_EQ(declarations.back().Id, fixture::kFirstDeclaration);
     EXPECT_EQ(declarations.back().Owner, fixture::kFirstId);
     EXPECT_EQ(declarations.back().DisplayName, "first");
-    for (const auto id : host->RegistrationOrder())
+    for (const auto id : pg::module::test::BusinessOrder(*host))
     {
-        ASSERT_TRUE(host->Activate(id, report));
+        ASSERT_TRUE(host->Activate(host->Find(id).value_or(ModuleHandle{}), report));
     }
     const auto first = host->CreateScope(pg::service::Scope::kContext, host->HostScope(), report);
     const auto second = host->CreateScope(pg::service::Scope::kContext, host->HostScope(), report);

@@ -10,6 +10,9 @@ endif()
 file(MAKE_DIRECTORY "${PANGU_TEST_ROOT}")
 file(COPY "${projectFixture}" DESTINATION "${PANGU_TEST_ROOT}")
 set(source "${PANGU_TEST_ROOT}/MyGame")
+if(NOT DEFINED PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE)
+    set(PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE ON)
+endif()
 execute_process(COMMAND git -C "${PANGU_ENGINE_SOURCE_DIR}" rev-parse HEAD
     RESULT_VARIABLE revResult OUTPUT_VARIABLE engineHead OUTPUT_STRIP_TRAILING_WHITESPACE)
 if(NOT revResult EQUAL 0)
@@ -34,9 +37,10 @@ function(ConfigureProject name testing engineTests)
             "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PANGU_ENGINE_SOURCE_DIR}"
             "-DBUILD_TESTING:BOOL=${testing}"
             "-DPANGU_BUILD_ENGINE_TESTS:BOOL=${engineTests}"
-            "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=ON"
+            "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
             "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
             -DPANGU_FIXTURE_UNCLASSIFIED_ENGINE_TEST=OFF
+            ${ARGN}
         RESULT_VARIABLE rc OUTPUT_VARIABLE output ERROR_VARIABLE error)
     if(NOT rc EQUAL 0)
         message(FATAL_ERROR "MyGame configure ${name} failed: ${rc}\n${output}\n${error}")
@@ -107,7 +111,7 @@ function(ConfigureUnclassifiedEngineCase enabled)
     endif()
 endfunction()
 
-ConfigureProject(Enabled ON OFF)
+ConfigureProject(Enabled ON OFF -DPANGU_LINK_MODE=Monolithic)
 string(JSON enabledCount LENGTH "${Enabled_CTEST_LIST}" tests)
 set(projectProbeFound OFF)
 if(enabledCount GREATER 0)
@@ -129,7 +133,7 @@ if(NOT rc EQUAL 0)
     message(FATAL_ERROR "MyGameProbe standalone CTest failed")
 endif()
 
-ConfigureProject(Disabled OFF OFF)
+ConfigureProject(Disabled OFF OFF -DPANGU_LINK_MODE=Modular)
 string(JSON disabledCount LENGTH "${Disabled_CTEST_LIST}" tests)
 if(NOT disabledCount EQUAL 0)
     message(FATAL_ERROR "Project BUILD_TESTING=OFF must register no tests:\n${Disabled_CTEST_LIST}")

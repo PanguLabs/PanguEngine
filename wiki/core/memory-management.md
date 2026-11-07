@@ -1,11 +1,11 @@
 # PanguEngine 内存管理规范
 
 > 设计状态：Frozen（Memory Ownership Contract v1）；具体 API 与实现不由本规范宣称完成
-> 更新：2026-10-20
+> 更新：2026-11-07
 
 本文规定内存管理实现必须满足的约束；类型和接口名称表示设计约定，不代表已经落地。条款使用“**必须**”（MUST）、“**应该**”（SHOULD）和“**可以**”（MAY）区分约束强度。
 
-本文的 `Module` 遵循 [Plugin / Module](plugin-module.md) 的定义：一个逻辑代码单元对应一个 STATIC/SHARED 库 Target，不指 C++ 语言的 Module，也不与 Plugin 混称。Plugin 是分发与发现单元，可以包含多个 Module 或仅包含 Assets。STATIC Module 不具有独立的运行时可卸载镜像；静态链接构建同样遵守所有权契约，代码驻留保护覆盖实际承载代码的 EXE 或动态库。
+本文的 `Module` 遵循 [Plugin / Module](plugin-module.md) 的定义：一个逻辑代码单元对应一个 STATIC/SHARED 库 Target，不指 C++ 语言的 Module，也不与 Plugin 混称。Plugin 是分发与发现单元，可以包含多个 Module 或仅包含 Assets。Monolithic 的逻辑 STATIC Module 不嵌入另一个逻辑 SHARED Module，归档无独立卸载；普通 ThirdParty 仍遵守实际承载代码的驻留与释放契约。
 
 ## 10 条核心规则
 
@@ -116,3 +116,9 @@ PMR 用于需要运行时选择分配域的 STL 边界，不要求所有引擎�
 - Shipping 可以去除调用栈、额外追踪表和其他可选诊断，但必须保留分配器必要状态、正确释放所需的信息、句柄有效性机制、同步与 GPU 完成记录。
 - 声称诊断接近零开销时，应明确关闭了哪些功能，并通过生成代码或测量验证；不将分配算法本身的时间、空间成本算作可消除的诊断开销。
 - 实现落地后，针对性验证至少覆盖：对齐与大小溢出、分配失败及终止路径、声明支持的跨线程释放、存储重置前的析构与任务完成、过期句柄及槽位复用、多队列延迟销毁、带未完成依赖的 Module 卸载，以及 PMR 跨分配域的复制和移动。
+
+## ModuleManager 的代码与控制块寿命（2026-11-06）
+
+依据 [ADR-0015](../decisions/0015-unified-link-modes-module-manager.md)，保留 RTTI 并在内部擦除处比较 type_info 值；不能使用地址、仅名字/hash 或人工类型身份代替。业务 DLL RTTI、对象、匹配 Deleter、Factory/捕获和回调在卸载前解除；ScopeAccess/Pin 控制块、闸门与最终释放入口位于宿主常驻 Runtime，残留访问不延长实例寿命，关闭后 TryBorrow 不读取 DLL 数据。
+
+ModuleManager 自身原生持有与外部 Pin、Borrow、内部资源依赖分别记账；最后业务线程 Release 不执行 OS 卸载。先按有效资源依赖排空/销毁，再退休工厂并等待对应 Pin，原生释放成功才失效记录；释放未确认前保留 Provider。常驻记录最后统一确认且不释放宿主原生持有。成功不保证额外 OS 引用也消失。实际 RTTI、真实物理卸载和移动端链接层次见[正式验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)，不推导设备或跨配置 ABI 已通过。

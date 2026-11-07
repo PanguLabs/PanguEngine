@@ -1,8 +1,8 @@
 #include "Fixtures/ScopeLifecycleFixture.h"
 
+#include "Fixtures/ManagerFixture.h"
 #include <ModuleDescriptor.h>
 #include <Result.h>
-#include <StaticModuleHost.h>
 
 #include <array>
 #include <cstdlib>
@@ -48,13 +48,14 @@ int main(int argc, char* const* argv)
     const auto state = std::make_shared<Counters>();
     Fixture::gState = state;
     constexpr std::array kEntries{StaticCatalogEntry{Query}};
-    auto result = StaticModuleHost::Create({kEntries}, declarations, {}, report);
+    auto result = pg::module::test::CreateManager({kEntries}, declarations, {}, report);
     if (!result)
     {
         return 2;
     }
-    auto host = std::make_unique<StaticModuleHost>(std::move(*result));
-    if (!host->Register(kModule, report) || !host->Activate(kModule, report) ||
+    auto host = std::make_unique<ModuleManager>(std::move(*result));
+    if (!host->Register(host->Find(kModule).value_or(ModuleHandle{}), report) ||
+        !host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report) ||
         !host->CreateScope(Scope::kContext, host->HostScope(), report))
     {
         return 2;

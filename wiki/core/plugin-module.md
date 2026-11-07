@@ -1,7 +1,7 @@
 # Pangu Plugin / Module 架构基线
 
-> 状态：Partially Frozen（源码 Plugin 身份/发现规则、单 Module 单库、Target 命名、Service 与生命周期已冻结；最小 PanguBuildTool/Project 接线已实现，生产 Loader 与 Public ModuleDescriptor API 仍待验证）
-> 更新：2026-11-04
+> 状态：Partially Frozen（源码 Plugin 身份/发现规则、单 Module 单库、Target 命名、Service 与生命周期已冻结；最小 PanguBuildTool/Project 接线已实现，ModuleManager/原生 Loader 已实现；Public ModuleDescriptor API/ABI 未冻结，平台按实际验收记录）
+> 更新：2026-11-06
 > 决策：[ADR-0005：单 Module 单库](../decisions/0005-one-module-one-library.md)、[ADR-0006：三种 Service 模式](../decisions/0006-three-service-modes.md)、[ADR-0008：Module 注册与生命周期](../decisions/0008-module-registration-lifetime.md)
 > 参考：[EngineHost](engine-host.md)、[Service](service.md)、[ABI](../foundation/abi.md)、[内存所有权](memory-management.md)、[构建系统](../foundation/build-system.md)、[ADR-0014 源码插件](../decisions/0014-source-plugins-project-build.md)
 
@@ -28,7 +28,7 @@ Plugin / Module 体系要兼顾静态构建与动态扩展、Game 与 Editor 运
 2. 同一 Module 的源码、公开/私有依赖和 PanguMeta 生成的注册代码统一附着到这个目标；不得把一个 Module 拆成多个 Module Library Target，也不得把不同逻辑 Module 混为同一个 Module Target。
 3. CMake `ALIAS` 不是第二个真实目标；Windows SHARED 随附的 import `.lib`、PDB 等是辅助产物，不属于第二个 Module。
 4. ThirdParty/工具/宿主可以有普通 CMake Target，但它们不会因此自动变为某个 Module 的额外 Library Target；Plugin 本身不要求生成 CMake Library。
-5. STATIC Module 最终进入 EXE 或共享库，不存在独立的静态库运行时卸载；若静态代码进入可卸载动态库，CodePin **必须**保护真实承载代码的动态库。SHARED Module 由 Module 加载器直接管理库句柄。
+5. 全部逻辑 Pangu Module 按统一模式构建，Monolithic 归档最终进入 Host，不嵌入另一个逻辑 SHARED Module；Modular 每 Module 独立动态库。普通 ThirdParty 不受模式限制，回调和释放器仍须受实际代码驻留保护。
 6. 本规则冻结 Module 构建映射及下述 CMake Target 命名空间规则，**不冻结** `pg_add_module()`、物理库文件名、Manifest、PanguMeta 注册入口或工具链平台加载函数。
 
 ## Module 与 ThirdParty 的构建边界（Frozen）
@@ -60,10 +60,10 @@ Plugin / Module 体系要兼顾静态构建与动态扩展、Game 与 Editor 运
 2. **Module 生命周期受控**：不是成功载入镜像就等于初始化或具备可运行服务。
 3. **依赖先于使用**：启动、停止和卸载必须考虑 Module 间引用以及外部持有的资源、任务、回调。
 4. **安全卸载优先**：发现仍有使用者时拒绝或推迟卸载，不允许忽略悬空引用；动态库句柄与 CodePin 由现有 Module 机制维护，不建立独立 BinaryImageManager。
-5. **动态/静态部署兼容**：不把“Plugin”定义为只能由动态库交付的扩展。`STATIC` / `SHARED` 是各 Module 的 CMake Library Target 类型；`Monolithic` / `Modular` 仅在确需统一 Engine/Game/Editor 部署策略时作为顶层 CMake 构建选项，**不新增 Module 分类**，也不强制所有 Module 采用相同类型；详见 [构建系统](../foundation/build-system.md#monolithic--modular-与-module-库类型的边界)。
+5. **统一链接模式**：依据 [ADR-0015](../decisions/0015-unified-link-modes-module-manager.md)，同图 `PANGU_LINK_MODE=Monolithic|Modular` 统一全部 Module 为 STATIC/SHARED，桌面默认 Modular、移动默认 Monolithic，父 Project 控制 Engine 子目录；ThirdParty 按自身用途。不建同 Module 双变体或同库 Catalog。
 6. **统一 C++23 Module 入口，无强制 C Bootstrap**：STATIC Catalog 和 SHARED Query 都返回同一种 C++23 ModuleDefinition，SHARED 仅保留固定 `extern "C"` 符号用于定位；不需要独立 C POD Discovery 或人工维护的 C 注册桥。同树源码构建不运行 AbiProfile，独立 Pangu 插件 ABI Preflight 路线已由 ADR-0014 终止；运行时入口与 CodePin 仍须校验。
 7. **ABI 边界**：受控同树 C++ 构建可以在满足所有权与生命周期契约下交换兼容 STL 类型，不运行 AbiProfile；普通第三方预编译库按自身 Toolchain/ABI 契约审查，不采用独立 Pangu Plugin 的过时 Preflight 流程。历史 strict-v1 Fingerprint 不再是普通构建协议。
-8. **构建与发现分离**：`Plugin.toml` 是固定两根配置期身份发现的必需文件；`CMakeLists.txt` 是唯一构建依赖权威。所有候选 Manifest 均校验；`PANGU_ENABLED_PLUGINS` 显式启用且 `EXCLUDE_FROM_ALL` 不自动编译。实际编译由消费者 Target 决定；运行时激活清单另行设计。
+8. **构建与发现分离**：`Plugin.toml` 是固定两根配置期身份发现的必需文件；`CMakeLists.txt` 是唯一构建依赖权威。所有候选 Manifest 均校验；`PANGU_ENABLED_PLUGINS` 显式启用且 `EXCLUDE_FROM_ALL` 不自动编译。实际编译由消费者 Target 决定；运行时显式候选接纳/注册/激活由 ModuleManager 协调，完整产品清单另行设计。
 9. **第三方依赖不强制 Package Adapter**：可通过 CMake 及相应 Module/ThirdParty 目标集成。
 
 ## Module 安全卸载的不变量
@@ -100,8 +100,8 @@ Plugin / Module 体系要兼顾静态构建与动态扩展、Game 与 Editor 运
 
 ### 后续冻结顺序
 
-[Module Registration & Lifetime v1](module-registration-lifetime.md) 的**注册、依赖、状态、CodePin、回滚语义已 Frozen**；依 [ADR-0010](../decisions/0010-unified-cpp-module-entry.md) **STATIC/SHARED 统一 C++23 ModuleDefinition/Registration，SHARED 以稳定 `extern "C"` 导出名定位 C++ Query**，不需要独立 C POD。ABI 普通构建范围见 ADR-0013；源码 Plugin/独立 Project 政策由 [ADR-0014](../decisions/0014-source-plugins-project-build.md) 冻结，不再实施独立 Pangu Plugin Preflight；具体 ModuleDescriptor、Query/导出符号、ModuleManager Public API 与 Loader 接线仍待实现。
+[Module Registration & Lifetime v1](module-registration-lifetime.md) 的**注册、依赖、状态、CodePin、回滚语义已 Frozen**；依 [ADR-0010](../decisions/0010-unified-cpp-module-entry.md) **STATIC/SHARED 统一 C++23 ModuleDefinition/Registration，SHARED 以稳定 `extern "C"` 导出名定位 C++ Query**，不需要独立 C POD。ABI 普通构建范围见 ADR-0013；源码 Plugin/独立 Project 政策由 [ADR-0014](../decisions/0014-source-plugins-project-build.md) 冻结，不再实施独立 Pangu Plugin Preflight；当前 ModuleManager、PanguModuleQueryV1、公共导出与原生 Loader 已实现，Public API/ABI 仍未冻结；实际矩阵见[验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。
 
-[Module API v1](module-api.md) 已按 [ADR-0011](../decisions/0011-module-api-behavior-contract.md) 冻结身份/版本、依赖绑定、同库 Catalog 与驻留、Scope 局部回滚和操作后置条件；Public API/ABI 仍待验证，不由该行为冻结替代实现验收。
+[Module API v1](module-api.md) 已按 [ADR-0011](../decisions/0011-module-api-behavior-contract.md) 冻结身份/版本、依赖绑定、Scope 局部回滚和操作后置条件；同库 Catalog 已由 ADR-0015 替代为单库单 Module，并新增常驻失败整体 Shutdown 例外；Public API/ABI 仍待验证，不由该行为冻结替代实现验收。
 
 优先完成现有 Module 注册契约 → 三种 Service 的绑定/撤销 → CMake 与 PanguMeta 接入 → Host 生命周期协调和 CodePin → Plugin 分发及 Hot Reload，再据此补充可验证 C++23 接口。

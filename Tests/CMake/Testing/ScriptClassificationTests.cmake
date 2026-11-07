@@ -79,12 +79,18 @@ foreach(index RANGE 0 ${last})
     endif()
     list(APPEND seen "${name}")
 endforeach()
+# 同二进制终止回归在 Modular 中通过独立 Monolithic 子图保留。
+if(PANGU_TEST_LINK_MODE STREQUAL "Modular")
+    set(moduleLifecycleRegression ModuleRegression)
+else()
+    set(moduleLifecycleRegression ScopeDestructor)
+endif()
 foreach(required IN ITEMS BuildEnvironment ToolchainLibraryLink NlohmannSubmoduleRequired
         SourcePluginBuildTool SourcePluginBuildToolInvalidation SourcePluginBuildToolFileLinks
         SourcePluginBuildToolDirectoryLinks SourcePluginEngineRevision SourcePluginProject
         SourcePluginEnable SourcePluginStaticCatalog SourcePluginSharedDeploy SourcePluginIncremental
         TestingRegistration TestingDependencyIsolation TestingBuildToolsTests
-        TestingBuildToolsFailurePropagation TestingScriptClassification ScopeDestructor)
+        TestingBuildToolsFailurePropagation TestingScriptClassification ${moduleLifecycleRegression})
     if(NOT required IN_LIST seen)
         message(FATAL_ERROR "Missing original regression or explicit capability scenario: ${required}")
     endif()

@@ -5,6 +5,8 @@
 > 权威规范：[ModuleDescriptor & Registration API v1](../core/module-api.md)
 > 基线：[ADR-0007](0007-error-diagnostics.md)、[ADR-0008](0008-module-registration-lifetime.md)、[ADR-0010](0010-unified-cpp-module-entry.md)
 
+> 部分被替代：[ADR-0015](0015-unified-link-modes-module-manager.md)。Decision 2/3 的同库 Catalog/共同承载由 ADR-0015 替代，Decision 6 增加常驻执行失败请求整体 Shutdown 例外；其它身份、依赖、事务、Scope 和所有权契约保留。
+
 ## Context
 
 统一 C++ Module 发现/注册路线已确认，但 API 草案尚有身份、依赖绑定、失败进度、后续 Scope 装配与同库代码驻留等行为分歧。仅凭原始 Error 无法判断外层操作是否已经产生副作用；每次新增 World 重跑 Module 注册也会混淆全局能力与局部实例。STATIC 嵌入 SHARED 时，唯一 Query 还必须使内嵌 Catalog 可达。

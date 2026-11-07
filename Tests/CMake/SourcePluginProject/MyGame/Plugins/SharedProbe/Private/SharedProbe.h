@@ -1,7 +1,10 @@
 #pragma once
 
+#include <ModuleDescriptor.h>
+#include <PanguSharedProbeExport.h>
+
 namespace pg::fixture
 {
-// 仅用于 SHARED 构建/链接冒烟，不是运行时 Loader 协议。
-[[nodiscard]] int SharedProbeValue() noexcept;
+[[nodiscard]] PG_SHARED_PROBE_API int SharedProbeValue() noexcept;
+[[nodiscard]] PG_SHARED_PROBE_API const module::ModuleDefinition* QuerySharedProbe() noexcept;
 } // namespace pg::fixture

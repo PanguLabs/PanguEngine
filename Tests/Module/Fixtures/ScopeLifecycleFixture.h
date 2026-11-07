@@ -3,13 +3,13 @@
 #include <Error.h>
 #include <ModuleDeclaration.h>
 #include <ModuleError.h>
+#include <ModuleManager.h>
 #include <RegistrationContext.h>
 #include <Result.h>
 #include <ScopeAccess.h>
 #include <ScopeBuildContext.h>
 #include <ScopeFactory.h>
 #include <ScopeIdentity.h>
-#include <StaticModuleHost.h>
 
 #include <cstddef>
 #include <expected>
@@ -50,7 +50,7 @@ struct Counters
     bool WrongDependencyType{};
     bool Reenter{};
     bool SawBusy{};
-    StaticModuleHost* Host{};
+    ModuleManager* Host{};
     ModuleOperationReport* SharedReport{};
     std::string DestroyMarker;
     std::vector<Export> Exports;

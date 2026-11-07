@@ -16,8 +16,12 @@ file(COPY "${PANGU_ENGINE_SOURCE_DIR}/cmake/Platform/Linux/Toolchain.cmake"
     DESTINATION "${mirror}/cmake/Platform/Linux")
 set(enabled "pangu.physics;mygame.gameplay;mygame.editor-extras")
 ConfigureFixture(Incremental "${enabled}" PASS "" -DPANGU_FIXTURE_BUILD_HOSTS=ON
+    -DPANGU_LINK_MODE=Modular
     "-DPANGU_FIXTURE_PLUGIN_CMAKE_DIR:PATH=${mirror}/cmake")
 BuildFixture(MyGame)
+BuildFixture(MyGame)
+RequireText("${commandOutput}" "no work to do")
+file(APPEND "${source}/Plugins/EditorExtras/Private/EditorExtras.cpp" "\n// 已启用但未消费的 Plugin 变化不触发构建\n")
 BuildFixture(MyGame)
 RequireText("${commandOutput}" "no work to do")
 
@@ -84,5 +88,19 @@ if(NOT after GREATER before)
 endif()
 BuildFixture(MyGameProbe)
 RequireText("${commandOutput}" "no work to do")
+# 同一 Project 构建树往返；旧部署可以保留，但当前 Mono 消费命令不能引用它。
+foreach(mode IN ITEMS Modular Monolithic Modular)
+    ConfigureFixture(ModeSwitch "${enabled}" PASS "" -DPANGU_FIXTURE_BUILD_HOSTS=ON
+        "-DPANGU_LINK_MODE=${mode}")
+    BuildFixture(MyGame)
+    CheckConsumer(MyGame "${mode}" Gameplay EditorExtras)
+    ProjectCommand(PASS "" ninja -C "${binary}" -t commands MyGame)
+    if(mode STREQUAL "Monolithic")
+        RejectText("${commandOutput}" "Deploy/Modular")
+        RejectText("${commandOutput}" "ModuleQuery.cpp")
+    endif()
+    BuildFixture(MyGame)
+    RequireText("${commandOutput}" "no work to do")
+endforeach()
 include("${CMAKE_CURRENT_LIST_DIR}/PluginScaleTests.cmake")
 message(STATUS "Native TU/tool invalidation, disabled input validation and 0/10/100 plugin scale passed")

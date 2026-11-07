@@ -1,3 +1,4 @@
+#include "EditorExtrasModule.h"
 #include "FixtureModules.h"
 #include "ModuleDeclaration.h"
 #include "ModuleDescriptor.h"

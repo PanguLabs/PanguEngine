@@ -15,6 +15,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(cmake/Platform/Common/BuildOptions.cmake)
 include(cmake/PanguPlatform.cmake)
+include(cmake/PanguLinkMode.cmake)
+pangu_initialize_link_mode()
 include(cmake/Platform/Common/Module.cmake)
 
 add_subdirectory(Source/ThirdParty/NlohmannJson)

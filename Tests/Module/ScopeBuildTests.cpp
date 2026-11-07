@@ -68,11 +68,7 @@ struct Sink final : detail::ScopeBuildSink
             return std::unexpected(Reject(MakeModuleError(ModuleError::kInvalidDeclaration)));
         }
         Object = std::move(object);
-        Control = std::make_shared<detail::ScopeObjectControl>();
-        Control->Module = std::make_shared<detail::ScopeGate>();
-        Control->Scope = std::make_shared<detail::ScopeGate>();
-        Control->Object = Object->Get();
-        Control->Type = Object->Type();
+        Control = detail::MakeScopeObjectControl(detail::MakeScopeGate(), detail::MakeScopeGate(), Object->Get());
         return Control;
     }
     pg::Result<detail::ScopeDependencyObject> Resolve(DeclarationId id) noexcept override

@@ -27,7 +27,7 @@ struct ModuleDependency
     DependencyKind Kind{DependencyKind::kRequired};
 };
 
-// Borrowed only during Create. This STATIC slice is not a production ABI/Loader contract.
+// 仅在受保护的 Query 接纳窗口内借用；Manager 深复制诊断元数据。
 struct ModuleDescriptor
 {
     ModuleId Id{};
@@ -46,8 +46,6 @@ struct ModuleDefinition
 {
     ModuleDescriptor Descriptor{};
     RegisterModuleFn RegisterModule{};
-    // A leaf STATIC entry must not recursively supply another catalog.
-    const StaticModuleCatalog* LinkedStaticModules{};
 };
 
 using QueryModuleFn = const ModuleDefinition* (*)() noexcept;

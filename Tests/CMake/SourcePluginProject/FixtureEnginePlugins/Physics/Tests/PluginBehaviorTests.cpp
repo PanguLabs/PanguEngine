@@ -1,3 +1,4 @@
+#include "PhysicsModule.h"
 #include <FixtureModules.h>
 
 #include <gtest/gtest.h>

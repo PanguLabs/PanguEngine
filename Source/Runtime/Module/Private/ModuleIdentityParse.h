@@ -1,6 +1,7 @@
 #pragma once
 
 #include <ModuleIdentity.h>
+#include <PanguModuleExport.h>
 
 #include <cstdint>
 #include <expected>
@@ -16,5 +17,5 @@ enum class ModuleIdParseError : std::uint8_t
 };
 
 // Internal parser. The future Public API must translate domain errors to pg::Error.
-[[nodiscard]] std::expected<ModuleId, ModuleIdParseError> ParseModuleId(std::string_view text) noexcept;
+[[nodiscard]] PG_MODULE_API std::expected<ModuleId, ModuleIdParseError> ParseModuleId(std::string_view text) noexcept;
 } // namespace pg::module::detail

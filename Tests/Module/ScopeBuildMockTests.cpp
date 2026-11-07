@@ -10,6 +10,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <cstddef>
 #include <memory>
 
 namespace
@@ -38,5 +39,21 @@ TEST(ScopeBuildMock, InvalidHooksRejectBeforeStage)
     const auto result = context.Own(std::make_unique<int>(7), pg::module::ScopeHooks<int>{.RequestStop = RequestStop});
     ASSERT_FALSE(result);
     EXPECT_EQ(result.error(), pg::module::MakeModuleError(pg::module::ModuleError::kInvalidDeclaration));
+}
+
+TEST(ScopeBuildMock, WrongRttiRejectsBeforePointerConversion)
+{
+    ::testing::StrictMock<MockScopeBuildSink> sink;
+    const pg::module::DeclarationId id{.Bytes = {std::byte{1}}};
+    // 不可解引用的 Object 证明类型拒绝发生在转换和使用之前。
+    EXPECT_CALL(sink, Resolve(id))
+        .WillOnce(
+            ::testing::Return(pg::module::detail::ScopeDependencyObject{.Object = nullptr, .Type = typeid(double)}));
+    EXPECT_CALL(sink, Reject(pg::module::MakeModuleError(pg::module::ModuleError::kTypeMismatch)))
+        .WillOnce(::testing::ReturnArg<0>());
+    pg::module::ScopeBuildContext context(sink);
+    const auto result = context.Dependency<int>(id);
+    ASSERT_FALSE(result);
+    EXPECT_EQ(result.error(), pg::module::MakeModuleError(pg::module::ModuleError::kTypeMismatch));
 }
 } // namespace

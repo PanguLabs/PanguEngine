@@ -1,346 +1,123 @@
 # Pangu ModuleDescriptor & Registration API v1
 
-> 状态：**Partially Frozen**。第 8 节列出的行为契约已冻结；C++ 代码块仍为 API 提案，**Public Header、具体签名/布局、导出名、ABI 与生产 Loader 实现未冻结**。
-> 更新：2026-11-04
-> 前置已冻结：[Module Registration & Lifetime v1](module-registration-lifetime.md)、[Service v1](service.md)、[ABI 交付边界](../foundation/abi.md)、[Memory](memory-management.md)、[Build System](../foundation/build-system.md)
-> 决策：[ADR-0010：统一 C++23 Module 入口](../decisions/0010-unified-cpp-module-entry.md)、[ADR-0011：Module API v1 行为契约](../decisions/0011-module-api-behavior-contract.md)、[ADR-0013：原生构建与 ABI 交付边界](../decisions/0013-native-build-abi-boundary.md)、[ADR-0014：源码插件交付](../decisions/0014-source-plugins-project-build.md)。冻结行为不代表实现或跨平台 ABI 已验收，现有证据见第 9 节。
+> 状态：**Partially Frozen**。身份、依赖、注册、Scope、代码驻留和操作后置条件是现行行为契约；Public C++ 签名、布局、ABI 和长期封装 API 未冻结。
+> 更新：2026-11-07
+> 决策：[ADR-0015：统一链接模式与 ModuleManager](../decisions/0015-unified-link-modes-module-manager.md)，保留 ADR-0010/0011 未被替代的行为；源码交付边界沿用 ADR-0014。
+> 代码状态：Task 1–7 已实现统一模式、ModuleManager、原生 Loader、Pin 和动态 Scope。实际平台/模式、首轮与重跑、限制见[正式验收记录](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)，不从设计状态推断平台已通过。
 
 ## 1. 设计目标与边界
 
-一个 Module 仍对应唯一 CMake STATIC 或 SHARED Library Target。Plugin 是分发/启用单元，Module 是代码 Owner；Host / Context / World 是实例 Owner。不得引入 `BinaryImage` 架构层、统一 `IModule` / `IService` 虚基类、`ExtensionDescriptor` / `ExtensionManager` 或隐式全局 Service Locator。
+同一 CMake 目标图用 `PANGU_LINK_MODE=Monolithic|Modular` 统一全部 Pangu Module 为 STATIC 或 SHARED；一个 Module 一个真实 Library Target、一个主要库产物。桌面默认 Modular，Android/iOS 默认 Monolithic。ThirdParty、Host、BuildTools 按自身用途建普通目标。不建立 BinaryImage、统一 IModule/IService、反射注册表或通用 Loader Manager。
 
-- **STATIC**：编译/生成阶段显式引用每个 Module 的 C++ 登记函数，Catalog 是链接器可见的根。
-- **SHARED**：通过固定的版本化 `extern "C"` 导出符号获取同一原生 C++23 ModuleDefinition，并调用统一 C++23 注册函数。与宿主同树、同配置且配套交付的源码插件不经 AbiProfile；ADR-0014 已取消向既有宿主独立交付 Pangu 原生二进制插件及其 Preflight 路线。LoadLibrary/dlopen 可能执行初始化器，Discovery 不能当成未执行代码的安全边界；运行时协议、身份、依赖和 CodePin 检查仍须完成。
-- 两种来源最终创建相同的、由 Host 持有的 `ModuleRecord`（仅内部实现概念），走同一依赖、注册事务、激活、撤销和 CodePin 协议。
-- **Descriptor 不存运行时状态**。动态库句柄、外部 Pin、Task、实例 Borrow、故障报告等属于 Manager/Scope Owner。
-- **注册能力与 Service 实例 Ready 分离**；Concrete Service 不强制注册 Registry。
+配套源码 Module 使用 C++23、无异常、保留 RTTI 和受控 ABI。Plugin 是发现/启用与分发单元，Module 是代码 Owner，Host/Context/World 是实例 Owner。没有独立预编译 Pangu Plugin 接纳、ABI Preflight、Hot Reload 或状态迁移；OS Load 可能在 Query 前运行初始化器，校验不构成安全沙箱，业务不得靠全局构造启动。
 
 ## 2. 身份与描述数据
 
-`ModuleId` 是**明确分配并持久保留的 128 位强类型身份**，与显示名称、路径、PluginId、ErrorDomainId、ServiceId 无关。不使用 `std::hash`、RTTI、模块地址或加载序号生成身份。创建逻辑 Module 时一次分配并纳入源码管理；配置、重建、改名或移动目录不得重新生成，复制为新的逻辑 Module 时必须分配新 ID。由 CMake/PanguMeta 的受控元数据或明确声明提供 ID，不要求每个 Module 拥有 `Module.toml`；生成工具的具体 API 不在冻结范围内。
+`ModuleId` 明确分配并持久保留为 128 位身份，全零无效，按完整 16 字节比较；文本为数组字节顺序的 32 个小写十六进制字符。身份与名称、路径、PluginId、RTTI、地址、加载序号、hash 无关；改名和重建不更换身份。`ModuleVersion` 是三个 uint32_t 非负整数，0.0.0 合法；v1 精确匹配，不做范围或隐含 Major 兼容。
 
-身份按完整 16 字节比较，全零无效；持久文本固定为按字节数组顺序编码的 **32 个小写十六进制字符**，拒绝长度错误、非规范字符和零值，不使用平台 GUID 的内存字节序。这冻结的是身份表示规则，不冻结 C++ 对象布局或哈希容器实现。
+`Source/Runtime/Foundation/Public/ModuleIdentity.h` 和 `ModuleDescriptor.h` 是纯协议头，由 Foundation 的 PUBLIC 依赖传播；公开 include 仍为 `<ModuleIdentity.h>`、`<ModuleDescriptor.h>`，没有旧目录转发头。`ModuleDefinition` 只含 Descriptor 和非空 RegisterModule；`LinkedStaticModules` 已移除。Query、返回定义和注册函数均非空；无业务能力仍提供显式成功的空注册函数。
 
-`ModuleVersion` 使用三个 `uint32_t` 表示非负整数 `major.minor.patch`，`0.0.0` 合法，与构建身份独立。v1 **只允许同一受管装载域中一个 ModuleId 有一个生效版本**；依赖只接受三个分量精确相等，不支持范围、通配符或隐含的同 Major 兼容性。
-
-建议的原生 C++23 形状（类型布局、签名均为待审查）：
-
-```cpp
-namespace pg::module
-{
-struct ModuleId
-{
-    std::array<std::byte, 16> Bytes{};
-};
-
-struct ModuleVersion
-{
-    std::uint32_t Major{};
-    std::uint32_t Minor{};
-    std::uint32_t Patch{};
-};
-
-enum class DependencyKind : std::uint8_t
-{
-    kRequired,
-    kOptional,
-};
-
-struct ModuleDependency
-{
-    ModuleId Id{};
-    ModuleVersion Version{}; // v1 精确匹配；可选依赖仍需要显式绑定
-    DependencyKind Kind{};
-};
-
-struct ModuleDescriptor
-{
-    ModuleId Id{};
-    ModuleVersion Version{};
-    std::uint32_t ProtocolVersion{1};
-    std::span<const ModuleDependency> Dependencies;
-    std::string_view DisplayName;   // 可选诊断用途，非身份
-    std::string_view BuildIdentity; // 可用于诊断，不代表 ABI 兼容性
-};
-
-class RegistrationContext;
-struct StaticModuleCatalog;
-using RegisterModuleFn = pg::Status (*)(RegistrationContext&) noexcept;
-
-struct ModuleDefinition
-{
-    ModuleDescriptor Descriptor{};
-    RegisterModuleFn RegisterModule{};                // 必填；默认空值不是合法的 ModuleDefinition
-    const StaticModuleCatalog* LinkedStaticModules{}; // SHARED 承载的 STATIC 项；字段形状未冻结
-};
-
-using QueryModuleFn = const ModuleDefinition* (*)() noexcept;
-} // namespace pg::module
-```
-
-`pg::Status` 的具体 C++ API 尚未冻结，此处**不是可独立编译的 Public Header**。按 ADR-0013/0014，本草案不携带已退役的 strict-v1 Profile/Fingerprint 字段，也不规划独立 Pangu 插件的下一版交付兼容描述。注册入口不使用异常；回滚、失败报告由 Host 所有的操作上下文负责。
-
-**入口有效性**：STATIC / SHARED 使用同一验证规则：Query 入口、Query 返回的 `ModuleDefinition*` 和其中的 `RegisterModule` 均须非空，否则在进入注册前返回定义无效错误。无需登记任何能力的 Module 仍提供显式返回成功的空操作注册函数，不以空函数指针表达该语义。非空检查不代替 ABI、接口契约和代码驻留校验。
-
-**数据生存期**：上述 `span/string_view` 只在取得有效 CodePin 的查询/登记窗口内借用。ModuleManager 必须复制 ModuleId、版本、依赖列表、必要字符串和报告到 Host 拥有的存储，然后才能让这些记录跨卸载继续存在。不得保存指向候选动态库段的悬空借用。
+Descriptor 借用依赖 span 和诊断 string_view。Manager 在真实代码持有期间校验并深复制必要字段到拥有型 `OwnedModuleDescriptor`；`ModuleSnapshot` 自有 Descriptor、Bindings、State、Resident，不向调用方发布可跨增量修改保留的记录地址。快照和报告的复制/销毁不得依赖已卸载业务代码。
 
 ### 2.1 依赖选择与阶段要求
 
-Host 从显式提供的候选集合解析依赖，不按路径扫描顺序或“最后加载者”选择。Required 缺失或版本不匹配时拒绝登记；Optional 缺失、版本不匹配或未被显式选中时保持未绑定，并提供结构化原因。即使候选存在且版本匹配，也不得隐式绑定 Optional。调用方显式要求绑定时，绑定失败须返回错误，不能静默降级为未绑定。
+每个 Manager 域内一个身份至多一个生效版本，常驻和待清理记录仍占身份/预算。Required 缺失或版本不符拒绝；Optional 即使候选存在且版本相同，也仅按显式选择绑定，缺失/不符/未选择分别保留结构化原因。明确要求绑定失败不能静默降级。
 
-依赖边在本次 Module 登记前确定；成功登记后不自动补绑、替换或切换版本。Optional 一旦绑定，与 Required 一样取得所需驻留保护、参与有效生命周期图校验并限制卸载。新增候选不会改变已有绑定；变更绑定须完成依赖方的受管卸载并重新装载。重复依赖 ID、自依赖和已绑定图中的环在发布前拒绝。
-
-| 阶段 | 对已绑定依赖的要求 |
-| --- | --- |
-| Load / 发现 | Host 可先收集完整候选及身份，不把“已发现”当作可调用；单个 Load 不隐式扫描或递归装载未知 Module |
-| Register | 依赖先 Registered 或 Active，能力与代码有效；新绑定拒绝 CleanupPending / Unloaded 记录，即使身份仍被占用 |
-| Activate / 新 Scope 发布 | 依赖 Module 为 Active；具体 Service/工作还须满足对应 Scope 的 Ready 和实例依赖条件 |
-| 停止 / 清理 | 先处理依赖方，保留其已持有的代码与实例保护直至清理完成；不能为了满足 Active 前置条件重新开放已关闭的业务入口 |
+有效依赖在批次接纳时固定；新增候选不补绑旧记录，变更绑定须先退出依赖方再重新 Load。拒绝重复依赖、自依赖、有效图环及 CleanupPending/Unloaded Provider。Register 要求依赖 Registered/Active；Activate 要求 Active。清理保留既有依赖能力，不重新开放 Provider 的业务闸门。
 
 ## 3. STATIC Catalog
 
-由 CMake/PanguMeta 生成 **一个显式 Catalog 装配源文件**，加入 Host/最终链接目标，而不是生成第二个 Module Library。每个 Module 本身仍只有一个 STATIC/SHARED 目标。
+Monolithic 的 Catalog 是最终 Host 的显式装配源，直接引用原生 Query，保留真实归档中的入口；不创建第二个 Module Library，不依赖全局业务构造或 whole-archive。静态候选通过 `StaticModuleCandidate{Query}` 进入普通 Load；归档没有独立 OS Unload。
 
-```cpp
-namespace pg::module
-{
-struct StaticCatalogEntry
-{
-    QueryModuleFn Query{}; // 同一原生 C++23 Query，直接链接保留
-};
-
-struct StaticModuleCatalog
-{
-    std::span<const StaticCatalogEntry> Entries;
-};
-} // namespace pg::module
-```
-
-Catalog 构造函数/数组必须直接引用各静态 Module 的显式查询入口，确保静态归档中的相应对象文件被链接器拉入，不依赖业务全局构造、静态初始化顺序或对所有 Module 无差别 `whole-archive`。其生成行为由**最终链接目标**决定，不把 Catalog 当成 Module 的另一个物理库。
-
-`StaticCatalogEntry::Query` 指向代码的实际承载者：若静态代码装入可卸载的动态库，CodePin 保护该动态库；单独 STATIC 归档不执行 OS 卸载。依 ADR-0013，同树 STATIC 最终组合不再执行 AbiProfile/逐对象校验。Host 在登记阶段仍把 Descriptor 复制进自身内存，并检查重复 ID、依赖、版本、入口有效性及其它 Module 行为契约；这些检查不依赖旧 Fingerprint。
-
-**动态承载库内的 STATIC Module**：每个最终承载目标生成自己的完整、扁平 STATIC Catalog。EXE 的 Catalog 在宿主启动时显式交付；SHARED S 的唯一 Query 返回 S 的定义，并通过原生 C++ 数据关联提供其承载的全部 STATIC 条目（上文 `LinkedStaticModules` 为字段提案）。叶子 STATIC 定义不递归携带 Catalog；Catalog 不包含承载者自身，也不包含另一个 SHARED 的条目。不再导出第二个发现符号。
-
-例如 S 链入 STATIC A/B，Host 通过 S 的一次入口定位发现 S/A/B，分别验证并预留三个 ModuleId、建立独立生命周期记录，再按依赖顺序注册。装载成功须让 Host 取得或查询该组全部逻辑 Module 的句柄，不能只返回 S 而留下无法驱动注册/清理的 A/B。整组身份预留对竞争装载不可半完成；出现重复 ID 或非法条目时不发布其中任何一项，也不交付部分成功句柄，并回滚本次取得的所有预留及 OS 持有。该组元数据、接口和代码的预检必须覆盖实际承载的全部 Module。
-
-S/A/B 的记录和 CodePin 都关联同一个真实 OS 承载句柄。停止某个逻辑 Module 只退出该记录的业务生命周期；只有该承载库的全部受管记录、清理和代码保护结束后才允许 OS Unload。逻辑 Module 的停止不默认级联停用同库其他 Module；Host 关闭整个承载库时协调其全部记录。内部承载账本不构成新的 BinaryImage 架构层。
-
-`Unloaded` / `TryFinishUnload` 成功表示该逻辑 Module 已清理完毕并释放其承载持有，不能据此断言同库代码已从进程移除。只要有其它记录或保护仍需要该库，Manager 继续持有实际 OS 句柄。已退出记录可以释放身份占位；重新登记仍须使用原承载代码和受控候选。若要加载替代产物，必须先完成旧承载库全部记录的清理与释放，不能用单个逻辑身份释放绕过产物绑定或引入多代际并存。最后一个持有释放时若实际 OS 卸载未完成，则由该次清理保留记录/身份和必要句柄并返回未完成，不能仅清空账本就报告成功。
+Modular 的每个固定 Query 只返回本 Module。禁止 SHARED 内嵌另一个逻辑 STATIC Module、同库 Catalog、共享承载账本和同图双变体。普通 ThirdParty STATIC 依赖仍合法，不因此获得 Module 身份。已链接的宿主常驻 Module 通过 Create 的显式 Query 集合登记，不作为普通动态候选重复 OS Load。
 
 ## 4. SHARED Discovery：固定符号定位 + 原生 C++23 Query
 
-**已确认技术路线：STATIC / SHARED 共享同一种 `pg::module::ModuleDefinition` 和原生 C++23 注册函数签名。SHARED 不再采用独立的 C POD Discovery、C 状态码协议或 `void*` Registration Bridge。** 仅动态库的入口定位方式不同。
+`SharedModuleCandidate` 持有 ExpectedId 与拥有型 filesystem::path。Manager 取得真实 OS 持有，在 Windows 用 LoadLibrary/GetProcAddress，在 POSIX 用 dlopen/dlsym 查找 `PanguModuleQueryV1`，转调同一种原生 C++23 Query。C linkage 只用于稳定符号定位，不是 C POD 数据交换或强制 C Bootstrap。
 
-建议固定查找符号 `PanguModuleQueryV1`（名称与平台导出细节尚待验证）；`extern "C"` **只确保可通过固定名称查询该符号**，不是在声明 C 数据交换协议，不意味着返回的 C++ 对象跨不兼容 ABI 仍安全。动态库内的生成包装函数转调其原生 C++ Query；STATIC Catalog 可直接引用对应原生函数：
+`pangu_export_module_query(TARGET target QUERY function HEADER header)` 仅为 SHARED 编译包装；公共 C++ 符号经生成 export header 显式导出，保留 RTTI。OS 隐式装入导入依赖不等于 Manager 已接纳/注册该依赖，仍须显式候选和运行期声明。Query 只提供定义，不注册、不激活、不递归发现未知模块。
 
-```cpp
-namespace pg::module
-{
-// 引擎 C++23 内部使用上文统一定义的 QueryModuleFn 类型。
-// 以下由每个 Module 的生成代码提供；函数名按 Module 唯一化。
-const ModuleDefinition* QueryExampleModule() noexcept;
-} // namespace pg::module
+POSIX 使用 `RTLD_NOW | RTLD_GLOBAL`，使受控 C++ ABI 下的公开 RTTI 可在独立装载组间合并；保持逐 Module 最小显式公共导出和私有隐藏。LOCAL 的实现选择在两桌面真实回归中无法满足合法类型值匹配，已由 Task 8 替代。代价是公开符号进入进程作用域，必须约束 ODR、名称冲突和符号插入；这不是插件隔离或外部 ABI 兼容保证。
 
-// SHARED 才导出；生成器使该符号对应当前唯一 Module Target。
-// PG_EXPORT 为平台可见性示意，不是反射标记宏。
-extern "C" PG_EXPORT const pg::module::ModuleDefinition* PanguModuleQueryV1() noexcept
-{
-    return pg::module::QueryExampleModule();
-}
+Load 对显式候选整批接纳：检查输入、预算/已知身份，取得原生持有并 Query、深复制、复核协议/预期身份/入口/依赖后整体提交；返回本批依赖优先句柄。任一失败不交付部分句柄、不执行业务注册；该原子性不包含 Register/Activate，也不保证撤销 DLL 初始化副作用。
 
-// STATIC Catalog 条目：&pg::module::QueryExampleModule
-```
+失败批次未完成释放时保留内部占位、持有、原错及有界私有清理组，Poll/Shutdown 可以继续。依赖描述不完整时保守阻止潜在 Provider 清理，旧 Active 业务闸门和固定绑定不变，全部真实释放后解除屏障。代价是部分无关卸载可能暂时 InUse/Busy，不能永久全局阻塞。
 
-这里 `QueryExampleModule` 和 `PG_EXPORT` 都是**非冻结示意名**，不是要求业务作者手写包装宏。链接器函数地址与平台动态符号解析所得函数指针的调用约定、Language Linkage 和目标 ABI 匹配，必须在 Windows / Linux / macOS 实测；不能仅凭 `reinterpret_cast` 或符号名称推断兼容性。
+仅对从未成功接纳、从未 Register/Activate 的拒绝批次，先释放无可信完整描述项，可信无环图按逆拓扑；元数据环没有合法业务拓扑，可逐项释放 Manager 自身 OS 持有。首次释放失败即停并保留整批占位/剩余持有及潜在 Provider 屏障；真实原生导入持有仍由 OS 维持。此例外不得用于有效业务记录，也不承诺非法元数据图的业务析构顺序。
 
-**SHARED 校验和注册顺序：**
+## 5. 注册与 Scope 装配
 
-ADR-0014 已替代 ADR-0013 曾保留的独立 Pangu 插件二进制交付范围；历史 Preflight 设想不再是当前产品要求。以下为同树、同配置、配套交付的源码 SHARED Module 路径，仍须遵守固定符号、入口有效性、ModuleId、依赖、注册事务、CodePin 和生命周期契约。
+RegistrationContext 是带 Module Owner 的声明事务，不是全局 ServiceLocator。注册只暂存、验证并提交可重复装配的拥有型工厂；每次装载至多注册一次，不直接启动全部 Scope。具体接口为 RegistrationScope、ScopeFactory、ScopeBuildContext、ScopeAccess/ScopeBorrow；完整 Contract Provider 选择与业务 Registry API 仍属后续。
 
-1. **Build-Time / Delivery-Time**：配套源码插件由同一受控 CMake 图编译，不生成 AbiProfile；系统 SDK/普通 ThirdParty 预编译依赖继续按自身契约审查。
-2. **Explicit Selection / Deployment**：应用显式选择 Module 路径与部署集合；源码 Plugin 的发现/启用以及文件复制不自动构成运行时激活，不扫描未知动态库并赋予执行权限。
-3. **OS Load**：由 ModuleManager 取得并维护真实动态库句柄；`LoadLibrary/dlopen` 可能先执行 DLL 初始化器及全局构造，后续符号检查不构成不可信代码沙箱或签名认证。
-4. **Symbol Lookup / C++ Query**：用 `GetProcAddress/dlsym` 等定位固定版本符号，按满足当前边界要求的 C++ 函数类型调用，获得 `const ModuleDefinition*`；返回空值/失配视为失败。Query 不得通过静态构造完成业务注册。
-5. **Post-Load Recheck**：执行不依赖 AbiProfile 的协议、入口、ModuleId、依赖和接口检查。Descriptor 的借用 `span/string_view` 必须在卸载前复制到 Host 存储；任意失败均不进入注册。
-6. **Native C++ Registration**：对 STATIC 与 SHARED 一律由 ModuleManager 调用 `ModuleDefinition::RegisterModule(RegistrationContext&)`，返回 `pg::Status`（具体类型仍待 ADR-0007 API 冻结），使用同一事务、Scope/Owner、Error 报告、回滚与 CodePin 规则。无需转换 C 错误码或调用单独注册 Bridge。
+Concrete Service 可由 Owner 强类型持有/注入，不强迫注册。Host/Context/World 表示 Scope 种类，ScopeHandle 标识具体 Owner；声明与实例分开持有。Module 初次 Activate 装配全部已有 Ready Scope，全部成功才开放 Module 闸门；之后 CreateScope 只装配当前 Active Module，不重跑 Register。新 Scope 失败只回滚本次，已有 Scope 可继续；初次 Activate 失败则清理该 Module 的全部初次装配。
 
-**数据与生命周期约束**：模块查询入口仅定位/返回元数据，不负责初始化业务实例。Query/注册入口和回调的所在代码必须驻留；引用字段和析构/分配器来源受 Memory Contract 约束。Module 卸载先撤销业务与在途调用、排空 Scope Borrow，最后释放实际动态库。静态 Module 不进行 OS Unload。
+资源先追踪后 Start，失败也需停止/轮询后匹配销毁。工厂可仅移动，但必须支持多次装配；实例和可变配置按 Scope 独立。显式 ScopeDependency 仅允许当前 Scope 或祖先，禁止跨 Host/Context、反向寿命依赖及未 Ready Provider。Module 与具体资源合并约束必须无环，不能仅分别检查两张图。
 
-**冻结范围区分**：**统一 C++23 ModuleDefinition/Registration + SHARED 稳定 C-linkage 符号定位** 的机制保持 ADR-0010 约束；`PanguModuleQueryV1` 的最终名称、`ModuleDefinition` 的 Public 类型布局/接口契约、导出调用约定、错误及并发实现仍属 Draft/待验证，不宣称生产 Loader 跨平台已验收。
+### 5.1 强类型与 RTTI
 
-## 5. RegistrationContext：声明与提交分离
+内部类型擦除由 Own<T>/适配器从实际 T 取得 RTTI，Dependency<T> 在代码和对象受保护时用 `std::type_info::operator==` 比较值，匹配后才形成指针；只支持精确类型，不隐式继承转换，不移除接口 const 保护。失配返回 kTypeMismatch。禁止 RTTI 地址、仅 name/hash、人工持久 TypeId/trait 代替检查。Monolithic/Modular 使用同一规则。
 
-`RegistrationContext` 属于当前正在注册的 Module、Scope 的受控事务，**不是全局 ServiceLocator**。业务 Module 的登记入口只提交声明，不直接向外部发布 Service：
+交付的 ScopeAccess<T> 热路径只做闸门与计数，不重复查询 RTTI。业务 DLL 的 type_info/type_index、名字视图、对象/Factory/捕获/Deleter 和回调必须在卸载前解除或销毁。控制块、闸门与 shared_ptr 最终释放入口在宿主常驻 Runtime 分配/实现，残留 ScopeAccess 可在业务 DLL 真正卸载后复制、TryBorrow 失败及最终释放，不读取其 RTTI 或执行其释放代码。
 
-```cpp
-namespace pg::module
-{
-class RegistrationContext
-{
-public:
-    template <class TContract, class TFactory>
-    [[nodiscard]] pg::Status DeclareContractProvider(pg::service::Scope scope, TFactory&& factory) noexcept;
+## 6. ModuleManager 操作与清理
 
-    template <class TRegistry, class TContributionFactory>
-    [[nodiscard]] pg::Status DeclareContribution(pg::service::Scope scope, TContributionFactory&& factory) noexcept;
+生产公共协调器仅 `ModuleManager`，旧 StaticModuleHost 已删除。Manager 仅移动，内部 State 地址稳定；管理操作和查询由调用方串行协调，回调不得移动/销毁 Manager 或保留借用 Context；同 Manager 重入在副作用前 Busy。业务 Pin/Borrow 支持并发接纳、释放和关闭。
 
-    template <class TWorkFactory>
-    [[nodiscard]] pg::Status DeclareRuntimeWork(pg::service::Scope scope, TWorkFactory&& factory) noexcept;
-};
-} // namespace pg::module
-```
+`RegistrationScope` 声明注册域必须比 Manager 活得更久；Shutdown 撤销本 Manager 的声明，撤销也使原 `Declarations()` 借用视图失效。需要跨清理保留诊断时复制拥有型快照。
 
-此处模板仅表示**强类型方向**；具体约束、Factory 所有权、键/Provider ID、类型擦除点、无异常内存失败策略依赖 Service API 的进一步设计，尚不能直接固定签名。对于已确定的 Concrete Service，Scope Owner 直接构造/注入，可完全跳过动态 Registry。
+ModuleHandle 含 Domain、Slot、Generation，零值无效；代际从 1 开始、耗尽不回绕。旧域/代际不能指向新记录。ModuleState 为 Loaded、Registered、Active、CleanupPending、Unloaded；没有 RegistrationFailed 兼容别名。Find/Inspect/Modules/RegistrationOrder 是串行冷路径拥有型查询，不复活关闭记录。
 
-`pg::service::Scope` 只表示 Host / Context / World **种类**，不标识具体实例。Module 级声明可记录后续装配策略；向 Registry 实际安装时，Host 必须将事务显式绑定到具体 Scope Owner 及其所属 Host/Context，并校验 Scope 方向。不得仅凭 `Scope::kContext` 或 `Scope::kWorld` 选择任意实例，或隐式向全部实例发布。具体目标 Scope 的句柄/上下文签名仍待 Service API 评审。
+### 6.1 操作后置条件
 
-**一次声明，多次装配**：每次成功 Load 的生命周期至多执行一次 Module 注册回调；重复 Register 前置拒绝。注册产物是 Host/Manager 持有且有代码保护的可重复装配声明。Provider、Contribution 和运行工作均通过工厂/配方在具体 Scope 创建状态，不把一个只能消费一次的可移动对象当成多 Scope 的实例来源。工厂本身可以仅移动，但其调用契约必须支持多次装配；可共享的只读状态须显式声明所有权，可变实例及撤销 Token 按 Scope 独立持有。
+| 操作 | 后置条件与继续责任 |
+| --- | --- |
+| Create(declarations, residentQueries, selections, report) | 必须含 Foundation/Module 两基础根；接纳常驻集合后仍 Loaded，宿主自行按依赖顺序 Register/Activate，无重复 OS Load |
+| Load(candidates, selections, report) | 非空显式批次整体交付，单次失败无部分成功句柄；Modular 普通候选必须 SHARED，Monolithic 必须 STATIC |
+| Register/Activate(handle, report) | 前置拒绝不改状态；执行失败保留原错，可卸载记录进入单记录清理，常驻记录请求整体 Shutdown |
+| BeginUnload/TryFinishUnload(handle, report) | 常驻一律拒绝；仍有有效依赖方先拒绝。可卸载记录关闭新业务，逐步清理，成功才失效句柄/释放身份 |
+| CreateScope/BeginCloseScope/TryFinishCloseScope | 新 Scope 局部事务；独立关闭子先父，父有子记录不能完成关闭，根只能随整体 Shutdown 关闭 |
+| PollCleanup(report) | 推进失败批次、未交付 Scope、待清理记录和已请求 Shutdown；不独立确认常驻退出 |
+| BeginShutdown/TryFinishShutdown(report) | 关闭新管理/业务接纳，幂等推进；TryFinishShutdown 成功统一使常驻句柄失效，未完成保持 Manager/注册域存活 |
 
-Module 的 Register/首次 Activate 与之后的 Scope 装配是不同操作：Module Active 后，Host 为新增 Context/World 执行单独的装配事务，不重跑整个注册回调或重新 Activate Module。新 Scope 失败只撤回该次装配的实例、贡献和工作；其在途清理由该 Scope 的操作记录持有，既有 Scope 和 Module 保持原状态。Scope 装配结果同样独立给出错误和清理进度，不能把局部失败映射成全 Module 的 CleanupPending。
+Foundation 固定 ID `9f80b25853204dfba45ae9d87c9a1201`，Module Runtime 固定 ID `c0e3457b71fb49e39d0c8c0b232ea402`，版本均 1.0.0、协议 1，后者 Required 前者。BuiltinResidentQueries 返回两原生 Query。常驻 Register/Activate **执行失败**在同次操作请求整体关闭，报告 CleanupOwner=kManagerShutdown；前置拒绝不触发。原始报告销毁后仍可 Poll/Finish 读取原错，普通 TryFinishUnload 仍拒绝。资源排空期间保留常驻诊断句柄，最终确认不释放宿主原生持有，也不能原地重启同一 Manager。
 
-进入 Module Quiescing 时同时关闭新的 Scope 装配入口。装配与停用必须有确定的线性化顺序：停用前已接纳的装配由 Host 追踪，若尚未发布则撤销并清理，停用后不得再发布；Module 卸载汇总其所有已发布和未完成装配记录及保护。初次 Activate 失败则按第 6.1 节清理该 Module 初次激活关联的全部装配，并保持业务不可见。
+### 6.2 代码驻留、清理顺序与原生成功含义
 
-事务规则：
+ModuleCodePin 是仅移动代码保护，TryPinForBusiness 仅在 Active 且业务闸门开放时成功；ScopeBorrow 保护实例及必要代码，ScopeAccess 本身不保活实例。槽位发布/回收与 Pin 解析共享 AdmissionMutex，回收关闭旧闸门；锁内不执行用户回调或 OS 装卸。管理器基本持有、外部 Pin、Borrow 和内部资源依赖分开计数。
 
-- `RegisterModuleFn` 可以声明 Module 能力、工厂及后续 Scope 装配策略；**不能擅自创建全部 Host/Context/World 实例**。
-- 登记先暂存；ModuleManager/Host 验证同目标 Scope 的唯一 Provider、业务 Registry 的冲突规则、Module/Service 两套依赖图。具体 Provider 绑定后还须检查合并生命周期约束无环且顺序不矛盾，不能只验证两张图各自无环；通过后再**同一 Scope 原子发布**。跨多个 Scope 依靠 Host 可见性闸门协调，不虚构全进程原子提交。
-- 撤销 Token/Journal 由 ModuleManager/相关 Registry 所拥有；用户登记回调不直接执行全局 `Commit()` 或持久存储可卸载 DLL 内数据视图。
-- 失败按登记事务及实际实例完成顺序逆序回滚，保留首个 Error 及有界次要清理报告。
-- Registry Contribution 的撤销先拒绝新查找/调用，待在途回调结束后才能销毁插件拥有的状态；`ModuleCodePin` 和实例借用保护始终分开。
+整体 Shutdown 按**实际有效资源 DAG、同 Module 跨 Scope 后代资源顺序**逐项 Stop/Poll/Destroy、退休 Factory，随后等待对应外部 Pin、释放该记录原生持有。依赖方原生释放未确认前不销毁 Provider 资源；不能先清空所有 Scope，也不能等待整个闭包的内部 Borrow 全归零才开始销毁。常驻 Consumer 资源排空且接纳中计数与外部 Pin 均归零后可解除其有效依赖边，允许业务 Provider 退出，但常驻记录最后统一确认。Scope 记录回收仍遵守 Owner 句柄契约。
 
-### 5.1 可选运行工作与停止协调
+Busy、停止错误或 OS Release 错误保留必要资源、依赖、记录、持有与原错，可继续重试；没有 ForceUnload 或超时强毁。最后 Pin/Borrow Release 只更新保护，不在任意业务线程执行 OS Unload。正常调用显式推进 Shutdown，析构最多同步尝试一次，未完成则进入所有配置有效的终止路径。
 
-`DeclareRuntimeWork` 是可选装配声明的 API 提案，用于不适合表达成 Service/Contribution 的持续任务；注册时只保存工厂和生命周期策略，不启动任务。Host 在具体 Scope 装配时创建工作状态，并在允许其启动之前记录 Owner、依赖、清理入口及 CodePin/实例保护。没有 Service 的 Module 也可以声明 Host 范围工作，其运行状态仍归 Host 所有，不放进 `ModuleDefinition` 或全局变量。冻结的是追踪、停止和排空行为，不是该模板方法的名字或签名。
+TryFinishUnload 成功表示受管生命周期完成、Manager 自己的原生释放调用成功、身份和句柄失效；系统或额外宿主导入/OS 引用仍可使库驻留。实际物理卸载证据须来自排除额外导入持有的可卸载夹具及库级事件；不承诺任意共享 Runtime 从进程移除。
 
-这类工作采用以下停止协议，具体 Concept、函数签名和类型擦除布局仍待设计：
+### 6.3 报告、错误与预算
 
-- **启动**：显式可失败；Host 在调用启动逻辑前就持有可清理的状态。启动部分完成后失败，也须纳入同一回滚流程。
-- **请求停止**：非阻塞、`noexcept`、可重复调用；关闭工作自身的新任务/回调来源，并向已有任务传递停止请求。停止请求已发出不代表任务已经完成。
-- **检查完成**：非阻塞地报告尚未结束、已结束或清理错误；“已结束”须覆盖在途任务、回调及其所访问的上下文。错误或超时不能伪装成已结束。
-- **最终销毁**：只在该工作已结束且外部使用已排空后执行，随后释放其依赖 Borrow 和代码保护。Scope Owner 负责且只执行一次最终销毁；需要返回错误的收尾先通过显式完成检查处理。
+ModuleOperationReport 是无业务借用的值报告，区分 Progress、PrimaryError、OriginalError、CleanupError、Module/RelatedModule/Scope/Declaration/Handle 和 CleanupOwner；不能从 Error Domain/Code 推断是否执行回调。原始 Load/Register/Activate/Scope 错误跨 Poll 保留，清理成功不把原操作改写成功，不长期借用调用方 report。Windows 原生错误可保留 GetLastError 数值；POSIX dlerror 即时消费，公共 Error 只保留确定 ModuleError，不保存借用文本，诊断粒度较粗。
 
-ModuleManager 通过 Host 协调器找到各 Scope 的工作记录，按有效依赖逆序逐项请求停止、检查完成并销毁。被依赖方的工作和实例须保持依赖方清理所需的可用性，不能无差别提前停止整个依赖闭包。`BeginUnload()` 关闭业务闸门并安排停止流程，`TryFinishUnload()` 推进尚未完成的停止和排空；已有 Host 任务调度机制负责继续执行在途任务。
+CleanupOwner 表示继续清理的协调责任，调用方仍依据原操作与 ModuleHandle/ScopeHandle 选择 Finish 入口。未交付的失败 Scope 仍待清理时为 kManagerCleanup，只能由 Manager 的 PollCleanup/Shutdown 继续；同步回滚完成或前置拒绝为 kNone。已交付 Scope 的显式关闭待完成时复用 kCallerUnload，完成为 kNone；整体 Shutdown 进行中的待清理报告为 kManagerShutdown，不因显式关闭单个 Scope 转回调用方责任。
 
-Concrete / Contract Service 和 Registry Contribution 已有自己的停止与清理协议时，由 Scope Owner 接入同一协调流程，不重复登记第二份工作所有权，也不强制实现统一生命周期基类。任何持续工作都必须在启动或入队前完成追踪和驻留保护，不允许用未登记的后台线程绕过卸载协议。Host/Registry 锁内不得调用未知启动、停止、完成检查或析构回调。
+最多 256 Module/Manager（常驻及待清理计入）、每 Module 64 依赖、每描述文本 256 字节、每次注册 256 声明、注册域 4096 声明、256 Scope（含根）、每工厂 64 Scope 依赖。OOM 沿用无异常终止政策；普通装载/校验错误必须可恢复。
 
-Registered 装配阶段及 Activate 失败均使用上述协议收尾，不能因 Module 尚未 Active 而跳过已启动工作。若工作不响应停止或仍有合法借用，则保留状态、依赖和库句柄并返回未完成；Host 继续存活以推进清理，不能强制卸载。
+## 7. 验收与性能边界
 
-## 6. ModuleManager / ModuleCodePin
+正式回归在 Tests，按 boundary/area/tier 接线，旧有效 Mono 覆盖保留且由 Modular 的 ModuleRegression 独立子图执行。真实 DLL 覆盖跨库 RTTI/STL、私有类型、失败批次、关闭故障/重入、外部 Pin/Borrow、并发接纳、卸载后凭据和 Busy 析构。Project 验证父模式、消费集合、动态部署与启动、无变化构建和模式往返，不以 OS 隐式加载冒充接纳。
 
-```cpp
-namespace pg::module
-{
-struct ModuleHandle;            // 强类型、非拥有句柄；必须防止复用后的 ABA
-struct ModuleLoadCandidate;     // 已发现的 STATIC 项或 SHARED 产物
-struct ModuleLoadResult;        // 根 Module 与本次接纳的全部逻辑 Module 句柄；具体容器/布局未冻结
-struct ModuleOperationReport;   // 操作入口拥有；交付后独立于 Host/Module 存活的有界诊断
-struct ModuleOperationProgress; // 独立表达调用后的状态/清理责任，不从 Error 推断阶段
+三桌面须分别完成实际构建/运行、Query/依赖及卸载观察。Android/iOS 两模式必须正式根构建与独立 Project 的 Runtime/业务库和最小宿主最终链接；Android 为 AArch64 ELF 原生宿主 .so，iOS 为 ARM64 Mach-O executable/platform 2。仅归档、空 main 或未消费 Runtime 的 Probe 不足。移动端不执行目标 GTest，不宣称设备 RTTI/卸载、打包、签名或分发可用。
 
-class ModuleCodePin
-{
-public:
-    ModuleCodePin(const ModuleCodePin&) = delete;
-    ModuleCodePin& operator=(const ModuleCodePin&) = delete;
-    ModuleCodePin(ModuleCodePin&&) noexcept;
-    ModuleCodePin& operator=(ModuleCodePin&&) noexcept;
-    ~ModuleCodePin() noexcept;
-};
-
-class ModuleManager
-{
-public:
-    [[nodiscard]] pg::Result<ModuleLoadResult> Load(const ModuleLoadCandidate&, ModuleOperationProgress&,
-                                                    ModuleOperationReport&) noexcept;
-    [[nodiscard]] pg::Status Register(ModuleHandle, ModuleOperationProgress&, ModuleOperationReport&) noexcept;
-    [[nodiscard]] pg::Status Activate(ModuleHandle, ModuleOperationProgress&, ModuleOperationReport&) noexcept;
-    [[nodiscard]] pg::Status BeginUnload(ModuleHandle, ModuleOperationProgress&, ModuleOperationReport&) noexcept;
-    [[nodiscard]] pg::Status TryFinishUnload(ModuleHandle, ModuleOperationProgress&, ModuleOperationReport&) noexcept;
-
-    [[nodiscard]] pg::Result<ModuleCodePin> TryPinForBusiness(ModuleHandle) noexcept;
-};
-} // namespace pg::module
-```
-
-`ModuleHandle` 建议为带代际的强类型不拥有句柄，不得携带裸 `ModuleRecord*` 供任意业务长期访问。Manager、其控制块及 OS 库句柄是驻留所有者；`ModuleCodePin` 为独立 Move-only RAII 代码保护，**不隐式延长 Service 实例生命期**。
-
-- `TryPinForBusiness` 仅在 Module 为 Active 且业务闸门开放时成功；Loaded / Registered 阶段不得发新业务 Pin。注册、装配和清理使用协调器内部权限，不借此提前开放业务访问。取得业务 Pin 后，访问 Service 仍须满足对应 Scope 实例 Ready 条件，并有 Borrow/Lease 或等价的 Scope 所有权及销毁顺序保护。
-- `TryPinForBusiness` 和 `BeginUnload` 的 Quiescing 闸门必须有确定的线性化点；开始 Quiescing 后不再发新业务 Pin，也不能通过重新 Activate 绕过尚未完成的清理。
-- 之前获得的 Pin、合法借用以及内部清理所需的权限可以在 Quiescing / Draining 使用；**内部 Cleanup Pin 不作为公共接口开放**。
-- Manager 持有的基本代码所有权不算外部 Pin；卸载时不可等待自身清理所需的内部 Pin 归零之后才开始 Destroy。
-- 先 Drain Task/Callback、释放外部使用，再沿合并生命周期约束的逆序逐项销毁 Service/资源，释放依赖 Borrow，最后撤销贡献、释放 CodePin 和卸载真正的动态代码承载库；不能等待整个依赖闭包的全部 Borrow 先归零。
-- `TryFinishUnload` 遇到 Busy / Timeout 必须保留原 ModuleId 占位、ModuleRecord 和真实库句柄，不能假装成功，也不能趁间隙加载第二份同身份 Module。
-
-错误语义保持 ADR-0007：可恢复失败使用 `Result/Status`，独立有界 `ModuleOperationReport` 存放加载、回滚、卸载细节；报告由操作入口拥有并显式向下传递，交付后其文本、存储和析构机制必须独立于 Host、Diagnostics 和原始 Module 存活。Host 拥有元数据副本不代表已交付报告可以借用 Host 分配域；不强制立即日志，也不依赖插件字符串在卸载后仍存在。
-
-### 6.1 操作后置条件与继续清理
-
-下表冻结操作的后置条件，不冻结 Public 状态枚举或方法签名。`CleanupPending` 表示业务闸门已关闭、已进入 Quiescing / Draining 或后续清理阶段，尚未完成受管卸载；该名称不是新增业务活跃阶段。对同一 Module 的管理操作由 Host 串行协调，冲突调用在产生副作用前拒绝；这不代替业务 Pin 与 Quiescing 之间的同步规则。
-
-所有操作先校验适用的句柄代际、前置状态和依赖条件；**前置拒绝**保持原状态，不启动回滚。`Register` / `Activate` 一旦开始执行后失败，统一进入 `CleanupPending`，不自动恢复到可重试的 Loaded / Registered。原始 Error 可以来自任意下层，不能据其错误域或代码推断本次调用是否已经产生副作用。
-
-因此操作必须独立交付 `ModuleOperationProgress`：至少区分前置拒绝、目标操作完成、清理待完成和失败后的清理已完成，并说明本次调用后句柄是否仍有效以及由调用方继续收尾还是由 Manager 接管。上述参数是传递方式的提案，字段布局和最终签名仍未冻结；冻结的是**控制流进度与原始 Error、可截断诊断报告分离**。每条返回路径都初始化进度，报告截断不影响调用方决策；操作返回后不得保留调用方进度对象的引用。成功的 Load / TryFinishUnload 分别交付新有效句柄 / 使原句柄失效；Load 失败不交付成功句柄，即使 Manager 仍在清理。
-
-| 操作 | 前置条件 | 成功后的状态 | 执行失败或未完成后的状态与责任 |
-| --- | --- | --- | --- |
-| `Load` | 候选可验证且身份未被占用；Manager 在装载前预留身份 | 本次接纳的逻辑 Module 均 Loaded；交付根及全部有效句柄 | 不交付成功句柄；Manager 撤销本次整组装载。无法立即完成清理时由 Manager 保留记录、身份占位及必要库句柄并负责继续清理，调用方不能凭失败结果发起注册 |
-| `Register` | Loaded；已绑定依赖满足第 2.1 节阶段要求 | Registered；能力仅供协调器装配，业务仍不可进入 | 返回原始注册 Error；撤回本次事务的可见性并安排逆序回滚，保留有效句柄为 `CleanupPending`；调用方继续 `TryFinishUnload`，不能直接重试 Register |
-| `Activate` | Registered，依赖 Module 已 Active，初次目标 Scope 的装配条件可满足 | Active；具体 Service 仍须满足自身 Ready 条件 | 返回原始激活 Error；关闭相关业务入口并安排已创建实例/工作的逆序清理，保留有效句柄为 `CleanupPending`；调用方继续 `TryFinishUnload`，不能直接重试 Activate；后续新增 Scope 不调用本操作 |
-| `BeginUnload` | Loaded / Registered / Active，或已经为 `CleanupPending`；仍有未清理完成且需要本 Module 的依赖方时先拒绝，由 Host 按依赖顺序停用 | `CleanupPending`；成功仅表示已关闭入口并安排停止，不代表已经卸载 | 前置拒绝不改变状态；进入清理后发生的停止错误保留在报告中并维持 `CleanupPending`。清理期间重复调用不重复创建清理任务，也不重新开放业务 |
-| `TryFinishUnload` | `CleanupPending`，包括注册/激活失败后自动进入的清理 | 逻辑 Module 为 Unloaded；释放身份占位，原句柄失效；同库实际 OS 卸载还须满足第 3 节条件 | Busy / Timeout / 可恢复清理错误均保留有效句柄、身份及必要保护；修复条件或等待进展后重复调用，不重复销毁已完成清理的对象 |
-
-`Register` / `Activate` 执行失败时，即使资源回滚已能立即完成，也保留受管记录和原句柄直到 `TryFinishUnload` 确认收尾；此后需要重试业务操作时，从新的 `Load` 开始。对已经失效的句柄调用管理操作返回失效句柄错误，不把它误当成新的 Module，也不再次执行卸载。
-
-**未交付句柄的装载失败**：Manager 将待清理记录纳入 Host 的清理推进机制，在正常运行和 Host 关闭时持续检查并重试可恢复的清理；不得依赖调用方持有一个未返回的句柄。未完成时继续拒绝同身份装载；Host 关闭必须报告未完成并保留 Manager/控制块，不得用 Manager 析构强制释放库。内部记录的标识、清理调度和状态查询接口仍待实现设计，但必须能让 Host 观察未完成项及失败原因。
-
-**跨调用错误与报告**：Register / Activate 的原始 Error 不被后续 Busy 或清理错误覆盖；Manager 保存必要的有界主错误和清理进度，各次 `TryFinishUnload` 返回当前清理操作的 Status，并在本次报告中关联原始失败及追加次要诊断。操作返回后不得继续借用调用方传入的 `ModuleOperationReport&`；异步清理使用 Manager/Scope 自有的有界上下文，在后续调用或 Host 收尾时交付快照。`TryFinishUnload` 成功只表示清理完成，不把先前注册/激活失败改写成成功。
-
-## 7. 最小实施与验收切片
-
-按相互依赖的最小切片验证，不做第二个构建系统：
-
-1. **Identity/Descriptor**：静态编译期常量与 Host 深复制，拒绝重复 ID、非法版本/缺失依赖；卸载后仍可读取已复制元数据，报告在 Host 销毁后仍可读取及释放，不保留原 Module 的字符串视图。
-2. **STATIC Catalog**：两个真实 STATIC Module，通过生成 Catalog 根引用入 Host；链接器裁剪下注册入口仍被拉入，不依赖全局构造。
-3. **Registration**：暂存 → 冲突检查 → 同 Scope 提交；第 N 项失败回滚前 N-1 项并保留原始 Error，Concrete Service 不强制入 Registry；具体 Context/World 独立安装，多 Scope 装配不可半可见；两张图各自无环但合并有环时仍拒绝发布/激活。
-4. **SHARED**：真实 `LoadLibrary/dlopen` + 一个稳定名称的 `extern "C"` 导出符号（返回原生 C++23 ModuleDefinition）；同树、同配置配套插件免 AbiProfile，单独交付插件必须先可信验证与将加载产物绑定的 ABI/Public API Contract，失败不得 OS Load/Query；两类插件的入口、注册和代码驻留行为都需验证，DLL 初始化可能先于 Query 执行。
-5. **Pin/Drain**：外部 Pin 与 Task/Borrow 阻止卸载；Loaded / Registered / Quiescing 拒绝新业务 Pin，Active 仍检查 Service Ready/Borrow；Busy 保留代码；依赖逐个逆序销毁、不因内部 Borrow 自锁。
-6. **平台矩阵**：Windows、WSL Linux、macOS 做本机真实链接/加载验收；Android/iOS 首先做目标编译/链接及入口布局检查，设备运行不在本切片内。
-
-针对上述接口契约还须覆盖：
-
-- **空入口**：STATIC / SHARED 的空 Query、空定义和空注册函数均在注册前拒绝；显式空操作注册函数正常通过。
-- **失败后状态**：前置拒绝保持原状态；Register / Activate 执行失败后句柄只可用于清理，不允许直接重试；清理完成后句柄失效，新 Load 才能重新占用身份。
-- **激活失败且回滚 Busy**：先启动一项工作，再使后续装配失败；原始 Error 保留，第一次 `TryFinishUnload` 返回 Busy 时工作、依赖及库仍存活，工作结束后再次调用成功，销毁只执行一次。
-- **无 Service 的持续工作**：Host 范围工作收到停止请求后才结束；验证 BeginUnload 与完成分离、重复停止安全，以及 Registered 装配失败也会请求停止。再验证依赖方清理期间被依赖方的必要工作仍可用。
-- **Load 失败且清理延后**：调用方未获成功句柄时，Manager 仍能推进清理；完成前重复身份被拒，Host 关闭可观察未完成项，完成后身份释放。
-- **报告生命周期**：原调用报告销毁后，异步清理仍安全；后续报告保留主错误与次要清理诊断，成功收尾不改变原操作的失败结果。
-- **错误与进度独立**：前置拒绝和业务回调返回完全相同的 Error 时，前者不改变状态，后者明确进入 CleanupPending；报告缺失/截断也不影响区分。
-- **身份/依赖**：规范文本与 16 字节往返、零值/非法字符拒绝、版本任一分量不符不匹配；Optional 未选中不绑定，绑定后形成环或卸载 Provider 时拒绝；清理中的依赖不能新绑定。
-- **多 Scope**：Module 只注册一次；A 已运行时 B 装配失败只清理 B；随后可装配 C，A/C 的状态和撤销记录独立；装配与卸载争用不得在闸门关闭后发布。
-- **同库多 Module**：SHARED S 内嵌 STATIC A/B，单 Query 可达全部条目；裁剪不丢条目，重复 ID 导致本次整组接纳失败；A 的代码保护及尚未退出的 B 阻止真实 OS 卸载。
-
-临时 C++23 探针统一位于 `.probe/`，本次验证使用 `.probe/module-api-freeze/`；正式测试一旦引入仓库 `Tests/`，使用 CMake 4.0+ / CTest，不引入 Python 正式测试。
+六场景 benchmark 的身份输入、稳态借用与 1/8/32 业务 Catalog 保持；Create/析构计时现在包含两个必要常驻根，不移出计时改善结果，不与旧 STATIC 基线混算。dry run 只证明可运行；Ninja 无变化时不得新增扫描/生成/重链接。
 
 ## 8. 冻结范围与后续 API/ABI 门槛
 
-本轮按 [ADR-0011](../decisions/0011-module-api-behavior-contract.md) 冻结以下**行为契约**。第 7 节是实现验收要求，不表示整张矩阵已经通过；C++ 代码块用于表达方向，不作为可直接发布的头文件。
+ADR-0015 替代混合类型、同库 Catalog 和常驻执行失败的旧规则，身份/精确版本、显式依赖、声明事务、Scope 局部回滚、所有权和安全清理继续有效。本文叙述现有实现 API，**不冻结 Public C++ 布局、符号 ABI、长期 CMake API 或跨配置二进制兼容性**。未来 PanguMeta 可生成显式 Query/Catalog，但不得改变单库和强类型边界；本实现不依赖 Meta。
 
-| 已冻结行为 | 权威章节 | 仍未冻结的实现/API 内容 |
-| --- | --- | --- |
-| 128 位身份、全零无效、规范文本与永久保留；三段精确版本 | 第 2 节 | C++ 对象布局、ID 生成/审查工具和元数据文件格式 |
-| Required/Optional 的显式绑定、固定绑定、依赖阶段条件 | 第 2.1 节 | 候选集合、绑定结果/原因和图存储的 Public 类型 |
-| STATIC 根引用、同库 Catalog 可达性、独立记录与共同代码驻留 | 第 3 节 | Catalog 字段、生成器、承载账本、跨平台符号与布局 |
-| Query/注册入口非空、预检后查询、二次复核后注册 | 第 2/4 节 | 导出符号/调用约定、ModuleDefinition Public Contract、可信产物绑定和 TOCTOU 工艺 |
-| 一次 Module 注册、多 Scope 独立装配/撤销、局部失败隔离 | 第 5 节 | Factory Concept、键和 Provider 选择 API、类型擦除、Scope 句柄 |
-| 运行工作启动前追踪、停止/完成分离、依赖逆序清理 | 第 5.1 节 | 停止协议签名、任务组/调度器接线、回调存储 |
-| Active 业务闸门、代码与实例保护分离、Busy 保留 | 第 6 节 | Handle 代际编码、引用计数、锁/原子操作及并发实现 |
-| 操作后置条件、进度与原始错误分离、继续清理与报告所有权 | 第 6.1 节 | Status/Result、Progress/Report 类型与 ABI、未交付句柄记录的查询接口 |
-
-冻结 Public API/ABI 前还必须完成：可独立编译的公共头文件及上述依赖类型；同一契约的 STATIC/SHARED 接线；所有借用数据与报告预算/上限；无异常分配策略；五平台目标布局和调用约定验证；装载前真实产物绑定与装载后二次核对；并发线性化、失败注入和卸载回归。不得因本轮行为冻结跳过任何一项，也不要求恢复独立 C POD Discovery。
+完整 EngineHost、Contract/Registry Service、TaskScheduler/GPU 集成、Hot Reload/状态迁移、安装/发布和移动设备政策仍属后续。历史独立二进制插件 Preflight 已由 ADR-0014 取消，不是当前冻结待办。
 
 ## 9. 本轮验证证据与限制
 
-### 当前 STATIC Scope 生命周期切片（2026-10-29）
+以下保留各阶段当时接口、路径和成绩，已由 [ADR-0015](../decisions/0015-unified-link-modes-module-manager.md) 与上方现行规范替代；旧 STATIC 或局部 Probe 结果不代表本轮 Modular 验收。
+
+### 历史 STATIC Scope 生命周期切片（2026-10-29）
 
 在下述 Descriptor/Catalog 切片之上，新增 `ScopeFactory` / `ScopeBuildContext` / `ScopeAccess<T>` / `ScopeBorrow<T>` 及 STATIC Scope 协调器。工厂声明一次、按具体 Scope 重复装配；Scope/Module 闸门与原始错误由 Host 持有，完成 Start 才发布访问；失败进入局部或 Module CleanupPending，Poll/外部借用未完成时保持资源存活，逆序逐个 Stop/Poll/Destroy。未交付句柄的失败 Scope 由 Host 持续跟踪。
 
@@ -366,7 +143,7 @@ API/布局仍未冻结。当前库的 `std::move_only_function` 可用性不一�
 
 已在 `Source/Runtime/Module/` 创建第一个实际 CMake `STATIC` Target：`PanguModule`，并在仓库根目录建立最小 CMake 入口、将长期回归测试放在 `Tests/Module/`。这只实现已冻结身份/版本规则的一小部分，**不表示 `ModuleDefinition`、`RegistrationContext`、`ModuleManager`、`ModuleCodePin`、ABI Profile 采集或 SHARED Loader 已实现**。
 
-- Public `Source/Runtime/Module/Public/ModuleIdentity.h`（公开 include 使用 `#include <ModuleIdentity.h>`）提供 `pg::module::ModuleId`（16 字节强类型，全零无效）和 `ModuleVersion`（三段整数，`constexpr` 比较）；无分配 `FormatModuleId` 支持 `constexpr` 和规范化的 32 字符小写十六进制。
+- Public `Source/Runtime/Foundation/Public/ModuleIdentity.h`（公开 include 使用 `#include <ModuleIdentity.h>`）提供 `pg::module::ModuleId`（16 字节强类型，全零无效）和 `ModuleVersion`（三段整数，`constexpr` 比较）；无分配 `FormatModuleId` 支持 `constexpr` 和规范化的 32 字符小写十六进制。
 - 内部 `Private/ModuleIdentityParse.h` / `ModuleIdentity.cpp` 严格解析十六进制文本，拒绝长度错误、大写/非法字符与全零 ID；因通用 `pg::Error` Public API 尚未冻结，该领域专属错误**仅保留于内部**，将来的跨模块公共解析接口须遵循 ADR-0007 转换为 `std::expected<T, pg::Error>`。
 - CMake 目标使用 C++23、Clang、`-fno-exceptions`，非 Windows 目标明确使用 `libc++`，静态库启用 PIC 以便以后组合进入 SHARED。该根工程尚不是完整引擎构建/部署配置。
 - `Tests/Module/ModuleIdentityTests.cpp` 通过 `static_assert` 与 CTest 检查身份类型性质、编译期版本比较与格式化、合法往返及非法文本拒绝。Windows Clang 23.1.0、WSL Ubuntu Clang 23.1.0、macOS MacPorts Clang 23.1.2 **各 1/1 CTest 通过**；Windows `clang-format --dry-run --Werror` 与按编译数据库执行的 `clang-tidy` 无新增诊断。

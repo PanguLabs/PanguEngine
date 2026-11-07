@@ -15,6 +15,7 @@
         "rhs": "Windows"
       },
       "cacheVariables": {
+        "PANGU_LINK_MODE": "Modular",
         "CMAKE_CXX_COMPILER": "$env{LLVM_ROOT}/bin/clang++.exe",
         "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS": "$env{LLVM_ROOT}/bin/clang-scan-deps.exe"
       }

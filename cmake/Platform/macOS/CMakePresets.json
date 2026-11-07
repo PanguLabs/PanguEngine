@@ -16,6 +16,7 @@
       },
       "toolchainFile": "${sourceDir}/cmake/Platform/macOS/Toolchain.cmake",
       "cacheVariables": {
+        "PANGU_LINK_MODE": "Modular",
         "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS": "$env{LLVM_ROOT}/bin/clang-scan-deps"
       }
     }

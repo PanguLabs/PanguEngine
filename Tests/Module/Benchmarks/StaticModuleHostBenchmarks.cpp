@@ -1,13 +1,18 @@
+#include <ModuleBuiltin.h>
 #include <ModuleDescriptor.h>
 #include <ModuleIdentity.h>
+#include <ModuleManager.h>
+#include <ModuleOperation.h>
 #include <RegistrationContext.h>
 #include <Result.h>
-#include <StaticModuleHost.h>
 #include <array>
-#include <benchmark/benchmark.h>
+#include <benchmark/registration.h>
+#include <benchmark/state.h>
+#include <benchmark/utils.h>
 #include <cstddef>
 #include <span>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -58,16 +63,21 @@ void CatalogCreate(benchmark::State& state)
         }
     }
     const StaticModuleCatalog catalog{std::span(kEntries).first(count)};
+    std::vector<QueryModuleFn> queries(BuiltinResidentQueries().begin(), BuiltinResidentQueries().end());
+    for (const auto& entry : catalog.Entries)
+    {
+        queries.push_back(entry.Query);
+    }
     RegistrationScope scope;
-    state.SetLabel("Create + Host destruction");
+    state.SetLabel("Resident Create + Manager destruction");
     for (const auto iteration : state)
     {
         static_cast<void>(iteration);
         ModuleOperationReport report;
-        auto host = StaticModuleHost::Create(catalog, scope, {}, report);
+        auto host = ModuleManager::Create(scope, queries, {}, report);
         if (!host)
         {
-            state.SkipWithError("StaticModuleHost::Create failed");
+            state.SkipWithError("ModuleManager::Create failed");
             break;
         }
         benchmark::DoNotOptimize(host->Modules().size());

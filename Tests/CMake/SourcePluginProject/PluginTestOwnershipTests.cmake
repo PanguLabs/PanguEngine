@@ -89,7 +89,8 @@ BuildFixture(MyGameProbe)
 CheckOwnership(OFF OFF OFF ON)
 ProjectCommand(PASS "" "${CMAKE_CTEST_COMMAND}" --test-dir "${binary}" --no-tests=error -R "^MyGameProbe$" --output-on-failure)
 
-ConfigureFixture(ProjectOnly "pangu.physics;mygame.gameplay" PASS "" -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=OFF)
+ConfigureFixture(ProjectOnly "pangu.physics;mygame.gameplay" PASS "" -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=OFF
+    -DPANGU_LINK_MODE=Monolithic)
 BuildFixture(MyGameProbe)
 RejectText("${commandOutput}" "PluginBehaviorTests.cpp")
 RejectText("${commandOutput}" "PluginCollaborationTests.cpp")
@@ -108,7 +109,8 @@ ProjectCommand(PASS "" "${CMAKE_CTEST_COMMAND}" --test-dir "${binary}" --no-test
 BuildFixture(MyGameProbe)
 RequireText("${commandOutput}" "no work to do")
 
-ConfigureFixture(EngineAndProject "pangu.physics;mygame.gameplay" PASS "" -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON)
+ConfigureFixture(EngineAndProject "pangu.physics;mygame.gameplay" PASS "" -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON
+    -DPANGU_LINK_MODE=Modular)
 BuildFixture(MyGameProbe)
 RejectText("${commandOutput}" "PluginBehaviorTests.cpp")
 # Engine 集合含嵌套工具准备；外层串行，内层继续使用同一处理器预算。

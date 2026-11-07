@@ -1,5 +1,7 @@
 #pragma once
 
+#include <PanguModuleExport.h>
+
 #include <ModuleDeclaration.h>
 #include <ModuleError.h>
 #include <ModuleIdentity.h>
@@ -11,6 +13,7 @@
 #include <expected>
 #include <memory>
 #include <type_traits>
+#include <typeinfo>
 #include <utility>
 
 namespace pg::module
@@ -26,7 +29,7 @@ struct ScopeHooks
 namespace detail
 {
 // Resource-lifetime adapter, not a base class for business Services.
-class ErasedScopeObject
+class PG_MODULE_API ErasedScopeObject
 {
 public:
     ErasedScopeObject() = default;
@@ -36,7 +39,7 @@ public:
     ErasedScopeObject(ErasedScopeObject&&) = delete;
     ErasedScopeObject& operator=(ErasedScopeObject&&) = delete;
     [[nodiscard]] virtual void* Get() const noexcept = 0;
-    [[nodiscard]] virtual const void* Type() const noexcept = 0;
+    [[nodiscard]] virtual const std::type_info& Type() const noexcept = 0;
     [[nodiscard]] virtual pg::Status Start() noexcept = 0;
     virtual void RequestStop() noexcept = 0;
     [[nodiscard]] virtual pg::Status PollStopped() noexcept = 0;
@@ -52,7 +55,7 @@ public:
     {
     }
     [[nodiscard]] void* Get() const noexcept override { return Object.get(); }
-    [[nodiscard]] const void* Type() const noexcept override { return ScopeTypeToken<T>(); }
+    [[nodiscard]] const std::type_info& Type() const noexcept override { return typeid(T); }
     [[nodiscard]] pg::Status Start() noexcept override { return Hooks.Start ? Hooks.Start(*Object) : pg::Status{}; }
     void RequestStop() noexcept override
     {
@@ -74,10 +77,12 @@ private:
 struct ScopeDependencyObject
 {
     void* Object{};
-    const void* Type{};
+    // 仅在资源及其实现代码受保护期间借用，禁止保存在访问控制块中。
+    // NOLINTNEXTLINE(cppcoreguidelines-avoid-const-or-ref-data-members)
+    const std::type_info& Type;
 };
 
-class ScopeBuildSink
+class PG_MODULE_API ScopeBuildSink
 {
 public:
     ScopeBuildSink() = default;
@@ -96,7 +101,7 @@ public:
 } // namespace detail
 
 // Borrowed for one factory call. Do not retain the context or start work here.
-class ScopeBuildContext final
+class PG_MODULE_API ScopeBuildContext final
 {
 public:
     explicit ScopeBuildContext(detail::ScopeBuildSink& sink) noexcept;
@@ -122,7 +127,8 @@ public:
         {
             return std::unexpected(staged.error());
         }
-        return detail::ScopeAccessMaker::Make<T>(std::move(*staged));
+        // T 来自刚刚接纳的拥有模型，不允许调用方拼接 void* 与任意类型。
+        return ScopeAccess<T>{std::move(*staged)};
     }
 
     // Explicitly declared dependency, borrowed until this resource's Destroy.
@@ -134,7 +140,7 @@ public:
         {
             return std::unexpected(dependency.error());
         }
-        if (dependency->Type != detail::ScopeTypeToken<std::remove_cv_t<T>>())
+        if (dependency->Type != typeid(T))
         {
             return std::unexpected(Sink->Reject(MakeModuleError(ModuleError::kTypeMismatch)));
         }

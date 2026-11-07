@@ -33,6 +33,14 @@ enum class ModuleError : std::uint8_t
     kDependencyInUse = 20,
     kDependencyNotActive = 21,
     kUndeclaredDependency = 22,
+    kInvalidHandle = 23,
+    kResidentModule = 24,
+    kWrongLoadSource = 25,
+    kInvalidPath = 26,
+    kLibraryOpenFailed = 27,
+    kQuerySymbolMissing = 28,
+    kLibraryCloseFailed = 29,
+    kInvalidResidentSet = 30,
 };
 
 [[nodiscard]] constexpr pg::Error MakeModuleError(ModuleError code) noexcept

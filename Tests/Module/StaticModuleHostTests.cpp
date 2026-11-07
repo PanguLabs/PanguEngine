@@ -1,11 +1,11 @@
 #include <gtest/gtest.h>
 
+#include "Fixtures/ManagerFixture.h"
 #include "ModuleIdentity.h"
 #include "Result.h"
 #include <ModuleDescriptor.h>
 #include <ModuleError.h>
 #include <RegistrationContext.h>
-#include <StaticModuleHost.h>
 
 #include <array>
 #include <bit>
@@ -71,7 +71,8 @@ struct Candidates
         if (gNestedReport != nullptr)
         {
             const std::array invalid{StaticCatalogEntry{}};
-            [[maybe_unused]] const auto nested = StaticModuleHost::Create({invalid}, *gNestedScope, {}, *gNestedReport);
+            [[maybe_unused]] const auto nested =
+                pg::module::test::CreateManager({invalid}, *gNestedScope, {}, *gNestedReport);
         }
         return gFirst;
     }
@@ -86,7 +87,7 @@ constexpr std::array kEntries{StaticCatalogEntry{Candidates::QueryFirst}, Static
 
 bool IsError(const auto& result, ModuleError code) { return !result && result.error() == MakeModuleError(code); }
 
-TEST(StaticModuleHost, CopiesMetadataBeforeSourceDestruction)
+TEST(ModuleManager, CopiesMetadataBeforeSourceDestruction)
 {
     const Candidates callbackState;
     RegistrationScope scope;
@@ -103,7 +104,7 @@ TEST(StaticModuleHost, CopiesMetadataBeforeSourceDestruction)
         Candidates::gFirst = &first;
         Candidates::gSecond = &second;
         Candidates::gQueries = 0;
-        auto result = StaticModuleHost::Create({kEntries}, scope, {}, report);
+        auto result = pg::module::test::CreateManager({kEntries}, scope, {}, report);
         name.assign("changed");
         build.assign("changed");
         dependencies.front().Id = kAbsent;
@@ -113,12 +114,12 @@ TEST(StaticModuleHost, CopiesMetadataBeforeSourceDestruction)
     Candidates::gSecond = nullptr;
     ASSERT_TRUE(host);
     ASSERT_EQ(Candidates::gQueries, 2);
-    ASSERT_EQ(host->Modules().size(), 2);
+    ASSERT_EQ(pg::module::test::BusinessSnapshots(*host).size(), 2);
     ASSERT_EQ(report.Progress, ModuleOperationProgress::kLoaded);
     ASSERT_FALSE(report.PrimaryError);
     auto const moved = std::move(*host);
-    const auto& descriptor = moved.Modules().front().Descriptor;
-    const auto order = moved.RegistrationOrder();
+    const auto descriptor = pg::module::test::BusinessSnapshots(moved).front().Descriptor;
+    const auto order = pg::module::test::BusinessOrder(moved);
     ASSERT_EQ(descriptor.DisplayName, "owned name");
     ASSERT_EQ(descriptor.BuildIdentity, "owned build");
     ASSERT_EQ(descriptor.Dependencies.front().Id, kSecond);
@@ -127,40 +128,38 @@ TEST(StaticModuleHost, CopiesMetadataBeforeSourceDestruction)
     ASSERT_EQ(order.back(), kFirst);
 }
 
-TEST(StaticModuleHost, RejectsInvalidDefinitionsAndIdentity)
+TEST(ModuleManager, RejectsInvalidDefinitionsAndIdentity)
 {
     const Candidates callbackState;
     RegistrationScope scope;
     ModuleOperationReport report;
     const std::array emptyQuery{StaticCatalogEntry{}};
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({emptyQuery}, scope, {}, report), ModuleError::kInvalidDefinition));
+    ASSERT_TRUE(
+        IsError(pg::module::test::CreateManager({emptyQuery}, scope, {}, report), ModuleError::kInvalidDefinition));
     const auto one = std::span(kEntries).first<1>();
     Candidates::gFirst = nullptr;
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDefinition));
+    ASSERT_TRUE(IsError(pg::module::test::CreateManager({one}, scope, {}, report), ModuleError::kInvalidDefinition));
     auto first = Definition(kFirst);
     Candidates::gFirst = &first;
     first.RegisterModule = nullptr;
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDefinition));
+    ASSERT_TRUE(IsError(pg::module::test::CreateManager({one}, scope, {}, report), ModuleError::kInvalidDefinition));
     first = Definition({});
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDescriptor));
+    ASSERT_TRUE(IsError(pg::module::test::CreateManager({one}, scope, {}, report), ModuleError::kInvalidDescriptor));
     first = Definition(kFirst);
     first.Descriptor.ProtocolVersion = 2;
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDescriptor));
+    ASSERT_TRUE(IsError(pg::module::test::CreateManager({one}, scope, {}, report), ModuleError::kInvalidDescriptor));
     first = Definition(kFirst);
     first.Descriptor.Version = {};
-    const auto zeroVersion = StaticModuleHost::Create({one}, scope, {}, report);
+    const auto zeroVersion = pg::module::test::CreateManager({one}, scope, {}, report);
     ASSERT_TRUE(zeroVersion);
-    const StaticModuleCatalog nested{};
-    first.LinkedStaticModules = &nested;
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kInvalidDefinition));
     first = Definition(kFirst);
     Candidates::gSecond = &first;
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kDuplicateModule));
+    ASSERT_TRUE(IsError(pg::module::test::CreateManager({kEntries}, scope, {}, report), ModuleError::kDuplicateModule));
     ASSERT_EQ(report.Module, kFirst);
     ASSERT_EQ(report.PrimaryError, MakeModuleError(ModuleError::kDuplicateModule));
 }
 
-TEST(StaticModuleHost, EnforcesLimitsBeforeCopying)
+TEST(ModuleManager, EnforcesLimitsBeforeCopying)
 {
     const Candidates callbackState;
     RegistrationScope scope;
@@ -170,21 +169,21 @@ TEST(StaticModuleHost, EnforcesLimitsBeforeCopying)
     const auto one = std::span(kEntries).first<1>();
     std::string name(256, 'n');
     first.Descriptor.DisplayName = name;
-    ASSERT_TRUE(StaticModuleHost::Create({one}, scope, {}, report));
+    ASSERT_TRUE(pg::module::test::CreateManager({one}, scope, {}, report));
     name.push_back('n');
     first.Descriptor.DisplayName = name;
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kLimitExceeded));
+    ASSERT_TRUE(IsError(pg::module::test::CreateManager({one}, scope, {}, report), ModuleError::kLimitExceeded));
     first = Definition(kFirst);
     first.Descriptor.BuildIdentity = name;
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kLimitExceeded));
+    ASSERT_TRUE(IsError(pg::module::test::CreateManager({one}, scope, {}, report), ModuleError::kLimitExceeded));
     std::array<ModuleDependency, 65> dependencies{};
     first = Definition(kFirst, dependencies);
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kLimitExceeded));
+    ASSERT_TRUE(IsError(pg::module::test::CreateManager({one}, scope, {}, report), ModuleError::kLimitExceeded));
     const std::array<StaticCatalogEntry, 257> entries{};
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({entries}, scope, {}, report), ModuleError::kLimitExceeded));
+    ASSERT_TRUE(IsError(pg::module::test::CreateManager({entries}, scope, {}, report), ModuleError::kLimitExceeded));
 }
 
-TEST(StaticModuleHost, ValidatesDependencies)
+TEST(ModuleManager, ValidatesDependencies)
 {
     const Candidates callbackState;
     RegistrationScope scope;
@@ -195,7 +194,7 @@ TEST(StaticModuleHost, ValidatesDependencies)
     auto first = Definition(kFirst, dependencies);
     Candidates::gFirst = &first;
     const auto one = std::span(kEntries).first<1>();
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({one}, scope, {}, report), ModuleError::kMissingDependency));
+    ASSERT_TRUE(IsError(pg::module::test::CreateManager({one}, scope, {}, report), ModuleError::kMissingDependency));
     ASSERT_EQ(report.Module, kFirst);
     ASSERT_EQ(report.RelatedModule, kSecond);
     constexpr std::array kWrongVersions{
@@ -206,24 +205,28 @@ TEST(StaticModuleHost, ValidatesDependencies)
     for (const ModuleVersion version : kWrongVersions)
     {
         second.Descriptor.Version = version;
-        ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kVersionMismatch));
+        ASSERT_TRUE(
+            IsError(pg::module::test::CreateManager({kEntries}, scope, {}, report), ModuleError::kVersionMismatch));
     }
     second.Descriptor.Version = kVersion;
     for (const auto id : {ModuleId(), kFirst})
     {
         dependencies.front().Id = id;
-        ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kInvalidDependency));
+        ASSERT_TRUE(
+            IsError(pg::module::test::CreateManager({kEntries}, scope, {}, report), ModuleError::kInvalidDependency));
     }
     dependencies.front().Id = kSecond;
     dependencies.front().Kind = std::bit_cast<DependencyKind>(std::uint8_t{255});
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kInvalidDependency));
+    ASSERT_TRUE(
+        IsError(pg::module::test::CreateManager({kEntries}, scope, {}, report), ModuleError::kInvalidDependency));
     dependencies.front().Kind = DependencyKind::kRequired;
     const std::array duplicate{dependencies.front(), dependencies.front()};
     first.Descriptor.Dependencies = duplicate;
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, {}, report), ModuleError::kInvalidDependency));
+    ASSERT_TRUE(
+        IsError(pg::module::test::CreateManager({kEntries}, scope, {}, report), ModuleError::kInvalidDependency));
 }
 
-TEST(StaticModuleHost, OptionalSelectionIsExplicitAndRejectsCycles)
+TEST(ModuleManager, OptionalSelectionIsExplicitAndRejectsCycles)
 {
     const Candidates callbackState;
     RegistrationScope scope;
@@ -242,22 +245,23 @@ TEST(StaticModuleHost, OptionalSelectionIsExplicitAndRejectsCycles)
     const auto reason = [&](DependencyBindingReason expected, bool present)
     {
         const std::span<const StaticCatalogEntry> entries = kEntries;
-        auto host = StaticModuleHost::Create({present ? entries : entries.first(1)}, scope, {}, report);
-        return host && host->Modules().front().Bindings.front().Reason == expected &&
-               !host->Modules().front().Bindings.front().IsBound();
+        auto host = pg::module::test::CreateManager({present ? entries : entries.first(1)}, scope, {}, report);
+        return host && pg::module::test::BusinessSnapshots(*host).front().Bindings.front().Reason == expected &&
+               !pg::module::test::BusinessSnapshots(*host).front().Bindings.front().IsBound();
     };
     ASSERT_TRUE(reason(DependencyBindingReason::kNotSelected, true));
     ASSERT_TRUE(reason(DependencyBindingReason::kMissing, false));
     second.Descriptor.Version = {};
     ASSERT_TRUE(reason(DependencyBindingReason::kVersionMismatch, true));
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, selected, report), ModuleError::kVersionMismatch));
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({std::span(kEntries).first<1>()}, scope, selected, report),
+    ASSERT_TRUE(
+        IsError(pg::module::test::CreateManager({kEntries}, scope, selected, report), ModuleError::kVersionMismatch));
+    ASSERT_TRUE(IsError(pg::module::test::CreateManager({std::span(kEntries).first<1>()}, scope, selected, report),
                         ModuleError::kMissingDependency));
     second.Descriptor.Version = kVersion;
-    auto bound = StaticModuleHost::Create({kEntries}, scope, selected, report);
+    auto bound = pg::module::test::CreateManager({kEntries}, scope, selected, report);
     ASSERT_TRUE(bound);
-    ASSERT_TRUE(bound->Modules().front().Bindings.front().IsBound());
-    ASSERT_EQ(bound->RegistrationOrder().front(), kSecond);
+    ASSERT_TRUE(pg::module::test::BusinessSnapshots(*bound).front().Bindings.front().IsBound());
+    ASSERT_EQ(pg::module::test::BusinessOrder(*bound).front(), kSecond);
     for (const auto binding : {
              OptionalDependencyBinding{.Dependent = kAbsent, .Dependency = kSecond},
              OptionalDependencyBinding{.Dependent = kFirst, .Dependency = kAbsent},
@@ -265,18 +269,19 @@ TEST(StaticModuleHost, OptionalSelectionIsExplicitAndRejectsCycles)
          })
     {
         const std::array invalid{binding};
-        ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, invalid, report),
+        ASSERT_TRUE(IsError(pg::module::test::CreateManager({kEntries}, scope, invalid, report),
                             ModuleError::kInvalidOptionalBinding));
     }
     const std::array duplicate{selected.front(), selected.front()};
-    ASSERT_TRUE(
-        IsError(StaticModuleHost::Create({kEntries}, scope, duplicate, report), ModuleError::kInvalidOptionalBinding));
+    ASSERT_TRUE(IsError(pg::module::test::CreateManager({kEntries}, scope, duplicate, report),
+                        ModuleError::kInvalidOptionalBinding));
     const std::array backEdge{ModuleDependency{.Id = kFirst, .Version = kVersion}};
     second.Descriptor.Dependencies = backEdge;
-    ASSERT_TRUE(StaticModuleHost::Create({kEntries}, scope, {}, report));
-    ASSERT_TRUE(IsError(StaticModuleHost::Create({kEntries}, scope, selected, report), ModuleError::kDependencyCycle));
+    ASSERT_TRUE(pg::module::test::CreateManager({kEntries}, scope, {}, report));
+    ASSERT_TRUE(
+        IsError(pg::module::test::CreateManager({kEntries}, scope, selected, report), ModuleError::kDependencyCycle));
 }
-TEST(StaticModuleHost, NestedQueryCannotPolluteOuterReport)
+TEST(ModuleManager, NestedQueryCannotPolluteOuterReport)
 {
     const Candidates callbackState;
     RegistrationScope scope;
@@ -285,7 +290,7 @@ TEST(StaticModuleHost, NestedQueryCannotPolluteOuterReport)
     Candidates::gFirst = &first;
     Candidates::gNestedReport = &report;
     Candidates::gNestedScope = &scope;
-    const auto host = StaticModuleHost::Create({std::span(kEntries).first<1>()}, scope, {}, report);
+    const auto host = pg::module::test::CreateManager({std::span(kEntries).first<1>()}, scope, {}, report);
     Candidates::gNestedReport = nullptr;
     Candidates::gNestedScope = nullptr;
     ASSERT_TRUE(host);
@@ -294,4 +299,28 @@ TEST(StaticModuleHost, NestedQueryCannotPolluteOuterReport)
     ASSERT_EQ(report.Module, ModuleId());
     ASSERT_EQ(report.RelatedModule, ModuleId());
 }
+TEST(ModuleManager, IncrementalBatchDoesNotRebindExistingOptionalDependencies)
+{
+    const Candidates callbackState;
+    RegistrationScope scope;
+    ModuleOperationReport report;
+    const std::array dependencies{
+        ModuleDependency{.Id = kSecond, .Version = kVersion, .Kind = DependencyKind::kOptional}};
+    const auto first = Definition(kFirst, dependencies);
+    const auto second = Definition(kSecond);
+    Candidates::gFirst = &first;
+    Candidates::gSecond = &second;
+    auto manager = pg::module::test::CreateManager({std::span(kEntries).first(1)}, scope, {}, report);
+    ASSERT_TRUE(manager);
+    const auto original = *manager->Find(kFirst);
+    ASSERT_EQ(manager->Inspect(original)->Bindings.front().Reason, DependencyBindingReason::kMissing);
+    const std::array added{ModuleLoadCandidate{StaticModuleCandidate{Candidates::QuerySecond}}};
+    ASSERT_TRUE(manager->Load(added, {}, report));
+    EXPECT_EQ(manager->Inspect(original)->Bindings.front().Reason, DependencyBindingReason::kMissing);
+    const auto duplicate = manager->Load(added, {}, report);
+    EXPECT_EQ(duplicate.error(), MakeModuleError(ModuleError::kDuplicateModule));
+    EXPECT_EQ(manager->Modules().size(), 4U);
+    EXPECT_TRUE(manager->Inspect(original));
+}
+
 } // namespace

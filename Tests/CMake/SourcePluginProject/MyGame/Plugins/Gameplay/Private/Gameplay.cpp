@@ -1,4 +1,5 @@
 #include "FixtureModules.h"
+#include "GameplayModule.h"
 #include "ModuleDeclaration.h"
 #include "ModuleDescriptor.h"
 #include "Result.h"

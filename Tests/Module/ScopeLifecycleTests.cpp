@@ -1,21 +1,27 @@
-#include "Fixtures/ScopeLifecycleFixture.h"
+﻿#include "Fixtures/ScopeLifecycleFixture.h"
 #include <gtest/gtest.h>
 
 #include "Error.h"
+#include "Fixtures/ManagerFixture.h"
+#include <ModuleBuiltin.h>
 #include <ModuleDeclaration.h>
 #include <ModuleDescriptor.h>
 #include <ModuleError.h>
+#include <ModuleHandle.h>
 #include <ModuleIdentity.h>
+#include <ModuleManager.h>
+#include <ModuleOperation.h>
 #include <RegistrationContext.h>
 #include <Result.h>
 #include <ScopeAccess.h>
 #include <ScopeBuildContext.h>
 #include <ScopeFactory.h>
 #include <ScopeIdentity.h>
-#include <StaticModuleHost.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdlib>
 #include <expected>
 #include <memory>
 #include <optional>
@@ -114,13 +120,13 @@ ModuleDefinition Definition(ModuleId id, RegisterModuleFn registration,
         .RegisterModule = registration,
     };
 }
-[[nodiscard]] pg::Result<StaticModuleHost> Host(RegistrationScope& declarations, ModuleOperationReport& report,
-                                                const std::shared_ptr<Counters>& state)
+[[nodiscard]] pg::Result<ModuleManager> Host(RegistrationScope& declarations, ModuleOperationReport& report,
+                                             const std::shared_ptr<Counters>& state)
 {
     Fixture::gState = state;
     const auto definition = Definition(kModule, Fixture::Register);
     Fixture::gFirst = &definition;
-    return StaticModuleHost::Create({std::span(kEntries).first<1>()}, declarations, {}, report);
+    return pg::module::test::CreateManager({std::span(kEntries).first<1>()}, declarations, {}, report);
 }
 
 TEST(ScopeLifecycle, ScopeFailureIsLocalAndFactoryRepeats)
@@ -131,8 +137,8 @@ TEST(ScopeLifecycle, ScopeFailureIsLocalAndFactoryRepeats)
     const auto state = std::make_shared<Counters>();
     auto host = Host(declarations, report, state);
     ASSERT_TRUE(host);
-    ASSERT_TRUE(host->Register(kModule, report));
-    ASSERT_TRUE(host->Activate(kModule, report));
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report));
     const auto first = host->CreateScope(Scope::kContext, host->HostScope(), report);
     ASSERT_TRUE(first);
     ASSERT_EQ(state->Exports.size(), 1);
@@ -144,7 +150,7 @@ TEST(ScopeLifecycle, ScopeFailureIsLocalAndFactoryRepeats)
     ASSERT_EQ(failed.error(), kFailure);
     ASSERT_EQ(state->Destroyed, 1);
     ASSERT_EQ(state->Registrations, 1);
-    ASSERT_EQ(host->Modules().front().State, StaticModuleState::kActive);
+    ASSERT_EQ(pg::module::test::BusinessSnapshots(*host).front().State, ModuleState::kActive);
     ASSERT_TRUE(state->Exports.front().Access.TryBorrow());
     const auto third = host->CreateScope(Scope::kContext, host->HostScope(), report);
     ASSERT_TRUE(third);
@@ -154,6 +160,8 @@ TEST(ScopeLifecycle, ScopeFailureIsLocalAndFactoryRepeats)
     ASSERT_FALSE(state->Exports.at(1).Access.TryBorrow());
     ASSERT_TRUE(state->Exports.back().Access.TryBorrow());
     ASSERT_EQ(snapshot.OriginalError, kFailure);
+    ASSERT_EQ(snapshot.Progress, ModuleOperationProgress::kRolledBack);
+    ASSERT_EQ(snapshot.CleanupOwner, ModuleCleanupOwner::kNone);
     ASSERT_TRUE(host->BeginShutdown(report));
     ASSERT_TRUE(host->TryFinishShutdown(report));
     ASSERT_EQ(state->Destroyed, 3);
@@ -168,8 +176,8 @@ TEST(ScopeLifecycle, BorrowAndWorkDelayDestructionIndependently)
     const auto state = std::make_shared<Counters>();
     auto host = Host(declarations, report, state);
     ASSERT_TRUE(host);
-    ASSERT_TRUE(host->Register(kModule, report));
-    ASSERT_TRUE(host->Activate(kModule, report));
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report));
     const auto first = host->CreateScope(Scope::kContext, host->HostScope(), report);
     const auto second = host->CreateScope(Scope::kContext, host->HostScope(), report);
     ASSERT_TRUE(first);
@@ -179,13 +187,16 @@ TEST(ScopeLifecycle, BorrowAndWorkDelayDestructionIndependently)
     state->BusyValue = 1;
     ASSERT_TRUE(borrow);
     ASSERT_TRUE(host->BeginCloseScope(*first, report));
+    EXPECT_EQ(report.CleanupOwner, ModuleCleanupOwner::kCallerUnload);
     const auto busy = host->TryFinishCloseScope(*first, report);
     ASSERT_FALSE(busy);
     ASSERT_EQ(busy.error(), MakeModuleError(ModuleError::kBusy));
+    EXPECT_EQ(report.CleanupOwner, ModuleCleanupOwner::kCallerUnload);
     ASSERT_EQ(state->Destroyed, 0);
     ASSERT_FALSE(state->Exports.front().Access.TryBorrow());
     ASSERT_TRUE(host->BeginCloseScope(*second, report));
     ASSERT_TRUE(host->TryFinishCloseScope(*second, report));
+    EXPECT_EQ(report.CleanupOwner, ModuleCleanupOwner::kNone);
     ASSERT_EQ(state->Destroyed, 1);
     state->Finished = false;
     borrow->Release();
@@ -205,30 +216,33 @@ TEST(ScopeLifecycle, PartialStartFailureStaysCleanupOnlyAndReloadUsesNewTokens)
     const auto state = std::make_shared<Counters>();
     auto host = Host(declarations, report, state);
     ASSERT_TRUE(host);
-    ASSERT_TRUE(host->Register(kModule, report));
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
     const auto first = host->CreateScope(Scope::kContext, host->HostScope(), report);
     const auto second = host->CreateScope(Scope::kContext, host->HostScope(), report);
     state->FailStartAt = 2;
     state->Finished = false;
-    const auto activated = host->Activate(kModule, report);
+    const auto activated = host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report);
     ASSERT_TRUE(first);
     ASSERT_TRUE(second);
     ASSERT_FALSE(activated);
     ASSERT_EQ(activated.error(), kFailure);
     ASSERT_EQ(report.OriginalError, kFailure);
-    ASSERT_EQ(host->Modules().front().State, StaticModuleState::kCleanupPending);
+    ASSERT_EQ(pg::module::test::BusinessSnapshots(*host).front().State, ModuleState::kCleanupPending);
     ASSERT_EQ(state->Destroyed, 0);
-    ASSERT_FALSE(host->Activate(kModule, report));
-    ASSERT_FALSE(host->TryFinishUnload(kModule, report));
+    ASSERT_FALSE(host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report));
+    ASSERT_FALSE(host->TryFinishUnload(host->Find(kModule).value_or(ModuleHandle{}), report));
     ASSERT_EQ(report.OriginalError, kFailure);
     state->Finished = true;
-    ASSERT_TRUE(host->TryFinishUnload(kModule, report));
+    ASSERT_TRUE(host->TryFinishUnload(host->Find(kModule).value_or(ModuleHandle{}), report));
     ASSERT_EQ(report.OriginalError, kFailure);
     ASSERT_EQ(state->Destroyed, 2);
-    ASSERT_TRUE(host->Load(kModule, report));
-    ASSERT_TRUE(host->Register(kModule, report));
+    const auto reloadedDefinition = Definition(kModule, Fixture::Register);
+    Fixture::gFirst = &reloadedDefinition;
+    const std::array reloadCandidates{ModuleLoadCandidate{StaticModuleCandidate{Fixture::QueryFirst}}};
+    ASSERT_TRUE(host->Load(reloadCandidates, {}, report));
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
     state->FailStartAt = 0;
-    ASSERT_TRUE(host->Activate(kModule, report));
+    ASSERT_TRUE(host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report));
     ASSERT_EQ(state->Registrations, 2);
     ASSERT_EQ(state->Exports.size(), 4);
     ASSERT_FALSE(state->Exports.front().Access.TryBorrow());
@@ -250,20 +264,20 @@ TEST(ScopeLifecycle, DependenciesPreserveParentAndReverseDestruction)
     const auto second = Definition(kProviderModule, Fixture::RegisterProvider);
     Fixture::gFirst = &first;
     Fixture::gSecond = &second;
-    auto host = StaticModuleHost::Create({kEntries}, declarations, {}, report);
+    auto host = pg::module::test::CreateManager({kEntries}, declarations, {}, report);
     ASSERT_TRUE(host);
-    ASSERT_TRUE(host->Register(kProviderModule, report));
-    ASSERT_TRUE(host->Register(kModule, report));
-    const auto early = host->Activate(kModule, report);
+    ASSERT_TRUE(host->Register(host->Find(kProviderModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
+    const auto early = host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report);
     ASSERT_FALSE(early);
     ASSERT_EQ(early.error(), MakeModuleError(ModuleError::kDependencyNotActive));
     ASSERT_EQ(state->Made, 0);
-    ASSERT_TRUE(host->Activate(kProviderModule, report));
-    ASSERT_TRUE(host->Activate(kModule, report));
+    ASSERT_TRUE(host->Activate(host->Find(kProviderModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report));
     const auto context = host->CreateScope(Scope::kContext, host->HostScope(), report);
     ASSERT_TRUE(context);
     ASSERT_TRUE(state->Exports.front().Access.TryBorrow());
-    const auto providerUnload = host->BeginUnload(kProviderModule, report);
+    const auto providerUnload = host->BeginUnload(host->Find(kProviderModule).value_or(ModuleHandle{}), report);
     ASSERT_FALSE(providerUnload);
     ASSERT_EQ(providerUnload.error(), MakeModuleError(ModuleError::kDependencyInUse));
     ASSERT_TRUE(host->BeginShutdown(report));
@@ -284,17 +298,17 @@ TEST(ScopeLifecycle, WrongDependencyTypeCannotCommit)
     const auto second = Definition(kProviderModule, Fixture::RegisterProvider);
     Fixture::gFirst = &first;
     Fixture::gSecond = &second;
-    auto host = StaticModuleHost::Create({kEntries}, declarations, {}, report);
+    auto host = pg::module::test::CreateManager({kEntries}, declarations, {}, report);
     ASSERT_TRUE(host);
-    ASSERT_TRUE(host->Register(kProviderModule, report));
-    ASSERT_TRUE(host->Register(kModule, report));
-    ASSERT_TRUE(host->Activate(kProviderModule, report));
-    ASSERT_TRUE(host->Activate(kModule, report));
+    ASSERT_TRUE(host->Register(host->Find(kProviderModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->Activate(host->Find(kProviderModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report));
     const auto scope = host->CreateScope(Scope::kContext, host->HostScope(), report);
     ASSERT_FALSE(scope);
     ASSERT_EQ(scope.error(), MakeModuleError(ModuleError::kTypeMismatch));
     ASSERT_EQ(state->Made, 1);
-    ASSERT_EQ(host->Modules().front().State, StaticModuleState::kActive);
+    ASSERT_EQ(pg::module::test::BusinessSnapshots(*host).front().State, ModuleState::kActive);
     ASSERT_TRUE(host->PollCleanup(report));
 }
 
@@ -309,8 +323,8 @@ TEST(ScopeLifecycle, HandlesAndMovingHostPreserveOwnership)
     auto foreign = Host(otherDeclarations, report, state);
     ASSERT_TRUE(original);
     ASSERT_TRUE(foreign);
-    ASSERT_TRUE(original->Register(kModule, report));
-    ASSERT_TRUE(original->Activate(kModule, report));
+    ASSERT_TRUE(original->Register(original->Find(kModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(original->Activate(original->Find(kModule).value_or(ModuleHandle{}), report));
     auto moved = std::move(*original);
     ASSERT_FALSE(moved.CreateScope(Scope::kContext, foreign->HostScope(), report));
     ASSERT_FALSE(moved.CreateScope(Scope::kWorld, moved.HostScope(), report));
@@ -334,8 +348,8 @@ TEST(ScopeLifecycle, ManagementReentryAndAliasedReportDoNotCorruptOuterOperation
     const auto state = std::make_shared<Counters>();
     auto host = Host(declarations, report, state);
     ASSERT_TRUE(host);
-    ASSERT_TRUE(host->Register(kModule, report));
-    ASSERT_TRUE(host->Activate(kModule, report));
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report));
     state->Reenter = true;
     state->Host = &*host;
     state->SharedReport = &report;
@@ -355,24 +369,41 @@ TEST(ScopeLifecycle, FailedScopeWithoutHandleRemainsTrackedUntilWorkStops)
     const auto state = std::make_shared<Counters>();
     auto host = Host(declarations, report, state);
     ASSERT_TRUE(host);
-    ASSERT_TRUE(host->Register(kModule, report));
-    ASSERT_TRUE(host->Activate(kModule, report));
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report));
+    EXPECT_FALSE(host->CreateScope(Scope::kWorld, host->HostScope(), report));
+    EXPECT_EQ(report.PrimaryError, MakeModuleError(ModuleError::kInvalidScope));
+    EXPECT_EQ(report.Progress, ModuleOperationProgress::kUnchanged);
+    EXPECT_EQ(report.CleanupOwner, ModuleCleanupOwner::kNone);
     const auto first = host->CreateScope(Scope::kContext, host->HostScope(), report);
     ASSERT_TRUE(first);
     state->FailStartAt = 2;
     state->Finished = false;
     state->BusyValue = 2;
-    const auto failed = host->CreateScope(Scope::kContext, host->HostScope(), report);
-    const auto error = report.OriginalError;
+    {
+        ModuleOperationReport failure;
+        const auto failed = host->CreateScope(Scope::kContext, host->HostScope(), failure);
+        EXPECT_FALSE(failed);
+        if (!failed)
+        {
+            EXPECT_EQ(failed.error(), kFailure);
+        }
+        EXPECT_EQ(failure.OriginalError, kFailure);
+        EXPECT_EQ(failure.Progress, ModuleOperationProgress::kCleanupPending);
+        EXPECT_EQ(failure.CleanupOwner, ModuleCleanupOwner::kManagerCleanup);
+        EXPECT_FALSE(host->TryFinishCloseScope(failure.Scope, report));
+        EXPECT_EQ(report.PrimaryError, MakeModuleError(ModuleError::kScopeNotFound));
+        EXPECT_EQ(report.CleanupOwner, ModuleCleanupOwner::kNone);
+    }
     const auto busy = host->PollCleanup(report);
     state->Finished = true;
-    ASSERT_FALSE(failed);
-    ASSERT_EQ(failed.error(), kFailure);
-    ASSERT_EQ(error, kFailure);
     ASSERT_FALSE(busy);
     ASSERT_EQ(report.OriginalError, kFailure);
+    ASSERT_EQ(report.CleanupOwner, ModuleCleanupOwner::kManagerCleanup);
     ASSERT_TRUE(state->Exports.front().Access.TryBorrow());
     ASSERT_TRUE(host->PollCleanup(report));
+    ASSERT_EQ(report.OriginalError, kFailure);
+    ASSERT_EQ(report.CleanupOwner, ModuleCleanupOwner::kNone);
     ASSERT_EQ(state->Destroyed, 1);
     ASSERT_TRUE(host->BeginShutdown(report));
     ASSERT_TRUE(host->TryFinishShutdown(report));
@@ -405,11 +436,11 @@ TEST(ScopeLifecycle, RejectsCombinedAndLocalCyclesBeforeFactories)
         const auto second = Definition(kProviderModule, registerCycle);
         Fixture::gFirst = &first;
         Fixture::gSecond = &second;
-        auto host = StaticModuleHost::Create({kEntries}, declarations, {}, report);
+        auto host = pg::module::test::CreateManager({kEntries}, declarations, {}, report);
         ASSERT_TRUE(host);
-        ASSERT_TRUE(host->Register(kProviderModule, report));
-        ASSERT_TRUE(host->Register(kModule, report));
-        const auto cycle = host->Activate(kProviderModule, report);
+        ASSERT_TRUE(host->Register(host->Find(kProviderModule).value_or(ModuleHandle{}), report));
+        ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
+        const auto cycle = host->Activate(host->Find(kProviderModule).value_or(ModuleHandle{}), report);
         ASSERT_FALSE(cycle);
         ASSERT_EQ(cycle.error(), MakeModuleError(ModuleError::kDependencyCycle));
         ASSERT_EQ(state->Made, 0);
@@ -441,14 +472,14 @@ TEST(ScopeLifecycle, RejectsCombinedAndLocalCyclesBeforeFactories)
     };
     const auto definition = Definition(kModule, registerLocal);
     Fixture::gFirst = &definition;
-    auto host = StaticModuleHost::Create({std::span(kEntries).first<1>()}, declarations, {}, report);
+    auto host = pg::module::test::CreateManager({std::span(kEntries).first<1>()}, declarations, {}, report);
     ASSERT_TRUE(host);
-    ASSERT_TRUE(host->Register(kModule, report));
-    const auto cycle = host->Activate(kModule, report);
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
+    const auto cycle = host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report);
     ASSERT_FALSE(cycle);
     ASSERT_EQ(cycle.error(), MakeModuleError(ModuleError::kDependencyCycle));
     ASSERT_EQ(state->Made, 0);
-    ASSERT_EQ(host->Modules().front().State, StaticModuleState::kRegistered);
+    ASSERT_EQ(pg::module::test::BusinessSnapshots(*host).front().State, ModuleState::kRegistered);
 }
 
 TEST(ScopeLifecycle, ScopeBudgetIsCheckedBeforeCallbacksAndSlotsCanBeReused)
@@ -514,12 +545,12 @@ void ProviderWorkSurvivesBusyCleanup(bool indirect)
         StaticCatalogEntry{Fixture::QueryThird},
     };
     const std::span<const StaticCatalogEntry> selected = indirect ? std::span(entries) : std::span(entries).first(2);
-    auto host = StaticModuleHost::Create({selected}, declarations, {}, report);
+    auto host = pg::module::test::CreateManager({selected}, declarations, {}, report);
     ASSERT_TRUE(host);
-    for (const auto id : host->RegistrationOrder())
+    for (const auto id : pg::module::test::BusinessOrder(*host))
     {
-        ASSERT_TRUE(host->Register(id, report));
-        ASSERT_TRUE(host->Activate(id, report));
+        ASSERT_TRUE(host->Register(host->Find(id).value_or(ModuleHandle{}), report));
+        ASSERT_TRUE(host->Activate(host->Find(id).value_or(ModuleHandle{}), report));
     }
     state->Finished = false;
     state->BusyValue = 2;
@@ -559,8 +590,8 @@ TEST(ScopeLifecycle, ShutdownRetainsUnreturnedScopeFailure)
     const auto state = std::make_shared<Counters>();
     auto host = Host(declarations, report, state);
     ASSERT_TRUE(host);
-    ASSERT_TRUE(host->Register(kModule, report));
-    ASSERT_TRUE(host->Activate(kModule, report));
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report));
     state->FailStartAt = 1;
     state->Finished = false;
     const auto failed = host->CreateScope(Scope::kContext, host->HostScope(), report);
@@ -590,7 +621,8 @@ struct RetireCallback
     }
     ~RetireCallback()
     {
-        const auto result = State->Host->Register(kProviderModule, *State->SharedReport);
+        const auto result =
+            State->Host->Register(State->Host->Find(kProviderModule).value_or(ModuleHandle{}), *State->SharedReport);
         State->SawBusy = !result && result.error() == MakeModuleError(ModuleError::kBusy);
     }
     RetireCallback(const RetireCallback&) = delete;
@@ -623,19 +655,19 @@ TEST(ScopeLifecycle, FactoryRetirementBlocksSharedDeclarationReentry)
     { return context.Declare(kProvider, "nested metadata"); };
     const auto first = Definition(kModule, DeclareRetiringFactory);
     Fixture::gFirst = &first;
-    auto host = StaticModuleHost::Create({std::span(kEntries).first<1>()}, declarations, {}, report);
+    auto host = pg::module::test::CreateManager({std::span(kEntries).first<1>()}, declarations, {}, report);
     const auto second = Definition(kProviderModule, metadata);
     Fixture::gFirst = &second;
-    auto other = StaticModuleHost::Create({std::span(kEntries).first<1>()}, declarations, {}, report);
+    auto other = pg::module::test::CreateManager({std::span(kEntries).first<1>()}, declarations, {}, report);
     ASSERT_TRUE(host);
     ASSERT_TRUE(other);
     state->Host = &*other;
     state->SharedReport = &report;
-    ASSERT_TRUE(host->Register(kModule, report));
-    ASSERT_TRUE(host->BeginUnload(kModule, report));
-    ASSERT_TRUE(host->TryFinishUnload(kModule, report));
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->BeginUnload(host->Find(kModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->TryFinishUnload(host->Find(kModule).value_or(ModuleHandle{}), report));
     ASSERT_TRUE(state->SawBusy);
-    ASSERT_EQ(other->Modules().front().State, StaticModuleState::kLoaded);
+    ASSERT_EQ(pg::module::test::BusinessSnapshots(*other).front().State, ModuleState::kLoaded);
     ASSERT_TRUE(declarations.Declarations().empty());
     ASSERT_EQ(report.Module, kModule);
 }
@@ -672,17 +704,17 @@ TEST(ScopeLifecycle, FailedRegistrationRetiresFactoriesBeforeReporting)
         Fixture::gState = state;
         const auto first = Definition(kModule, callback);
         Fixture::gFirst = &first;
-        auto host = StaticModuleHost::Create({std::span(kEntries).first<1>()}, declarations, {}, report);
+        auto host = pg::module::test::CreateManager({std::span(kEntries).first<1>()}, declarations, {}, report);
         const auto metadata = [](RegistrationContext& context) noexcept -> pg::Status
         { return context.Declare(kProvider, "nested metadata"); };
         const auto second = Definition(kProviderModule, metadata);
         Fixture::gFirst = &second;
-        auto other = StaticModuleHost::Create({std::span(kEntries).first<1>()}, declarations, {}, report);
+        auto other = pg::module::test::CreateManager({std::span(kEntries).first<1>()}, declarations, {}, report);
         ASSERT_TRUE(host);
         ASSERT_TRUE(other);
         state->Host = &*other;
         state->SharedReport = &report;
-        const auto failed = host->Register(kModule, report);
+        const auto failed = host->Register(host->Find(kModule).value_or(ModuleHandle{}), report);
         ASSERT_FALSE(failed);
         ASSERT_EQ(failed.error(), expected);
         ASSERT_TRUE(state->SawBusy);
@@ -692,10 +724,10 @@ TEST(ScopeLifecycle, FailedRegistrationRetiresFactoriesBeforeReporting)
         ASSERT_EQ(report.PrimaryError, expected);
         ASSERT_EQ(report.OriginalError, expected);
         ASSERT_FALSE(report.CleanupError);
-        ASSERT_EQ(host->Modules().front().State, StaticModuleState::kCleanupPending);
-        ASSERT_EQ(other->Modules().front().State, StaticModuleState::kLoaded);
+        ASSERT_EQ(pg::module::test::BusinessSnapshots(*host).front().State, ModuleState::kCleanupPending);
+        ASSERT_EQ(pg::module::test::BusinessSnapshots(*other).front().State, ModuleState::kLoaded);
         ASSERT_TRUE(declarations.Declarations().empty());
-        ASSERT_TRUE(other->Register(kProviderModule, report));
+        ASSERT_TRUE(other->Register(other->Find(kProviderModule).value_or(ModuleHandle{}), report));
     }
 }
 
@@ -710,8 +742,8 @@ TEST(ScopeLifecycle, ReportSeparatesOriginalFailureFromCleanupResult)
         const auto state = std::make_shared<Counters>();
         auto host = Host(declarations, report, state);
         ASSERT_TRUE(host);
-        ASSERT_TRUE(host->Register(kModule, report));
-        ASSERT_TRUE(host->Activate(kModule, report));
+        ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
+        ASSERT_TRUE(host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report));
         if (mode == 0)
         {
             state->FailFactoryAt = 1;
@@ -748,11 +780,11 @@ TEST(ScopeLifecycle, ActivationReportSeparatesCleanupError)
     const auto state = std::make_shared<Counters>();
     auto host = Host(declarations, report, state);
     ASSERT_TRUE(host);
-    ASSERT_TRUE(host->Register(kModule, report));
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
     ASSERT_TRUE(host->CreateScope(Scope::kContext, host->HostScope(), report));
     state->FailStartAt = 1;
     state->PollError = kCleanupFailure;
-    const auto failed = host->Activate(kModule, report);
+    const auto failed = host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report);
     const auto snapshot = report;
     state->PollError.reset();
     state->Finished = true;
@@ -761,7 +793,7 @@ TEST(ScopeLifecycle, ActivationReportSeparatesCleanupError)
     ASSERT_EQ(snapshot.PrimaryError, kFailure);
     ASSERT_EQ(snapshot.OriginalError, kFailure);
     ASSERT_EQ(snapshot.CleanupError, kCleanupFailure);
-    ASSERT_TRUE(host->TryFinishUnload(kModule, report));
+    ASSERT_TRUE(host->TryFinishUnload(host->Find(kModule).value_or(ModuleHandle{}), report));
 }
 
 TEST(ScopeLifecycle, ShutdownCauseSurvivesRetiringFailedScopeAcrossPolls)
@@ -772,8 +804,8 @@ TEST(ScopeLifecycle, ShutdownCauseSurvivesRetiringFailedScopeAcrossPolls)
     const auto state = std::make_shared<Counters>();
     auto host = Host(declarations, report, state);
     ASSERT_TRUE(host);
-    ASSERT_TRUE(host->Register(kModule, report));
-    ASSERT_TRUE(host->Activate(kModule, report));
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report));
     ASSERT_TRUE(host->CreateScope(Scope::kContext, host->HostScope(), report));
     auto held = state->Exports.front().Access.TryBorrow();
     ASSERT_TRUE(held);
@@ -807,12 +839,12 @@ TEST(ScopeLifecycle, ShutdownDoesNotImportCompletedHistoricalFailure)
     const auto state = std::make_shared<Counters>();
     auto host = Host(declarations, report, state);
     ASSERT_TRUE(host);
-    ASSERT_TRUE(host->Register(kModule, report));
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
     ASSERT_TRUE(host->CreateScope(Scope::kContext, host->HostScope(), report));
     state->FailStartAt = 1;
-    const auto failed = host->Activate(kModule, report);
+    const auto failed = host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report);
     ASSERT_FALSE(failed);
-    ASSERT_TRUE(host->TryFinishUnload(kModule, report));
+    ASSERT_TRUE(host->TryFinishUnload(host->Find(kModule).value_or(ModuleHandle{}), report));
     ASSERT_TRUE(host->BeginShutdown(report));
     ASSERT_TRUE(host->TryFinishShutdown(report));
     ASSERT_FALSE(report.OriginalError);
@@ -863,19 +895,19 @@ TEST(ScopeLifecycle, InactiveDeclarationCycleDoesNotBlockUnrelatedActiveScope)
         StaticCatalogEntry{Fixture::QuerySecond},
         StaticCatalogEntry{Fixture::QueryThird},
     };
-    auto host = StaticModuleHost::Create({entries}, declarations, {}, report);
+    auto host = pg::module::test::CreateManager({entries}, declarations, {}, report);
     ASSERT_TRUE(host);
-    ASSERT_TRUE(host->Register(kThirdModule, report));
-    ASSERT_TRUE(host->Activate(kThirdModule, report));
-    ASSERT_TRUE(host->Register(kProviderModule, report));
-    ASSERT_TRUE(host->Register(kModule, report));
-    const auto rejected = host->Activate(kProviderModule, report);
+    ASSERT_TRUE(host->Register(host->Find(kThirdModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->Activate(host->Find(kThirdModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->Register(host->Find(kProviderModule).value_or(ModuleHandle{}), report));
+    ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
+    const auto rejected = host->Activate(host->Find(kProviderModule).value_or(ModuleHandle{}), report);
     ASSERT_FALSE(rejected);
     ASSERT_EQ(rejected.error(), MakeModuleError(ModuleError::kDependencyCycle));
     const auto scope = host->CreateScope(Scope::kContext, host->HostScope(), report);
     ASSERT_TRUE(scope);
     ASSERT_EQ(state->Made, 1);
-    ASSERT_EQ(host->Modules().back().State, StaticModuleState::kActive);
+    ASSERT_EQ(pg::module::test::BusinessSnapshots(*host).back().State, ModuleState::kActive);
 }
 
 TEST(ScopeLifecycle, FactoryMustOwnExactlyOneInactiveObject)
@@ -916,18 +948,312 @@ TEST(ScopeLifecycle, FactoryMustOwnExactlyOneInactiveObject)
         Fixture::gState = state;
         const auto definition = Definition(kModule, registration);
         Fixture::gFirst = &definition;
-        auto host = StaticModuleHost::Create({std::span(kEntries).first<1>()}, declarations, {}, report);
+        auto host = pg::module::test::CreateManager({std::span(kEntries).first<1>()}, declarations, {}, report);
         ASSERT_TRUE(host);
-        ASSERT_TRUE(host->Register(kModule, report));
-        const auto failed = host->Activate(kModule, report);
+        ASSERT_TRUE(host->Register(host->Find(kModule).value_or(ModuleHandle{}), report));
+        const auto failed = host->Activate(host->Find(kModule).value_or(ModuleHandle{}), report);
         ASSERT_FALSE(failed);
         ASSERT_EQ(failed.error(), MakeModuleError(ModuleError::kInvalidDeclaration));
         ASSERT_EQ(state->Started, 0);
         ASSERT_EQ(state->Destroyed, state->Made);
         ASSERT_FALSE((!state->Exports.empty() && state->Exports.front().Access.TryBorrow()));
-        ASSERT_TRUE(host->TryFinishUnload(kModule, report));
+        ASSERT_TRUE(host->TryFinishUnload(host->Find(kModule).value_or(ModuleHandle{}), report));
         ASSERT_TRUE(declarations.Declarations().empty());
     }
+}
+
+TEST(ScopeLifecycle, IncrementalLoadAndMoveKeepExistingScopeAccessStable)
+{
+    const Fixture callbacks;
+    RegistrationScope declarations;
+    ModuleOperationReport report;
+    const auto state = std::make_shared<Counters>();
+    auto manager = Host(declarations, report, state);
+    ASSERT_TRUE(manager);
+    const auto handle = *manager->Find(kModule);
+    ASSERT_TRUE(manager->Register(handle, report));
+    ASSERT_TRUE(manager->Activate(handle, report));
+    auto context = manager->CreateScope(Scope::kContext, manager->HostScope(), report);
+    ASSERT_TRUE(context);
+    auto borrowed = state->Exports.front().Access.TryBorrow();
+    ASSERT_TRUE(borrowed);
+    const auto second = Definition(kProviderModule, [](RegistrationContext&) noexcept -> pg::Status { return {}; });
+    Fixture::gSecond = &second;
+    const std::array candidates{ModuleLoadCandidate{StaticModuleCandidate{Fixture::QuerySecond}}};
+    const auto loaded = manager->Load(candidates, {}, report);
+    ASSERT_TRUE(loaded);
+    auto moved = std::move(*manager);
+    EXPECT_TRUE(moved.Inspect(handle));
+    EXPECT_TRUE(state->Exports.front().Access.TryBorrow());
+    EXPECT_EQ(state->Exports.front().Scope, *context);
+    borrowed = std::unexpected(MakeModuleError(ModuleError::kNotReady));
+}
+
+TEST(ScopeLifecycle, ShutdownConsumerParentDoesNotWaitForProviderChildScope)
+{
+    const Fixture callbacks;
+    RegistrationScope declarations;
+    ModuleOperationReport report;
+    const auto state = std::make_shared<Counters>();
+    Fixture::gState = state;
+    const auto providerRegistration = [](RegistrationContext& context) noexcept -> pg::Status
+    {
+        return context.DeclareFactory(
+            kProvider, Scope::kContext,
+            ScopeFactory(
+                [state = Fixture::gState](ScopeBuildContext& build) noexcept -> pg::Status
+                {
+                    auto access =
+                        build.Own(std::make_unique<Object>(state, ++state->Made, true, false),
+                                  ScopeHooks<Object>{.Start = Start, .RequestStop = Stop, .PollStopped = Poll});
+                    return access ? pg::Status{} : std::unexpected(access.error());
+                }));
+    };
+    const auto consumerRegistration = [](RegistrationContext& context) noexcept -> pg::Status
+    {
+        return context.DeclareFactory(
+            kObject, Scope::kHost,
+            ScopeFactory(
+                [state = Fixture::gState](ScopeBuildContext& build) noexcept -> pg::Status
+                {
+                    auto access =
+                        build.Own(std::make_unique<Object>(state, ++state->Made, false, true),
+                                  ScopeHooks<Object>{.Start = Start, .RequestStop = Stop, .PollStopped = Poll});
+                    return access ? pg::Status{} : std::unexpected(access.error());
+                }));
+    };
+    const std::array dependencies{ModuleDependency{.Id = kProviderModule}};
+    const auto first = Definition(kModule, consumerRegistration, dependencies);
+    const auto second = Definition(kProviderModule, providerRegistration);
+    Fixture::gFirst = &first;
+    Fixture::gSecond = &second;
+    auto manager = pg::module::test::CreateManager({kEntries}, declarations, {}, report);
+    ASSERT_TRUE(manager);
+    const auto provider = *manager->Find(kProviderModule);
+    const auto consumer = *manager->Find(kModule);
+    ASSERT_TRUE(manager->Register(provider, report));
+    ASSERT_TRUE(manager->Activate(provider, report));
+    ASSERT_TRUE(manager->CreateScope(Scope::kContext, manager->HostScope(), report));
+    ASSERT_TRUE(manager->Register(consumer, report));
+    ASSERT_TRUE(manager->Activate(consumer, report));
+    ASSERT_TRUE(manager->BeginShutdown(report));
+    ASSERT_TRUE(manager->TryFinishShutdown(report));
+    EXPECT_FALSE(state->BrokenOrder);
+    EXPECT_EQ(state->DestroyOrder, (std::vector<int>{2, 1}));
+}
+
+TEST(ScopeLifecycle, ShutdownRetainsResidentDeclarationsWhileBusinessIsBusy)
+{
+    const Fixture callbacks;
+    RegistrationScope declarations;
+    ModuleOperationReport report;
+    const auto state = std::make_shared<Counters>();
+    Fixture::gState = state;
+    const auto business = Definition(kModule, Fixture::Register);
+    const auto resident = Definition(kProviderModule, [](RegistrationContext& context) noexcept -> pg::Status
+                                     { return context.Declare(kProvider, "resident"); });
+    Fixture::gFirst = &business;
+    Fixture::gSecond = &resident;
+    std::vector<QueryModuleFn> queries(BuiltinResidentQueries().begin(), BuiltinResidentQueries().end());
+    queries.push_back(Fixture::QuerySecond);
+    auto manager = ModuleManager::Create(declarations, queries, {}, report);
+    ASSERT_TRUE(manager);
+    const auto root = *manager->Find(kProviderModule);
+    ASSERT_TRUE(manager->Register(root, report));
+    ASSERT_TRUE(manager->Activate(root, report));
+    const std::array candidates{ModuleLoadCandidate{StaticModuleCandidate{Fixture::QueryFirst}}};
+    auto loaded = manager->Load(candidates, {}, report);
+    ASSERT_TRUE(loaded);
+    const auto handle = loaded->Modules.front();
+    ASSERT_TRUE(manager->Register(handle, report));
+    ASSERT_TRUE(manager->Activate(handle, report));
+    const auto scope = manager->CreateScope(Scope::kContext, manager->HostScope(), report);
+    ASSERT_TRUE(scope);
+    state->Finished = false;
+    ASSERT_TRUE(manager->BeginShutdown(report));
+    EXPECT_EQ(report.CleanupOwner, ModuleCleanupOwner::kManagerShutdown);
+    EXPECT_TRUE(manager->BeginCloseScope(*scope, report));
+    EXPECT_EQ(report.CleanupOwner, ModuleCleanupOwner::kManagerShutdown);
+    EXPECT_FALSE(manager->TryFinishCloseScope(*scope, report));
+    EXPECT_EQ(report.CleanupOwner, ModuleCleanupOwner::kManagerShutdown);
+    const auto pending = manager->TryFinishShutdown(report);
+    EXPECT_EQ(report.CleanupOwner, ModuleCleanupOwner::kManagerShutdown);
+    const bool residentPreserved = std::ranges::any_of(declarations.Declarations(), [](const auto& declaration)
+                                                       { return declaration.Id == kProvider; });
+    state->Finished = true;
+    ASSERT_TRUE(manager->TryFinishShutdown(report));
+    EXPECT_FALSE(pending);
+    EXPECT_TRUE(residentPreserved);
+}
+
+TEST(ScopeLifecycle, ResidentConsumerDrainsBeforeBusinessProviderAndConfirmsLast)
+{
+    EXPECT_EXIT(
+        {
+            const Fixture callbacks;
+            RegistrationScope declarations;
+            ModuleOperationReport report;
+            const auto state = std::make_shared<Counters>();
+            Fixture::gState = state;
+            const auto resident = Definition(kModule, Fixture::RegisterDependent);
+            const auto business = Definition(kProviderModule, Fixture::RegisterProvider);
+            Fixture::gFirst = &resident;
+            Fixture::gSecond = &business;
+            std::vector<QueryModuleFn> queries(BuiltinResidentQueries().begin(), BuiltinResidentQueries().end());
+            queries.push_back(Fixture::QueryFirst);
+            auto manager = ModuleManager::Create(declarations, queries, {}, report);
+            if (!manager)
+            {
+                std::_Exit(90);
+            }
+            const std::array candidates{ModuleLoadCandidate{StaticModuleCandidate{Fixture::QuerySecond}}};
+            auto loaded = manager->Load(candidates, {}, report);
+            if (!loaded)
+            {
+                std::_Exit(90);
+            }
+            const auto provider = loaded->Modules.front();
+            const auto consumer = manager->Find(kModule).value_or(ModuleHandle{});
+            if (!manager->Register(provider, report) || !manager->Activate(provider, report) ||
+                !manager->CreateScope(Scope::kContext, manager->HostScope(), report) ||
+                !manager->Register(consumer, report) || !manager->Activate(consumer, report) ||
+                !manager->BeginShutdown(report))
+            {
+                std::_Exit(90);
+            }
+            const auto finished = manager->PollCleanup(report);
+            if (!finished)
+            {
+                std::_Exit(91);
+            }
+            if (!manager->Inspect(consumer) || manager->Inspect(provider) || state->BrokenOrder ||
+                state->DestroyOrder != std::vector<int>({11, 1}))
+            {
+                std::_Exit(92);
+            }
+            if (!manager->TryFinishShutdown(report) || manager->Inspect(consumer))
+            {
+                std::_Exit(93);
+            }
+            std::_Exit(0);
+        },
+        ::testing::ExitedWithCode(0), "");
+}
+
+TEST(ScopeLifecycle, ModuleUnloadPollPreservesUnreturnedScopeFailureOnlyUntilCompletion)
+{
+    const Fixture callbacks;
+    RegistrationScope declarations;
+    ModuleOperationReport report;
+    const auto state = std::make_shared<Counters>();
+    auto manager = Host(declarations, report, state);
+    ASSERT_TRUE(manager);
+    const auto module = manager->Find(kModule).value_or(ModuleHandle{});
+    ASSERT_TRUE(manager->Register(module, report));
+    ASSERT_TRUE(manager->Activate(module, report));
+    state->FailStartAt = 1;
+    state->Finished = false;
+    {
+        ModuleOperationReport failedScopeReport;
+        const auto failed = manager->CreateScope(Scope::kContext, manager->HostScope(), failedScopeReport);
+        const auto unload = manager->BeginUnload(module, failedScopeReport);
+        state->Finished = true;
+        ASSERT_FALSE(failed);
+        ASSERT_EQ(failed.error(), kFailure);
+        ASSERT_TRUE(unload);
+    }
+    report = {};
+    ASSERT_TRUE(manager->PollCleanup(report));
+    EXPECT_EQ(report.OriginalError, kFailure);
+    EXPECT_EQ(report.PrimaryError, kFailure);
+    EXPECT_FALSE(report.CleanupError);
+    EXPECT_FALSE(manager->Inspect(module));
+    EXPECT_EQ(state->Destroyed, 1);
+    ASSERT_TRUE(manager->BeginShutdown(report));
+    EXPECT_FALSE(report.OriginalError);
+    ASSERT_TRUE(manager->TryFinishShutdown(report));
+    EXPECT_FALSE(report.OriginalError);
+}
+
+TEST(ScopeLifecycle, IndirectResidentConsumerDrainsBeforeBusinessProviderAndConfirmsLast)
+{
+    EXPECT_EXIT(
+        {
+            const Fixture callbacks;
+            RegistrationScope declarations;
+            ModuleOperationReport report;
+            const auto state = std::make_shared<Counters>();
+            Fixture::gState = state;
+            constexpr ModuleId kRootConsumer{.Bytes = {std::byte{4}}};
+            const auto bridge = Definition(kModule, Fixture::RegisterDependent);
+            const auto business = Definition(kProviderModule, Fixture::RegisterProvider);
+            const auto root = Definition(
+                kRootConsumer,
+                [](RegistrationContext& context) noexcept -> pg::Status
+                {
+                    constexpr DeclarationId kRootObject{.Bytes = {std::byte{4}}};
+                    constexpr std::array kDependencies{ScopeDependency{.Id = kObject, .Scope = Scope::kContext}};
+                    return context.DeclareFactory(
+                        kRootObject, Scope::kContext,
+                        ScopeFactory(
+                            [state = Fixture::gState](ScopeBuildContext& build) noexcept -> pg::Status
+                            {
+                                const auto provider = build.Dependency<Object>(kObject);
+                                if (!provider)
+                                {
+                                    return std::unexpected(provider.error());
+                                }
+                                const auto access = build.Own(
+                                    std::make_unique<Object>(state, (*provider)->Value + 10, false, true),
+                                    ScopeHooks<Object>{.Start = Start, .RequestStop = Stop, .PollStopped = Poll});
+                                return access ? pg::Status{} : std::unexpected(access.error());
+                            }),
+                        kDependencies);
+                });
+            Fixture::gFirst = &bridge;
+            Fixture::gSecond = &business;
+            Fixture::gThird = &root;
+            std::vector<QueryModuleFn> queries(BuiltinResidentQueries().begin(), BuiltinResidentQueries().end());
+            queries.push_back(Fixture::QueryFirst);
+            queries.push_back(Fixture::QueryThird);
+            auto manager = ModuleManager::Create(declarations, queries, {}, report);
+            if (!manager)
+            {
+                std::_Exit(90);
+            }
+            const std::array candidates{ModuleLoadCandidate{StaticModuleCandidate{Fixture::QuerySecond}}};
+            auto loaded = manager->Load(candidates, {}, report);
+            if (!loaded)
+            {
+                std::_Exit(90);
+            }
+            const auto provider = loaded->Modules.front();
+            const auto middle = manager->Find(kModule).value_or(ModuleHandle{});
+            const auto consumer = manager->Find(kRootConsumer).value_or(ModuleHandle{});
+            if (!manager->Register(provider, report) || !manager->Activate(provider, report) ||
+                !manager->CreateScope(Scope::kContext, manager->HostScope(), report) ||
+                !manager->Register(middle, report) || !manager->Activate(middle, report) ||
+                !manager->Register(consumer, report) || !manager->Activate(consumer, report) ||
+                !manager->BeginShutdown(report))
+            {
+                std::_Exit(90);
+            }
+            if (!manager->PollCleanup(report))
+            {
+                std::_Exit(91);
+            }
+            if (!manager->Inspect(middle) || !manager->Inspect(consumer) || manager->Inspect(provider) ||
+                state->BrokenOrder || state->DestroyOrder != std::vector<int>({21, 11, 1}))
+            {
+                std::_Exit(92);
+            }
+            if (!manager->TryFinishShutdown(report) || manager->Inspect(middle) || manager->Inspect(consumer))
+            {
+                std::_Exit(93);
+            }
+            std::_Exit(0);
+        },
+        ::testing::ExitedWithCode(0), "");
 }
 
 } // namespace

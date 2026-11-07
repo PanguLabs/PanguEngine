@@ -1,5 +1,7 @@
 #pragma once
 
+#include <PanguModuleExport.h>
+
 #include <ModuleDeclaration.h>
 #include <ModuleIdentity.h>
 #include <Result.h>
@@ -27,7 +29,7 @@ struct RegisteredDeclaration
     std::uint64_t HostDomain{};
 };
 
-class StaticModuleHost;
+class ModuleManager;
 namespace detail
 {
 class ScopeRuntime;
@@ -51,7 +53,7 @@ public:
 
 private:
     friend class RegistrationContext;
-    friend class StaticModuleHost;
+    friend class ModuleManager;
     friend class detail::ScopeRuntime;
     struct Recipe
     {
@@ -69,7 +71,7 @@ private:
 
 // Callback-local borrowed transaction. Do not retain this object or its address.
 // Declares metadata and repeatable factories; it does not start services or work.
-class RegistrationContext final
+class PG_MODULE_API RegistrationContext final
 {
 public:
     ~RegistrationContext() = default;
@@ -84,7 +86,7 @@ public:
                                             std::string_view displayName = {}) noexcept;
 
 private:
-    friend class StaticModuleHost;
+    friend class ModuleManager;
     RegistrationContext(RegistrationScope& scope, ModuleId owner, std::uint64_t hostDomain = 0) noexcept;
 
     RegistrationScope& Scope;

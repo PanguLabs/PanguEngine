@@ -2,8 +2,8 @@
 
 测试构建目标与累计运行集合的契约见[测试分类与运行契约](testing.md)；实际命令和维护要求见 [Tests](../../Tests/README.md)。普通 ALL 与测试专用准备目标是不同入口。
 
-> 状态：Partially Frozen（CMake 4.0+、Ninja 原生增量、单 Module 单库、Target 命名空间及源码 Plugin/独立 Project 构建政策已冻结；最小源码插件接线已实现，完整发布/运行时 Loader 尚未实现）
-> 更新：2026-11-04
+> 状态：Partially Frozen（CMake 4.0+、Ninja 原生增量、单 Module 单库、Target 命名空间及源码 Plugin/独立 Project 构建政策已冻结；源码插件与统一 ModuleManager/Loader 已实现，实际平台验收单独记录，完整发布未实现）
+> 更新：2026-11-07
 > 决策：[ADR-0001：采用 CMake](../decisions/0001-adopt-cmake.md)、[ADR-0005：一个 Module 一个库](../decisions/0005-one-module-one-library.md)、[ADR-0012：构建树按宿主本地化](../decisions/0012-host-local-build-trees.md)、[ADR-0013：原生构建](../decisions/0013-native-build-abi-boundary.md)、[ADR-0014：源码 Plugin 与独立 Project](../decisions/0014-source-plugins-project-build.md)
 
 ## 已确定的决策
@@ -24,7 +24,7 @@
 
 依据 [ADR-0014](../decisions/0014-source-plugins-project-build.md)：Engine 可独立顶层构建；Game Project 自行选择 Toolchain、CTest、隔离 BuildRoot，通过 Engine 源码 `add_subdirectory()` 进入同一目标图。配置期仅从 Engine/Project 两个固定 `Plugins/` 根扫描直接子目录，所有候选必须同时包含 `Plugin.toml` + `CMakeLists.txt`，严格验证稳定 ID 和可选 SemVer。顶层每次 Configure（**包括无 Plugin**）都须通过宿主 Clang/C++23 独立增量构建并运行 `PanguBuildTool`（`toml++`、JSON）；不能因插件为空跳过。Plugin 显式启用后仍用 `EXCLUDE_FROM_ALL`，只由实际 Game/Editor/Tool Target 链接/依赖触发编译，部署和激活另行控制。
 
-已实现 `BuildTools/PanguBuildTool`、`cmake/PanguPlugins.cmake` 的发现/启用接线及 `cmake/PanguEngineRevision.cmake` 的 Project Git 锁定校验。`ENGINE_ROOT` / `PROJECT_ROOT` 参数指向持有 `Plugins/` 的工程根。Engine standalone 默认启用内部测试；嵌入 Project 时内部测试默认关闭，父级拥有 `BUILD_TESTING`，需要时另开 `PANGU_BUILD_ENGINE_TESTS`。Project 及 Game/Editor STATIC Catalog、Assets 和显式 SHARED 部署以正式测试夹具验收；生产 Loader、PanguMeta 和 App 发布未因此实现。平台命令、结果和性能证据见[本次验收](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md)。
+已实现 `BuildTools/PanguBuildTool`、`cmake/PanguPlugins.cmake` 的发现/启用接线及 `cmake/PanguEngineRevision.cmake` 的 Project Git 锁定校验。`ENGINE_ROOT` / `PROJECT_ROOT` 参数指向持有 `Plugins/` 的工程根。Engine standalone 默认启用内部测试；嵌入 Project 时内部测试默认关闭，父级拥有 `BUILD_TESTING`，需要时另开 `PANGU_BUILD_ENGINE_TESTS`。Project 及 Game/Editor STATIC Catalog、Assets 和显式 SHARED 部署以正式测试夹具验收；ModuleManager 原生 Loader 的当前实现与双模式实际验收见[新验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)；PanguMeta 和 App 发布未因此实现。平台命令、结果和性能证据见[本次验收](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md)。
 
 ## CMake Target 命名与职责（Frozen）
 
@@ -35,7 +35,8 @@
 | 无上述命名空间 | Pangu 自有构建策略、宿主程序、构建工具、测试或辅助库（不是 Module） | `PanguBuildOptions`、`PanguToolchainLinkTests` |
 
 ```cmake
-add_library(PanguFoundation STATIC Private/Error.cpp)
+pangu_module_library_type(moduleType)
+add_library(PanguFoundation ${moduleType} Private/Error.cpp)
 add_library(Pangu::Foundation ALIAS PanguFoundation)
 pangu_configure_module(PanguFoundation)
 
@@ -49,12 +50,9 @@ add_library(ThirdParty::NlohmannJson ALIAS ThirdPartyNlohmannJson)
 
 ## Monolithic / Modular 与 Module 库类型的边界
 
-**已确定的设计约束**：`STATIC` / `SHARED` 是 CMake 原生的 **Library Target 类型**，直接描述每个 Pangu Module 的编译、链接和产物；`Monolithic` / `Modular` **不是 Module 类型，也不是新的引擎架构层**。**只有在需要对整个 Engine / Game / Editor 统一施加部署或链接策略时，才将 Monolithic / Modular 作为顶层 CMake 构建选项**（如 Preset 或顶层 Cache 配置），不要求每个工程必须声明或选择该选项。
+依据 [ADR-0015](../decisions/0015-unified-link-modes-module-manager.md)，`PANGU_LINK_MODE=Monolithic|Modular` 在同一目标图统一全部 Pangu Module 为 STATIC/SHARED。桌面默认 Modular，Android/iOS 默认 Monolithic；Editor Modular 与 Game Monolithic 分别配置，不在同图为同 Module 建双目标。Engine 子目录服从父 Project 缓存或普通变量，非法枚举和同图中途改值配置期拒绝。
 
-- 顶层策略可影响 Module 的默认 `STATIC` / `SHARED` 选择及最终装配方式，但不能取代每个 Module 最终落实为唯一真实 CMake Library Target 的既有规则；允许因平台或功能需要显式混用两类目标。
-- `Monolithic` 不等于禁止所有动态 Plugin，`Modular` 也不等于所有 Module 必须为 `SHARED`；两者描述的是整体部署取向，而非逐 Module 类型。
-- CMake 内置的 `BUILD_SHARED_LIBS` 仅控制**未明确指定**库类型的 `add_library()`，不把它误当成 Pangu 的全局部署协议，也不无差别覆盖 ThirdParty 的库类型。
-- 顶层选项的**实际名称、默认值、Preset 组织、平台映射与是否需要实现**尚未冻结；本次仅确定其适用层级和按需引入原则。
+同一个 BuildRoot 可在上一验证会话结束后串行重新配置切换模式；模式改变由原生 CMake/Ninja 图重编/重链接，禁止混用旧发现/部署产物。无变化构建不新增扫描/生成/重链接。`BUILD_SHARED_LIBS` 不作为全局 Pangu 策略，也不影响 ThirdParty 的自有类型。Monolithic 的宿主 Catalog 保留归档根引用；Modular 每 Module 独立库、固定 Query，无内嵌逻辑 STATIC Module 或 LinkedStaticModules。
 
 ## 当前正式构建目录
 
@@ -78,7 +76,7 @@ macOS 使用 `ssh -o BatchMode=yes moozen-macos`，通过 `/Users/moozen/Windows
 
 `Build/` 已被 `.gitignore` 忽略。临时设计探针及其局部构建才使用 `.probe/`；此前 `.probe/module-public-api-build`、`.probe/module-public-api-linux` 和对应临时源码包已在正式构建验证后清理；**不得把其他已有 `.probe` 当成本次构建删除**。
 
-本节记录当前落地的目录组织、五平台最小 CMake Presets 和 **Module Identity 切片**编译证据；不意味着完整 Build System API、运行时注册/Loader、Android/iOS 应用链接、签名/真机或多平台 Runtime 已冻结/完成。
+本节定义当前目录组织与五平台 Preset 入口；目录本身不构成 Runtime 或设备验收证明。现行 ModuleManager/Loader、两模式真实应用链接与平台结果见[正式验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)，Public C++ ABI、完整发布、签名和真机运行仍未由此冻结或完成。
 
 ## 构建环境预检与基础回归（2026-10-22）
 
@@ -117,10 +115,10 @@ cmake/
 
 - `PanguPlatform.cmake` 在 `project(... LANGUAGES CXX)` 后按 **目标平台** 选择配置，并拒绝错误的 Clang 版本/不支持的平台；Android 只允许官方 NDK Toolchain 的 Clang，不套用桌面 LLVM 23 规则。
 - `PanguBuildOptions` 是无产物、无 `Pangu::` 别名的 **INTERFACE 编译策略 Target**，仅为显式依赖它的 Pangu 自有 Target 设置 C++23、`-fno-exceptions` 和基础告警参数；工具链/标准库选择由 Preset/Toolchain 在 `project()` 之前完成，普通 ThirdParty Target 不需要链接 `PanguBuildOptions`。Pangu 自有 Runtime、BuildTools、测试和基准保留 RTTI；框架与消费方保持 RTTI 一致，CRT/Iterator 等有效配置遵守平台工具链策略，不恢复逐 TU Collector。
-- `pangu_configure_module(<existing-target>)` 仅为现有 `add_library(... STATIC|SHARED ...)` Target **PRIVATE** 应用 Pangu 编译策略，并设置 PIC 和输出目录；必须**先创建**真实 Module Target，不隐式生成 Library、Manifest、Catalog 或 ModuleId。当前 `PanguModule` 通过 `add_library(PanguModule STATIC ...)` 建立，`Pangu::Module` 仅是 Alias。
+- `pangu_configure_module(<existing-target>)` 仅为现有 `add_library(... STATIC|SHARED ...)` Target **PRIVATE** 应用 Pangu 编译策略，并设置 PIC 和输出目录；必须**先创建**真实 Module Target，不隐式生成 Library、Manifest、Catalog 或 ModuleId。当前 `PanguModule` 通过 `pangu_module_library_type` 得到统一模式类型后创建，`Pangu::Module` 仅是 Alias。
 - 平台 Settings 负责目标特殊规则：Windows 使用 Clang + MSVC STL（Windows ARM 不在 v1）；Linux Toolchain 在 `project()` 前选择并核对匹配 LLVM 的 libc++ 头文件、`__config_site`、运行库及 RPATH；缺失时拒绝，不退回 `libstdc++`，不同安装布局可用 `PANGU_LIBCXX_ROOT` 显式覆盖；macOS Toolchain 统一选择 MacPorts Clang 23 与 libc++；Android 采用 NDK Clang；iOS 采用 MacPorts Clang 23 + 独立 iPhoneOS SDK。
 - `cmake/` 不写死本机工具链安装路径。Windows、Linux、macOS、iOS 从 `LLVM_ROOT` 派生编译器和 `clang-scan-deps` 路径，并校验编译器位于该安装目录内；Android 从 `ANDROID_HOME` 读取 SDK 目录、从 `ANDROID_NDK_HOME` 选择官方 NDK Toolchain，并校验实际使用的 NDK 与环境变量一致。
-- `Lib/` 存放 STATIC Library（以及平台归档产物）；`Bin/` 存放动态库/可执行程序。当前 Runtime 含 Foundation 错误值、Module Identity/Descriptor、STATIC Catalog 与声明事务切片，不意味着完整 Plugin、ModuleManager 或 Shader/Asset Pipeline 已实现。
+- `Lib/` 存放 STATIC Library（以及平台归档产物）；`Bin/` 存放动态库/可执行程序。当前 Runtime 含 Foundation 错误值/纯协议、ModuleManager、原生 Loader、Pin、增量 Scope 与声明事务；不意味着完整 EngineHost、ServiceRegistry 或 Shader/Asset Pipeline 已实现。
 - CMake Preset 默认 Ninja + Release，配置并导出 `compile_commands.json` 供 IDE/clang-tidy 使用；根目录通过 `BUILD_TESTING` 控制 `Tests/` 总入口。`BUILD_TESTING=OFF` 完整排除测试目标；交叉编译开启测试时保留编译型 Toolchain 验证，不创建需要设备运行的测试程序。Android ARM64/API29 与 iOS arm64/iOS18.0 是当前验收参数，**不是永久支持下限**。
 
 先在启动 CMake 的环境中设置下列变量；目录值由本机配置提供，不写入共享 Preset：
@@ -156,7 +154,11 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 
 本次将 Linux/macOS 标准库参数从 `PanguBuildOptions` 迁移至 Toolchain，**升级已有构建目录时必须使用** `cmake --fresh --preset <name>` 使 `CMAKE_CXX_FLAGS_INIT` 与链接参数重新初始化；之后可使用普通 `cmake --preset <name>`。切换 `LLVM_ROOT` 或 SDK/NDK 时也应重新配置。不同平台及 Host 的二进制缓存必须独立；更换构建根时重新配置，禁止复用旧目录的 CMake Cache。
 
-**尚未冻结/实现**：`pangu_configure_module` 的长期包装 API、完整工具链锁定（Windows SDK/MSVC STL、Linux libc++ ABI 配置、各平台 SDK 的精确 Profile）、PanguMeta、Monolithic/Modular 顶层策略、完整安装/分发和多配置产物政策。源码 Plugin/独立 Project 已提供最小构建接线，不将测试夹具提升为完整发布链路或跨平台 ABI 安全证明。
+当前统一链接选项为 `PANGU_LINK_MODE=Monolithic|Modular`：同图全部 Pangu Module 分别使用原生 STATIC 或 SHARED Target，桌面默认 Modular，Android/iOS 默认 Monolithic。Engine 子目录服从父 Project 的缓存或普通变量选择；非法值及同图中途改值在配置期拒绝。ThirdParty 不受该选项影响。同一构建树可重新配置切换模式。
+
+`pangu_configure_module(target EXPORT_MACRO macro)` 验证目标类型并生成 PUBLIC 构建包含目录中的 `<Target>Export.h`；Foundation/Module 分别使用 `PG_FOUNDATION_API`、`PG_MODULE_API`，显式标注所需符号，不使用自动导出全部符号。`pangu_export_module_query(TARGET target QUERY function HEADER header)` 仅为 SHARED Target 编译固定 `PanguModuleQueryV1` 包装。ModuleManager 已消费真实 Loader，当前阶段证据与最终平台矩阵分别记录于[正式验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。
+
+**尚未冻结/实现**：`pangu_configure_module` 的长期包装 API、完整工具链锁定（Windows SDK/MSVC STL、Linux libc++ ABI 配置、各平台 SDK 的精确 Profile）、PanguMeta、完整安装/分发和多配置产物政策。源码 Plugin/独立 Project 已提供最小构建接线，不将测试夹具提升为完整发布链路或跨平台 ABI 安全证明。
 
 ## “一个 Module 一个库”的范围
 
@@ -168,11 +170,11 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 | 生成代码 | 作为该 Module 目标的源文件，不创建第二个 Module 库 |
 | 主要产物 | 一个 `.a` / 静态 `.lib`，或一个 `.dll` / `.so` / `.dylib` |
 | 辅助产物 | Windows 的 import `.lib`、PDB 等不算第二个 Module |
-| STATIC 运行期 | 最终链接到 EXE 或动态库；归档本身不能被单独卸载 |
+| STATIC 运行期 | Monolithic 最终链接到 Host；归档不能单独卸载，不嵌入另一个逻辑 SHARED Module |
 | SHARED 运行期 | Module 加载器直接管理库句柄和 CodePin，不另建 BinaryImage 架构层 |
 | Host/Tool/ThirdParty | 可有自己的普通 CMake Target，但不因此违反 Pangu Module 规则 |
 
-对于 STATIC Module 被链接进可卸载动态库的情形，代码驻留保护 **MUST 覆盖实际承载代码的动态库**；单库构建关系不等同于独立运行时可卸载性。
+普通 ThirdParty STATIC 代码可进入动态库；逻辑 Pangu Module 按统一模式构建，不能恢复旧混合承载。代码、对象及释放器均需受实际驻留保护。
 
 ## 与旧方案的关系
 
@@ -195,12 +197,12 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 | 主题 | 待决问题 |
 | --- | --- |
 | CMake 组织 | 根工程、五平台 Presets 和最小 Module 设置已经落地；长期封装 API、Generator 组合、多配置与完整目标 Toolchain 管理尚未冻结 |
-| 库类型与部署策略 | `STATIC` / `SHARED` 是逐 Module CMake Target 类型；`Monolithic` / `Modular` 仅在需要统一部署策略时作为顶层 CMake 选项。具体默认库类型、Preset、平台策略与选项命名待决 |
+| 库类型与部署策略 | `PANGU_LINK_MODE` 已统一 Module 的 STATIC/SHARED 类型和平台默认值；完整安装与部署政策仍待实现 |
 | 产物布局 | 库、Manifest、符号文件、动态库导出、安装和分发目录 |
 | Meta 生成 | Clang 属性提取、代码生成、增量依赖、多配置构建 |
 | ABI | 同树构建普通零 AbiProfile 由 ADR-0013 保留；Pangu Plugin/SDK 独立二进制 Preflight 已被 ADR-0014 取消。运行时 SHARED Query、ModuleId、CodePin 与第三方 ABI 审核仍有各自责任 |
 | ThirdParty | Source/Binary 版本、目标导出与平台链接 |
-| 交叉编译 | Android ARM64/iOS ARM64 的历史 STATIC 编译与归档结果已记录；新方案需验证原生编译与独立链接冒烟，设备执行和外部 SHARED 加载仍待验收 |
+| 交叉编译 | Android/iOS 两模式正式根构建、Runtime/业务库和独立 Project 最终链接按新验收记录；设备执行、打包、签名不在本轮范围 |
 
 ## 验证要求
 
@@ -208,7 +210,7 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 
 ## 现行 Toolchain 与 ThirdParty 回归
 
-`BUILD_TESTING=ON` 时，`Tests/Toolchain/` 的 `ThirdParty::CompiledProbe` 和 `Pangu::ToolchainProbe` 使用所选平台 Clang/C++23 编译为真实 STATIC 库。普通第三方库不继承 `PanguBuildOptions`；桌面 `ToolchainLibraryLink` 通过链接两个库并运行 CTest 验证跨库 C++23 返回值。编译器/头依赖与命令变更导致的重编由 CMake + Ninja 判断，不执行自制 ABI 审计。
+`BUILD_TESTING=ON` 时，`Tests/Toolchain/` 的两个 Probe 使用所选平台 Clang/C++23 编译为真实库：`ThirdParty::CompiledProbe` 始终为 STATIC，`Pangu::ToolchainProbe` 服从统一链接模式。普通第三方库不继承 `PanguBuildOptions`；桌面 `ToolchainLibraryLink` 通过链接两个库并运行 CTest 验证跨库 C++23 返回值。编译器/头依赖与命令变更导致的重编由 CMake + Ninja 判断，不执行自制 ABI 审计。
 
 `BUILD_TESTING=OFF` 时不构建上述测试目标。Android/iOS 正式 Preset 默认关闭 Tests；单独的移动平台最终链接冒烟须由显式目标执行，不纳入默认 `ALL`。详情见 [Toolchain 测试](../../Tests/Toolchain/README.md)。
 

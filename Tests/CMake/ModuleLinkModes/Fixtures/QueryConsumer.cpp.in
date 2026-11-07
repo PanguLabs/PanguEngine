@@ -1,0 +1,10 @@
+#include <FixtureModules.h>
+#include <ModuleDescriptor.h>
+#include <PanguCatalog@name@Export.h>
+
+extern "C" PG_CATALOG_@upperName@_API const pg::module::ModuleDefinition* PanguModuleQueryV1() noexcept;
+
+int main()
+{
+    return PanguModuleQueryV1() == pg::module::fixture::Query@name@() ? 0 : 1;
+}

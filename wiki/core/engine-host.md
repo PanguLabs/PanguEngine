@@ -1,7 +1,7 @@
 # Pangu EngineHost 设计基线
 
 > 状态：Partially Frozen（宿主职责、与三种 Service 模式的边界冻结；启动与生命周期 API 未冻结）
-> 更新：2026-10-20
+> 更新：2026-11-07
 > 决策：[ADR-0002](../decisions/0002-name-engine-host.md)
 
 ## 背景
@@ -17,9 +17,11 @@ PanguEngine 需要同时支持 Game、Editor 以及工具型宿主。早期使�
 5. Host 负责或协调依赖对象的生命周期闭包：Module 代码、Task、Callback、Resource、Allocator 及 GPU 工作都可能影响关闭或卸载的完成时机。
 6. 不采用**强制 C Bootstrap** 作为整套引擎架构的基础；必要的 ABI 边界互操作仍可使用 C 接口。
 
-源码 Plugin 与独立 Project 的构建边界由 [ADR-0014](../decisions/0014-source-plugins-project-build.md) 规定。Game/Editor fixture 已验证各自 STATIC Catalog 及按消费者构建的模块集合；SHARED 显式部署只产生文件，不等于 EngineHost 运行时激活、动态 Loader 或 CodePin 已实现。具体已验证平台见[验收记录](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md)。
+源码 Plugin 与独立 Project 的构建边界由 [ADR-0014](../decisions/0014-source-plugins-project-build.md) 规定。Game/Editor fixture 已接入双模式：Mono Catalog 保留根引用，Modular 显式 Load/Register/Activate 真实业务库并关闭，消费集合与部署分离；Foundation/Module 宿主常驻仍显式启动，失败整体 Shutdown。当前 ModuleManager 不等于完整 EngineHost；平台/模式与限制见[正式验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。
 
 以上不意味着每一个生命周期阶段都有固定枚举名或必须由单个类直接执行。
+
+ELF 可执行宿主若参与跨 DSO 公共类型 RTTI（例如宿主常驻 Factory 消费业务 DLL 的类型），除了类型本身正确的可见性，还需将相关公开符号放入主程序动态符号表，可通过 CMake `ENABLE_EXPORTS` 实现。当前 Linux Modular 的 `PanguModuleUnloadTests` 按此设置，其它没有同类参与的 Host 不强行开启。该设置不替代 Module 的最小导出/私有隐藏，也不引入逐类型锚点；公共符号的名称冲突与插入风险仍须受受控 ABI/ODR 约束。
 
 ## 概念关系
 

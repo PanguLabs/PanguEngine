@@ -1,5 +1,7 @@
 # STATIC Module Scope 装配与生命周期
 
+> 状态修订：Partially Superseded（2026-11-06）。StaticModuleHost、混合/同库承载与整体 Shutdown 顺序以[新批准规格](2026-11-06-module-manager-link-modes-design.md)及 [ADR-0015](../../../wiki/decisions/0015-unified-link-modes-module-manager.md) 为准；其它有效测试/身份/所有权契约保留。以下保留当时设计与结果，不改写为当前 Modular 验收。
+
 > 状态：实施设计，C++ API/ABI 仍为 Draft。用户已要求继续此前提出的 STATIC 闭环：实际工厂、多 Scope 独立装配、激活/回滚、Busy 排空和逆序清理。下述具体存储与签名为本轮实现选择，不新增架构冻结。
 > 基线：`c518990`；分支 `feature/module-scope-lifecycle`；不自动提交/推送。
 

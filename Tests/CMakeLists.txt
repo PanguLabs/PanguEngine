@@ -20,6 +20,7 @@ add_subdirectory(Foundation)
 add_subdirectory(Module)
 add_subdirectory(CMake/SourcePlugins)
 add_subdirectory(CMake/Testing)
+add_subdirectory(CMake/ModuleLinkModes)
 
 include("${PROJECT_SOURCE_DIR}/cmake/PanguBuildToolsTesting.cmake")
 pangu_add_build_tools_tests(TOOL_NAME PanguBuildTool

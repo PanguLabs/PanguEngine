@@ -73,15 +73,11 @@ TEST(ScopeAccess, EveryGateRejectsNewBorrowAndPreservesOldBorrow)
     }
 }
 
-TEST(ScopeAccess, RejectsEmptyAndWrongType)
+TEST(ScopeAccess, RejectsEmpty)
 {
     const auto empty = ScopeAccess<int>{}.TryBorrow();
     ASSERT_FALSE(empty);
     EXPECT_EQ(empty.error(), MakeModuleError(ModuleError::kNotReady));
-    ScopeAccessFixture const fixture;
-    const auto mismatch = detail::ScopeAccessMaker::Make<double>(fixture.Control);
-    ASSERT_FALSE(mismatch);
-    EXPECT_EQ(mismatch.error(), MakeModuleError(ModuleError::kTypeMismatch));
 }
 
 TEST(ScopeAccess, FactoryOwnsMoveOnlyCapture)

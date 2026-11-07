@@ -1,5 +1,7 @@
 #pragma once
 
+#include <PanguModuleExport.h>
+
 #include <ModuleError.h>
 #include <Result.h>
 
@@ -8,7 +10,6 @@
 #include <exception>
 #include <expected>
 #include <memory>
-#include <type_traits>
 #include <utility>
 
 namespace pg::module
@@ -17,6 +18,7 @@ template <class T>
 class ScopeAccess;
 template <class T>
 class ScopeBorrow;
+class ScopeBuildContext;
 
 namespace detail
 {
@@ -60,30 +62,18 @@ private:
     std::atomic<std::uint64_t> State{kClosed};
 };
 
-template <class T>
-[[nodiscard]] const void* ScopeTypeToken() noexcept
-{
-    // Writable storage prevents identical-constant folding. This is a same-binary
-    // C++ type check, never a persistent Module/Service/Declaration identity.
-    // NOLINTNEXTLINE(misc-const-correctness)
-    static unsigned char token{};
-    return &token;
-}
-
 struct ScopeObjectControl
 {
     std::shared_ptr<ScopeGate> Module;
     std::shared_ptr<ScopeGate> Scope;
     ScopeGate Gate;
     void* Object{};
-    const void* Type{};
 };
 
-struct ScopeAccessMaker
-{
-    template <class T>
-    [[nodiscard]] static pg::Result<ScopeAccess<T>> Make(std::shared_ptr<ScopeObjectControl> control) noexcept;
-};
+// 分配及 shared_ptr 最终释放入口均由常驻 Runtime 提供，不依赖业务 DLL。
+[[nodiscard]] PG_MODULE_API std::shared_ptr<ScopeGate> MakeScopeGate() noexcept;
+[[nodiscard]] PG_MODULE_API std::shared_ptr<ScopeObjectControl>
+MakeScopeObjectControl(std::shared_ptr<ScopeGate> module, std::shared_ptr<ScopeGate> scope, void* object) noexcept;
 } // namespace detail
 
 // Owns only access protection, not the object. Release is safe on another thread.
@@ -165,21 +155,11 @@ public:
     }
 
 private:
-    friend struct detail::ScopeAccessMaker;
+    friend class ScopeBuildContext;
     explicit ScopeAccess(std::shared_ptr<detail::ScopeObjectControl> control) noexcept
         : Control(std::move(control))
     {
     }
     std::shared_ptr<detail::ScopeObjectControl> Control;
 };
-
-template <class T>
-pg::Result<ScopeAccess<T>> detail::ScopeAccessMaker::Make(std::shared_ptr<ScopeObjectControl> control) noexcept
-{
-    if (!control || control->Type != ScopeTypeToken<std::remove_cv_t<T>>())
-    {
-        return std::unexpected(MakeModuleError(ModuleError::kTypeMismatch));
-    }
-    return ScopeAccess<T>{std::move(control)};
-}
 } // namespace pg::module

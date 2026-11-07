@@ -4,6 +4,8 @@
 > 日期：2026-10-20
 > 权威规范：[Plugin / Module](../core/plugin-module.md)、[Build System](../foundation/build-system.md)
 
+> 部分被替代：[ADR-0015](0015-unified-link-modes-module-manager.md)。保留唯一 Target/主要产物；Decision 6 中逻辑 STATIC Module 嵌入可卸载 SHARED 的允许范围由 ADR-0015 替代，统一模式见现行规范。
+
 ## Context
 
 此前 Plugin / Module 方案允许逻辑 Module、多个 CMake Target 和动态镜像之间存在复杂映射，并额外讨论了 BinaryImage 描述/管理层。这样的灵活性增加了 Module 身份、注册、ABI 校验与安全卸载的协同成本。
