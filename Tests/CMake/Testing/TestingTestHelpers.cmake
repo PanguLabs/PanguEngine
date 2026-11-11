@@ -43,6 +43,8 @@ function(TestingConfigure)
         -S "${arg_SOURCE}" -B "${binary}" -G Ninja
         "-DCMAKE_CXX_COMPILER=${PANGU_TEST_COMPILER}" -DCMAKE_BUILD_TYPE=Release
         "-DPANGU_ENGINE_ROOT=${PANGU_ENGINE_ROOT}"
+        "-DPANGU_META_SDK_CONFIG=${PANGU_META_SDK_CONFIG}"
+        "-DPANGU_META_HOST_BUILD_ROOT=${PANGU_META_HOST_BUILD_ROOT}"
         "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}" ${options} ${arg_ARGS})
     set(Testing_BINARY "${binary}" PARENT_SCOPE)
 endfunction()

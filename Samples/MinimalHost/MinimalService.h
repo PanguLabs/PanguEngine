@@ -51,12 +51,12 @@ inline constexpr module::DeclarationId kContextDeclaration{
 
 // POSIX 允许宿主与动态库按 RTTI 值匹配，Windows 不引入业务 DLL 类型导入。
 #ifdef _WIN32
-struct CounterService
+struct [[pga::Type]] CounterService
 #else
-struct __attribute__((visibility("default"))) CounterService
+struct [[pga::Type]] __attribute__((visibility("default"))) CounterService
 #endif
 {
-    int Value{};
+    [[pga::Field]] int Value{};
 };
 
 [[nodiscard]] inline Result<module::ScopeAccess<CounterService>> AcquireCounter(const engine::EngineHost& host,

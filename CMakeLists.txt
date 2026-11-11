@@ -12,17 +12,25 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+set(PANGU_META_SDK_CONFIG "" CACHE FILEPATH "Explicit prepared host SDK required by Query/Catalog and scan tasks")
 
 include(cmake/Platform/Common/BuildOptions.cmake)
 include(cmake/PanguPlatform.cmake)
 include(cmake/PanguLinkMode.cmake)
 pangu_initialize_link_mode()
+include(cmake/PanguBuildLayout.cmake)
+pangu_initialize_build_layout()
+include(cmake/PanguRuntimeDeployment.cmake)
 include(cmake/Platform/Common/Module.cmake)
 
-add_subdirectory(Source/ThirdParty/NlohmannJson)
-add_subdirectory(Source/Runtime/Foundation)
-add_subdirectory(Source/Runtime/Module)
-add_subdirectory(Source/Runtime/EngineHost)
+pangu_owned_build_root(_pangu_engine_root engine)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${_pangu_engine_root}/Lib")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${_pangu_engine_root}/Bin")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${_pangu_engine_root}/Bin")
+foreach(directory IN ITEMS Source/ThirdParty/NlohmannJson Source/Runtime/Foundation Source/Runtime/Module Source/Runtime/EngineHost)
+    pangu_add_owned_subdirectory(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${directory}"
+        OWNER engine RELATIVE_BINARY_DIR "${directory}")
+endforeach()
 
 if(_pangu_engine_standalone)
     include(CTest)
@@ -49,16 +57,19 @@ endif()
 
 option(PANGU_BUILD_SAMPLES "Build PanguEngine samples" OFF)
 if(PANGU_BUILD_SAMPLES)
-    add_subdirectory(Samples/MinimalHost)
+    pangu_add_owned_subdirectory(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Samples/MinimalHost"
+        OWNER engine RELATIVE_BINARY_DIR Samples/MinimalHost)
 endif()
 
 if(BUILD_TESTING AND PANGU_BUILD_ENGINE_TESTS)
-    add_subdirectory(Tests)
+    pangu_add_owned_subdirectory(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Tests"
+        OWNER engine RELATIVE_BINARY_DIR Tests)
 endif()
 
 option(PANGU_BUILD_BENCHMARKS "Build native performance benchmarks" OFF)
 if(PANGU_BUILD_BENCHMARKS AND NOT CMAKE_CROSSCOMPILING)
     include(cmake/PanguTestDependencies.cmake)
     pangu_require_googlebenchmark()
-    add_subdirectory(Tests/Module/Benchmarks)
+    pangu_add_owned_subdirectory(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Tests/Module/Benchmarks"
+        OWNER engine RELATIVE_BINARY_DIR Tests/Module/Benchmarks)
 endif()

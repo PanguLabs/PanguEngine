@@ -104,7 +104,7 @@ JSON byte 数受宿主绝对路径和换行影响，不作跨宿主定长断言�
 | Android ARM64 / Windows | `Build/Android/PlanSourcePlugins/EngineFinal` | 未运行设备测试，Preset 关闭 BUILD_TESTING | Configure 实际运行 Windows 宿主工具 | Engine STATIC 归档；MyGame/MyEditor 最终链接为 AArch64 ELF，显式 SHARED 构建和文件部署 |
 | iOS ARM64 / Mac | `$HOME/PanguEngineBuild/iOS/PlanSourcePlugins/EngineFinal` | 未运行设备测试，Preset 关闭 BUILD_TESTING | Configure 实际运行 macOS 宿主工具 | Engine STATIC 归档；MyGame/MyEditor 最终链接为 ARM64 Mach-O，显式 SHARED 构建和文件部署 |
 
-Windows 比 Linux/macOS 多一项 `SourcePluginBuildToolSourceChange`，其余正式插件集成测试均注册在三桌面 CTest。三个原生工具测试为 `PluginManifest`、`PluginDiscovery`、`PluginCli`；原有 13 个 Engine 测试保留。窗口/完整 EngineHost、PanguMeta、生产 SHARED Loader、动态 CodePin、签名、App 打包、Simulator、设备执行/加载/卸载均未据此验收。
+Windows 比 Linux/macOS 多一项 `SourcePluginBuildToolSourceChange`，其余正式插件集成测试均注册在三桌面 CTest。三个原生工具测试为 `PluginManifest`、`PluginDiscovery`、`PluginCli`；原有 13 个 Engine 测试保留。窗口/完整 EngineHost、PanguMetaTool、生产 SHARED Loader、动态 CodePin、签名、App 打包、Simulator、设备执行/加载/卸载均未据此验收。
 
 ### 可复跑命令与宿主/目标隔离
 

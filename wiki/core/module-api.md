@@ -1,7 +1,7 @@
 # Pangu ModuleDescriptor & Registration API v1
 
 > 状态：**Partially Frozen**。身份、依赖、注册、Scope、代码驻留和操作后置条件是现行行为契约；Public C++ 签名、布局、ABI 和长期封装 API 未冻结。
-> 更新：2026-11-07
+> 更新：2026-11-11
 > 决策：[ADR-0015：统一链接模式与 ModuleManager](../decisions/0015-unified-link-modes-module-manager.md)，保留 ADR-0010/0011 未被替代的行为；源码交付边界沿用 ADR-0014。
 > 代码状态：Task 1–7 已实现统一模式、ModuleManager、原生 Loader、Pin 和动态 Scope。实际平台/模式、首轮与重跑、限制见[正式验收记录](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)，不从设计状态推断平台已通过。
 
@@ -115,7 +115,7 @@ CleanupOwner 表示继续清理的协调责任，调用方仍依据原操作与 
 
 ## 8. 冻结范围与后续 API/ABI 门槛
 
-ADR-0015 替代混合类型、同库 Catalog 和常驻执行失败的旧规则，身份/精确版本、显式依赖、声明事务、Scope 局部回滚、所有权和安全清理继续有效。本文叙述现有实现 API，**不冻结 Public C++ 布局、符号 ABI、长期 CMake API 或跨配置二进制兼容性**。未来 PanguMeta 可生成显式 Query/Catalog，但不得改变单库和强类型边界；本实现不依赖 Meta。
+ADR-0015 替代混合类型、同库 Catalog 和常驻执行失败的旧规则，身份/精确版本、显式依赖、声明事务、Scope 局部回滚、所有权和安全清理继续有效。本文叙述现有实现 API，**不冻结 Public C++ 布局、符号 ABI、长期 CMake API 或跨配置二进制兼容性**。PanguMetaTool 已生成显式 Query/Catalog，保持单库和强类型边界；Module Runtime 不依赖 LLVM/Clang。
 
 EngineHost 最小生命周期已实现；完整 Contract/Registry Service、TaskScheduler/GPU 集成、Hot Reload/状态迁移、安装/发布和移动设备政策仍属后续。历史独立二进制插件 Preflight 已由 ADR-0014 取消，不是当前冻结待办。
 
@@ -180,3 +180,7 @@ llvm-readobj --coff-exports .probe/module-api-freeze/build-win/probe_shared.dll
 ```
 
 本轮未完成 macOS/Android/iOS 的此组验收。早期受限会话中 WSL 返回 `E_ACCESSDENIED`；本轮通过获准的 WSL 执行完成了上述 Linux 复验。Android 四 ABI 的工具链 smoke 探针已另行重建，但不能代替本接口验收；macOS/iOS 未运行本探针。测试动态库为同次构建的固定夹具，未实现可信预检；它不降低 ADR-0010 对生产 SHARED Loader 的 Fail Closed 要求。
+
+## 可选元数据提供者
+
+ModuleDefinition.Metadata 可为空；存在时验证 Owner 与 Definition.Descriptor.Id 一致、条目 RTTI/Info 指针有效，并拒绝提供者内重复 RTTI/显式 TypeId。`ModuleMetaBorrow` 仅移动并自持该 Module CodePin，允许无 Service 的 Module。关闭拒绝新借用，旧借用阻止卸载完成；它不保护对象实例，实例仍使用 ScopeBorrow。Query 与生成 Traits 共用公共 C++ ModuleId 常量，CMake 不复制身份值。具体 API 仍未冻结；实现与真实卸载证据见[Meta 验收](../../docs/superpowers/plans/2026-11-09-pangumeta-tool-validation.md)。

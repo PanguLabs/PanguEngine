@@ -25,11 +25,11 @@ Plugin / Module 体系要兼顾静态构建与动态扩展、Game 与 Editor 运
 ## 单 Module 单库构建规则（Frozen）
 
 1. 每个 Pangu Module **MUST 对应唯一一个实际 CMake Library Target**，类型为 `STATIC` 或 `SHARED`，只生成一个主要静态库或动态库。
-2. 同一 Module 的源码、公开/私有依赖和 PanguMeta 生成的注册代码统一附着到这个目标；不得把一个 Module 拆成多个 Module Library Target，也不得把不同逻辑 Module 混为同一个 Module Target。
+2. 同一 Module 的源码、公开/私有依赖和 PanguMetaTool 生成的注册代码统一附着到这个目标；不得把一个 Module 拆成多个 Module Library Target，也不得把不同逻辑 Module 混为同一个 Module Target。
 3. CMake `ALIAS` 不是第二个真实目标；Windows SHARED 随附的 import `.lib`、PDB 等是辅助产物，不属于第二个 Module。
 4. ThirdParty/工具/宿主可以有普通 CMake Target，但它们不会因此自动变为某个 Module 的额外 Library Target；Plugin 本身不要求生成 CMake Library。
 5. 全部逻辑 Pangu Module 按统一模式构建，Monolithic 归档最终进入 Host，不嵌入另一个逻辑 SHARED Module；Modular 每 Module 独立动态库。普通 ThirdParty 不受模式限制，回调和释放器仍须受实际代码驻留保护。
-6. 本规则冻结 Module 构建映射及下述 CMake Target 命名空间规则，**不冻结** `pg_add_module()`、物理库文件名、Manifest、PanguMeta 注册入口或工具链平台加载函数。
+6. 本规则冻结 Module 构建映射及下述 CMake Target 命名空间规则，**不冻结** `pg_add_module()`、物理库文件名、Manifest、PanguMetaTool 注册入口或工具链平台加载函数。
 
 ## Module 与 ThirdParty 的构建边界（Frozen）
 
@@ -88,7 +88,7 @@ Plugin / Module 体系要兼顾静态构建与动态扩展、Game 与 Editor 运
 | `Plugin.toml` | 源码 Plugin 必需；`[plugin].id` 全局唯一，形如 `pangu.physics` 的受限小写 ID，`name` 为可选字符串，`version` 为可选 SemVer 2.0.0；ADR-0014 的严格解析、双根发现和显式启用已实现，见[验收](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md) |
 | `Module.toml` | **不再视为强制文件**；CMake 采用后需重新评估 |
 | `CMakeLists.txt` | 负责构建表达，不自动替代所有运行时 Manifest |
-| `ModuleDescriptor` | 可由 PanguMeta 生成必要的模块运行时元数据；结构和序列化未冻结，不引入 ExtensionDescriptor |
+| `ModuleDescriptor` | 可由 PanguMetaTool 生成必要的模块运行时元数据；结构和序列化未冻结，不引入 ExtensionDescriptor |
 | Lifecycle / Lifetime 字段 | 曾讨论 `Durable` / `Mutable` 等词，未在本文件中宣称正式字段已冻结 |
 | 发现与安装 | 仅 Engine `Plugins/`、Project `Plugins/` 两根直接子目录；所有候选即使未启用也校验身份、重复与 Manifest 错误；不在配置期求解插件依赖/版本或联网；安装包及运行时启停尚未冻结 |
 | Module/库映射 | **已冻结为一个 Module 对应一个 STATIC/SHARED Library Target 和一个主要库产物**；动态库符号发现、代码驻留实现待冻结 |
@@ -104,4 +104,4 @@ Plugin / Module 体系要兼顾静态构建与动态扩展、Game 与 Editor 运
 
 [Module API v1](module-api.md) 已按 [ADR-0011](../decisions/0011-module-api-behavior-contract.md) 冻结身份/版本、依赖绑定、Scope 局部回滚和操作后置条件；同库 Catalog 已由 ADR-0015 替代为单库单 Module，并新增常驻失败整体 Shutdown 例外；Public API/ABI 仍待验证，不由该行为冻结替代实现验收。
 
-优先完成现有 Module 注册契约 → 三种 Service 的绑定/撤销 → CMake 与 PanguMeta 接入 → Host 生命周期协调和 CodePin → Plugin 分发及 Hot Reload，再据此补充可验证 C++23 接口。
+优先完成现有 Module 注册契约 → 三种 Service 的绑定/撤销 → CMake 与 PanguMetaTool 接入 → Host 生命周期协调和 CodePin → Plugin 分发及 Hot Reload，再据此补充可验证 C++23 接口。

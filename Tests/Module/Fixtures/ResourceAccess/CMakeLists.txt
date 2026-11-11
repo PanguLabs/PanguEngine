@@ -6,7 +6,7 @@ pangu_configure_module(PanguScopeResourceFixture)
 target_include_directories(PanguScopeResourceFixture PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(PanguScopeResourceFixture PRIVATE PanguModule PanguScopeTestSupport)
 target_compile_definitions(PanguScopeResourceFixture PRIVATE $<$<STREQUAL:${PANGU_LINK_MODE},Modular>:PG_TEST_MODULAR=1>)
-pangu_export_module_query(TARGET PanguScopeResourceFixture QUERY pg::module::test::QueryResourceAccessFixture HEADER ResourceAccessFixture.h)
+pangu_export_module_query(TARGET PanguScopeResourceFixture ID pg::module::test::resource_access::kModuleId ID_HEADER ResourceAccessFixture.h QUERY pg::module::test::QueryResourceAccessFixture HEADER ResourceAccessFixture.h)
 
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/ResourceAccessFixturePath.h" CONTENT
 "#pragma once

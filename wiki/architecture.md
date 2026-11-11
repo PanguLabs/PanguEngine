@@ -1,7 +1,7 @@
 # PanguEngine 总体架构基线
 
 > 状态：Partially Frozen（技术基线与职责分层冻结；具体接口仍待完善）
-> 更新：2026-10-21
+> 更新：2026-11-08
 
 ## 目标与范围
 
@@ -41,7 +41,7 @@ Foundation (C++23, Clang, CMake, Platform, ABI)
 | Rendering | 基础图形库选择 The Forge | [Runtime](runtime/README.md) |
 | Host | 对外概念采用 EngineHost，而不是容易与 Editor Runtime 混淆的 RuntimeHost | [Engine Host](core/engine-host.md) |
 | Service | 不使用 Subsystem 架构；采用 Host/Context/World Scope 与 Concrete / Contract / Registry Service 三种模式 | [Service](core/service.md) |
-| 反射声明 | 使用 pga Clang 属性，不以 PG_CLASS 等宏标记 | [反射/元数据](core/reflection-meta.md) |
+| 反射 / Meta | 原始 pga 属性；独立 PanguMetaTool（Attr/CodeGen）检查生成，目标侧受控豁免未知属性诊断；生产集成待完成 | [反射/元数据](core/reflection-meta.md)、[ADR-0017](decisions/0017-standalone-pangu-meta.md) |
 | 内存 | 明确来源、所有权、生命周期与安全释放 | [内存管理](core/memory-management.md) |
 | 错误与诊断 | 无堆分配值错误 + `std::expected`；重要操作独立失败报告；有界日志与 Fatal 应急路径分离 | [错误处理与基础诊断](foundation/error-diagnostics.md) |
 

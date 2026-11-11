@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 4.0)
+pangu_module_library_type(kind)
+add_library(PanguLayoutValue ${kind} Value.cpp)
+pangu_configure_module(PanguLayoutValue EXPORT_MACRO PG_LAYOUT_VALUE_API)
+target_compile_definitions(PanguLayoutValue PRIVATE "PANGU_PROJECT_VALUE=${PANGU_PROJECT_VALUE}")
+target_link_libraries(PanguLayoutValue PRIVATE Pangu::Module)
+pangu_meta_module(TARGET PanguLayoutValue ID layout::kModuleId ID_HEADER Context.h QUERY layout::Query HEADER Context.h)
+pangu_meta_headers(TARGET PanguLayoutValue ROOT . VISIBILITY public EMIT typed_access HEADERS Context.h)
+set_property(TARGET PanguLayoutValue PROPERTY CXX_SCAN_FOR_MODULES OFF)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/Owned.cpp" "static_assert(true);\n")
+add_library(PanguLayoutOwnedProbe STATIC "${CMAKE_CURRENT_BINARY_DIR}/Owned.cpp")
+set_target_properties(PanguLayoutOwnedProbe PROPERTIES
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Lib"
+    ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}/Lib/Debug")
+set_property(TARGET PanguLayoutOwnedProbe PROPERTY CXX_SCAN_FOR_MODULES OFF)

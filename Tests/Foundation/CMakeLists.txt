@@ -4,6 +4,8 @@ include("${PROJECT_SOURCE_DIR}/cmake/PanguTestDependencies.cmake")
 pangu_require_googletest(RTTI ON)
 add_executable(PanguFoundationUnitTests
     ErrorTests.cpp
+    MetaIdentityTests.cpp
+    MetaTraitsTests.cpp
 )
 
 target_link_libraries(PanguFoundationUnitTests PRIVATE PanguBuildOptions Pangu::Foundation ThirdParty::GoogleTestMain)

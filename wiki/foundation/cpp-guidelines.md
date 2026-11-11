@@ -161,8 +161,8 @@ UseTexture(*result);
 ## 10. Meta、Schema、Platform 与 Module 边界
 
 - `pga` 属性、Clang AST 提取及代码生成的边界、Schema 复用方向统一以 [Reflection / Meta](../core/reflection-meta.md) 为准；**Taxonomy 与生成协议尚未冻结**。
-- **MUST NOT** 用 `PG_CLASS` / `PG_PROPERTY` 标记替代 `pga`；`[[pga::...]]` 只是待验证的语法方向，不应宣称原版 Clang 已原生支持全部自定义语义。
-- **SHOULD** 避免 Gameplay 热路径重复执行可以预生成的反射查找、Schema 解析或资源烘焙；需要动态 introspection 的 Editor、Console、Plugin 可明确使用 Runtime Meta。
+- **MUST NOT** 用 `PG_CLASS` / `PG_PROPERTY` 标记替代 `pga`。已确定使用独立 PanguMetaTool（Attr / Meta / CodeGen）检查原始 C++23 属性声明，源码采用 `pga::Type` / `pga::Field` 等 CamelCase 拼写；首版解析、生成与原生生产接线已实现，平台覆盖以正式 Meta 验收记录为准。目标 Clang 不要求原生理解 `pga`，仅对必要编译目标受控豁免未知属性诊断，Meta 检查必须严格执行，详见 [ADR-0017](../decisions/0017-standalone-pangu-meta.md)。
+- **SHOULD** 避免 Gameplay 热路径重复执行可以预生成的反射查找、Schema 解析或资源烘焙；当前引擎只有 C++23，无 Blueprint/Lua 式运行时脚本需求。优先生成强类型 C++ 操作，确有需要时再由 Editor、调试工具或 Game Runtime 的特定消费者保留动态类型/字段描述；反射不强制业务类型继承统一 `Object` 基类。
 - **MUST** 区分序列化格式与 `sizeof(C++ Struct)` 内存布局；持久化协议需独立声明版本、编码、字节序、字段演化。
 - 平台 API **SHOULD** 将 OS/SDK 专属实现隔离，不让大量 `#if` 或运行时平台分支散落在业务层；目标平台已确定时优先编译期选择，设备动态能力检测仍是 Runtime。
 - **MUST** 遵循 CMake 构建单 Module 单库、不新增 BinaryImage 层、Concrete/Contract/Registry Service 三模式及 Module CodePin 安全卸载规则，见 [构建系统](build-system.md)、[Plugin / Module](../core/plugin-module.md)、[Service](../core/service.md)。

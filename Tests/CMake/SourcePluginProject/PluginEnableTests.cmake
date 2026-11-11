@@ -14,7 +14,7 @@ foreach(linkMode IN ITEMS Monolithic Modular)
     RequireText("${commands}" "Physics.cpp")
     RejectText("${commands}" "EditorExtras.cpp")
     BuildFixture(all)
-    file(GLOB libraries "${binary}/Lib/*Physics*" "${binary}/Lib/*Gameplay*"
+    file(GLOB libraries "${binary}/EngineBuild/Lib/*Physics*" "${binary}/EngineBuild/Bin/*Physics*" "${binary}/Lib/*Gameplay*"
         "${binary}/Bin/*Physics*" "${binary}/Bin/*Gameplay*")
     if(libraries)
         message(FATAL_ERROR "Unconsumed enabled plugins leaked into ALL: ${libraries}")
@@ -26,7 +26,7 @@ foreach(linkMode IN ITEMS Monolithic Modular)
     ConfigureFixture("${selection}" "pangu.physics;mygame.gameplay;mygame.editor-extras" PASS ""
         "-DPANGU_FIXTURE_PROBE_DEPENDENCIES:STRING=Pangu::Gameplay" "-DPANGU_LINK_MODE=${linkMode}")
     BuildFixture(MyGameProbe)
-    file(GLOB physics "${binary}/Lib/*Physics*" "${binary}/Bin/*Physics*")
+    file(GLOB physics "${binary}/EngineBuild/Lib/*Physics*" "${binary}/EngineBuild/Bin/*Physics*")
     file(GLOB gameplay "${binary}/Lib/*Gameplay*" "${binary}/Bin/*Gameplay*")
     file(GLOB editor "${binary}/Lib/*EditorExtras*" "${binary}/Bin/*EditorExtras*")
     if(NOT physics OR NOT gameplay OR editor)

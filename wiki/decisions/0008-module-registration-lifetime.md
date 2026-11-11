@@ -8,7 +8,7 @@
 
 ## Context
 
-此前已确定 Plugin / Module 分离、一个 Module 对应一个 CMake STATIC/SHARED 库、三种 Service 模式及安全卸载，但缺少贯穿静态/动态发现、注册、依赖、作用域可见性、回滚和代码驻留的统一契约。若让 EngineHost、PanguMeta 或业务 Registry 各自设计这套机制，将重复管理生命周期，且难以安全卸载。
+此前已确定 Plugin / Module 分离、一个 Module 对应一个 CMake STATIC/SHARED 库、三种 Service 模式及安全卸载，但缺少贯穿静态/动态发现、注册、依赖、作用域可见性、回滚和代码驻留的统一契约。若让 EngineHost、PanguMetaTool 或业务 Registry 各自设计这套机制，将重复管理生命周期，且难以安全卸载。
 
 ## Decision
 
@@ -23,7 +23,7 @@
 
 ## Consequences
 
-- PanguMeta、CMake、EngineHost 和 Service Registry 可以围绕同一套 Module 注册/撤销语义构建接口，不再重复发明生命周期体系。
+- PanguMetaTool、CMake、EngineHost 和 Service Registry 可以围绕同一套 Module 注册/撤销语义构建接口，不再重复发明生命周期体系。
 - 统一 C++23 SHARED Query 要求在动态库装载**之前**完成可信产物绑定、ABI/Profile 与 Public API Contract 预检；不能确认即拒绝加载。LoadLibrary/dlopen 可能先运行库初始化代码，装载后复核**不能声称阻止此前所有代码执行**；外部不可信二进制的安全性需额外机制。
 - STATIC 归档不能运行时卸载；当静态代码最终位于可卸载共享库时，CodePin 必须保护那个实际承载库。
 - 注册事务的并发可见性、借用和在途回调撤销需在 API/实现阶段针对性测试。

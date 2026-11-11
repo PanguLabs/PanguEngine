@@ -1,7 +1,7 @@
 # Pangu EngineHost 启动与生命周期
 
 > 状态：Partially Frozen（宿主职责、单次启动、Scope 与安全关闭行为已确定；Public C++ API/ABI 未冻结）
-> 更新：2026-11-07
+> 更新：2026-11-11
 > 决策：[ADR-0002](../decisions/0002-name-engine-host.md)、[ADR-0016](../decisions/0016-engine-host-lifecycle.md)
 
 ## 职责与所有权
@@ -45,3 +45,7 @@ ELF 可执行宿主参与跨 DSO 公共 RTTI 时需要正确的类型可见性�
 最小生命周期、Concrete 查询、[MinimalHost](../../Samples/MinimalHost/README.md) 以及独立 Project Game/Editor/MobileHost 消费已实现。正式回归保留在 `Tests/EngineHost` 和 `Tests/Module`；实际平台、模式、失败与重跑记录见[本轮验收](../../docs/superpowers/plans/2026-11-07-engine-host-lifecycle-validation.md)。设计规格见[生命周期规格](../../docs/superpowers/specs/2026-11-07-engine-host-lifecycle-design.md)。实现存在不等于平台已验收。
 
 完整 Contract Provider 选择、Registry Contribution、TaskScheduler/GPU 排空集成、热更新、窗口/渲染/主循环、设备运行、打包和签名仍未交付。Public C++ 签名、布局与 ABI 不作为长期冻结接口；现有三种 Service 模式、依赖方向和安全销毁语义继续有效。
+
+## 元数据借用
+
+Ready 且未执行管理操作时，`pg::meta::BorrowTypeInfo<T>(host)` 经生产 Gate 取得仅移动、持有所属 Module Pin 的描述视图。无 Service Module 同样适用；类型查询匹配生成 Owner 与 RTTI，不提供对象实例。Closing 拒绝新借用，旧描述仍可遍历并阻止 FinishShutdown 完成，释放后才可卸载。元数据 Pin 不替代 ScopeBorrow，跨卸载保存字段名等信息须作拥有型复制。正式测试与平台边界见[Meta 测试](../../Tests/Meta/README.md)及[验收](../../docs/superpowers/plans/2026-11-09-pangumeta-tool-validation.md)。

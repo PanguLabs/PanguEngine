@@ -39,7 +39,11 @@ function(ConfigureProject name testing engineTests)
     execute_process(
         COMMAND "${CMAKE_COMMAND}" -S "${source}" -B "${binary}" -G Ninja
             "${compilerArgs}"
+            -DCMAKE_BUILD_TYPE=Release
+            "-DPANGU_ENGINE_BUILD_ROOT:PATH=${binary}/EngineBuild"
             "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PANGU_ENGINE_SOURCE_DIR}"
+            "-DPANGU_META_SDK_CONFIG=${PANGU_META_SDK_CONFIG}"
+            "-DPANGU_META_HOST_BUILD_ROOT=${PANGU_META_HOST_BUILD_ROOT}"
             "-DBUILD_TESTING:BOOL=${testing}"
             "-DPANGU_BUILD_ENGINE_TESTS:BOOL=${engineTests}"
             "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
@@ -160,7 +164,7 @@ endif()
 if(CMAKE_HOST_WIN32)
     set(hostSuffix .exe)
 endif()
-execute_process(COMMAND "${PANGU_TEST_ROOT}/ServiceHosts/Bin/PanguMinimalHost${hostSuffix}"
+execute_process(COMMAND "${PANGU_TEST_ROOT}/ServiceHosts/EngineBuild/Bin/PanguMinimalHost${hostSuffix}"
     RESULT_VARIABLE sampleResult OUTPUT_VARIABLE sampleOutput ERROR_VARIABLE sampleError)
 if(NOT sampleResult EQUAL 0 OR NOT sampleOutput MATCHES "Counter Context values: 7 -> 8; isolated=7")
     message(FATAL_ERROR "Monolithic sample failed: ${sampleResult}\n${sampleOutput}\n${sampleError}")

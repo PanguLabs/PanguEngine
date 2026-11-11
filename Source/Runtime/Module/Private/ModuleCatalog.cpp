@@ -7,6 +7,7 @@
 #include "ModuleRecord.h"
 #include "Result.h"
 #include <ModuleError.h>
+#include <ModuleMetaProvider.h>
 #include <algorithm>
 #include <cstddef>
 #include <expected>
@@ -58,6 +59,27 @@ Status CopyDefinition(ModuleRecord& record, QueryModuleFn query, ModuleOperation
             return Reject(report, ModuleError::kInvalidDependency, descriptor.Id, dependency.Id);
         }
     }
+    if (const auto* metadata = definition->Metadata)
+    {
+        if (metadata->Owner != descriptor.Id)
+        {
+            return Reject(report, ModuleError::kInvalidDefinition, descriptor.Id);
+        }
+        for (std::size_t index = 0; index < metadata->Entries.size(); ++index)
+        {
+            const auto& entry = metadata->Entries.subspan(index).front();
+            if (entry.CppType == nullptr || entry.Info == nullptr ||
+                std::ranges::any_of(metadata->Entries.first(index),
+                                    [&](const auto& previous)
+                                    {
+                                        return *previous.CppType == *entry.CppType ||
+                                               (entry.Info->Id && previous.Info->Id == entry.Info->Id);
+                                    }))
+            {
+                return Reject(report, ModuleError::kInvalidDefinition, descriptor.Id);
+            }
+        }
+    }
     record.Descriptor = {
         .Id = descriptor.Id,
         .Version = descriptor.Version,
@@ -67,6 +89,7 @@ Status CopyDefinition(ModuleRecord& record, QueryModuleFn query, ModuleOperation
         .BuildIdentity = std::string(descriptor.BuildIdentity),
     };
     record.RegisterModule = definition->RegisterModule;
+    record.Metadata = definition->Metadata;
     return {};
 }
 

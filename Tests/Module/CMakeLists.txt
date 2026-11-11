@@ -41,6 +41,7 @@ set_target_properties(PanguScopeBuildMockTests PROPERTIES RUNTIME_OUTPUT_DIRECTO
 pangu_register_gtest(TARGET PanguScopeBuildMockTests BOUNDARY unit AREA module TIER fast)
 
 add_executable(PanguModuleIntegrationTests
+    ModuleMetadataTests.cpp
     ScopeResourceAccessTests.cpp
     ModuleManagerTests.cpp
     ResidentModuleTests.cpp
@@ -64,7 +65,7 @@ else()
     target_compile_definitions(PanguModuleIntegrationTests PRIVATE PG_TEST_MODULAR=1)
 endif()
 target_link_libraries(PanguModuleIntegrationTests PRIVATE
-    PanguBuildOptions PanguModule PanguScopeTestSupport ThirdParty::GoogleTestMain)
+    PanguBuildOptions PanguModule PanguScopeTestSupport PanguManualMetaFixture ThirdParty::GoogleTestMain)
 set_target_properties(PanguModuleIntegrationTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")
 pangu_register_gtest(TARGET PanguModuleIntegrationTests BOUNDARY integration AREA module TIER fast)
 

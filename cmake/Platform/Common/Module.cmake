@@ -1,5 +1,7 @@
 include_guard(GLOBAL)
 include("${CMAKE_CURRENT_LIST_DIR}/../../PanguLinkMode.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../PanguBuildLayout.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../PanguMeta.cmake")
 
 # Apply build policy to one actual STATIC or SHARED CMake Library Target.
 # This is deliberately not a replacement for add_library().
@@ -29,7 +31,17 @@ function(pangu_configure_module targetName)
     if(NOT ARG_EXPORT_MACRO MATCHES "^[A-Za-z_][A-Za-z0-9_]*$")
         message(FATAL_ERROR "Invalid EXPORT_MACRO '${ARG_EXPORT_MACRO}'.")
     endif()
-    set(exportDirectory "${CMAKE_BINARY_DIR}/Generated")
+    if(NOT PANGU_SOURCE_OWNER)
+        set(PANGU_SOURCE_OWNER project)
+    endif()
+    pangu_owned_build_root(ownedRoot "${PANGU_SOURCE_OWNER}")
+    set_property(TARGET "${targetName}" PROPERTY PANGU_SOURCE_OWNER "${PANGU_SOURCE_OWNER}")
+    if(PANGU_SOURCE_OWNER STREQUAL "engine")
+        get_property(context GLOBAL PROPERTY PANGU_LAYOUT_current_context)
+        target_compile_options("${targetName}" PRIVATE -include "${context}")
+        set_property(TARGET "${targetName}" PROPERTY PANGU_CONTEXT_INCLUDED ON)
+    endif()
+    set(exportDirectory "${ownedRoot}/Generated/Export")
     file(MAKE_DIRECTORY "${exportDirectory}")
     set(exportHeader "#pragma once\n\n")
     if(expectedType STREQUAL "SHARED")
@@ -51,31 +63,21 @@ function(pangu_configure_module targetName)
         DEFINE_SYMBOL "${targetName}_EXPORTS"
         CXX_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN ON
-        ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Lib"
-        LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin"
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin"
+        ARCHIVE_OUTPUT_DIRECTORY "${ownedRoot}/Lib"
+        LIBRARY_OUTPUT_DIRECTORY "${ownedRoot}/Bin"
+        RUNTIME_OUTPUT_DIRECTORY "${ownedRoot}/Bin"
     )
 endfunction()
 
 function(pangu_export_module_query)
-    cmake_parse_arguments(PARSE_ARGV 0 ARG "" "TARGET;QUERY;HEADER" "")
-    if(NOT ARG_TARGET OR NOT ARG_QUERY OR NOT ARG_HEADER OR ARG_UNPARSED_ARGUMENTS)
-        message(FATAL_ERROR "pangu_export_module_query requires TARGET, QUERY and HEADER.")
+    cmake_parse_arguments(PARSE_ARGV 0 ARG "" "TARGET;ID;ID_HEADER;QUERY;HEADER" "")
+    if(NOT ARG_TARGET OR NOT ARG_ID OR NOT ARG_ID_HEADER OR NOT ARG_QUERY OR NOT ARG_HEADER OR ARG_UNPARSED_ARGUMENTS)
+        message(FATAL_ERROR "pangu_export_module_query requires TARGET, ID, ID_HEADER, QUERY and HEADER.")
     endif()
     get_target_property(exportMacro "${ARG_TARGET}" PANGU_EXPORT_MACRO)
     if(NOT exportMacro)
         message(FATAL_ERROR "Configure Module '${ARG_TARGET}' before exporting its Query.")
     endif()
-    pangu_module_library_type(moduleType)
-    if(moduleType STREQUAL "STATIC")
-        return()
-    endif()
-    get_target_property(hasQuery "${ARG_TARGET}" PANGU_HAS_QUERY)
-    if(hasQuery)
-        message(FATAL_ERROR "Module '${ARG_TARGET}' already has a native Query wrapper.")
-    endif()
-    set_property(TARGET "${ARG_TARGET}" PROPERTY PANGU_HAS_QUERY ON)
-    set(querySource "${CMAKE_CURRENT_BINARY_DIR}/Generated/${ARG_TARGET}/ModuleQuery.cpp")
-    configure_file("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../../ModuleQuery.cpp.in" "${querySource}" @ONLY)
-    target_sources("${ARG_TARGET}" PRIVATE "${querySource}")
+    pangu_meta_module(TARGET "${ARG_TARGET}" ID "${ARG_ID}" ID_HEADER "${ARG_ID_HEADER}"
+        QUERY "${ARG_QUERY}" HEADER "${ARG_HEADER}")
 endfunction()

@@ -28,4 +28,4 @@ PanguEngine 的 CMake 4.0+ / Ninja 与 C++23/Clang 单图构建已替代自制 P
 
 ## Open Questions
 
-`PanguMeta` 自动生成 Catalog 的协议、运行时插件启停清单、SHARED 实际 Loader/热重载、资产管线、完整安装打包及设备级动态库装载策略待分别设计。以上都不构成恢复独立 Pangu 原生二进制 SDK/Plugin Preflight 的授权。
+`PanguMetaTool` 自动生成 Catalog 的协议、运行时插件启停清单、SHARED 实际 Loader/热重载、资产管线、完整安装打包及设备级动态库装载策略待分别设计。以上都不构成恢复独立 Pangu 原生二进制 SDK/Plugin Preflight 的授权。

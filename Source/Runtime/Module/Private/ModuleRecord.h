@@ -13,6 +13,7 @@ struct ModuleRecord
     bool Resident{};
     ModuleHandle Handle{};
     RegisterModuleFn RegisterModule{};
+    const ModuleMetaProvider* Metadata{};
     std::optional<NativeModuleLibrary> Library;
     std::optional<pg::Error> OriginalError;
     bool ResourcesDrained{};

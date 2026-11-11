@@ -15,4 +15,4 @@ target_include_directories(PanguFoundation PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/Public"
 )
 
-pangu_export_module_query(TARGET PanguFoundation QUERY pg::module::QueryFoundationModule HEADER FoundationModule.h)
+pangu_export_module_query(TARGET PanguFoundation ID pg::module::kFoundationModuleId ID_HEADER FoundationModule.h QUERY pg::module::QueryFoundationModule HEADER FoundationModule.h)

@@ -3,7 +3,7 @@
 > 状态：Approved（用户于 2026-11-06 批准）；已完成 grilling、Builder Check、双轴 Review 及 P2 修复的限定复评。本文是已批准设计规格，不是实施计划，不表示接口或平台能力已经实现。
 > 日期：2026-11-06
 > 实现与验收：见[正式验收记录](../plans/2026-11-06-module-manager-link-modes-validation.md)。设计批准、已实现范围、实际平台结果和最终Review状态分别记录；Public C++ API/ABI未因此冻结。
-> 实现基线：`5be751f`。本文独立定义本轮所需契约，不依赖 PanguMeta 设计草案或生成器实现。
+> 实现基线：`5be751f`。本文独立定义本轮所需契约，不依赖 PanguMetaTool 设计草案或生成器实现。
 > 依据：[Module API](../../../wiki/core/module-api.md)、[生命周期](../../../wiki/core/module-registration-lifetime.md)、[所有权](../../../wiki/core/memory-management.md)、[构建](../../../wiki/foundation/build-system.md)、[测试](../../../Tests/README.md)、[源码交付](../../../wiki/decisions/0014-source-plugins-project-build.md)。
 
 ## 1. 意图、确认结果与范围
@@ -28,7 +28,7 @@
 
 本轮是一个跨构建与 Runtime 的项目：既要建立两种模式，也要完成真实动态库生命周期。只增加 Loader 而保留生产 Module 硬编码 STATIC，不能视为完成。
 
-**非目标：** 完整 EngineHost/Game/Editor 产品、Hot Reload、状态迁移、新旧代码代际并存、自动扫描动态库、递归自动加载未知依赖、独立预编译 Pangu Plugin/SDK、AbiProfile/Preflight、完整 ServiceRegistry、TaskScheduler/GPU 调度器、PanguMeta/Clang Plugin 实现、移动设备运行与商店部署策略。
+**非目标：** 完整 EngineHost/Game/Editor 产品、Hot Reload、状态迁移、新旧代码代际并存、自动扫描动态库、递归自动加载未知依赖、独立预编译 Pangu Plugin/SDK、AbiProfile/Preflight、完整 ServiceRegistry、TaskScheduler/GPU 调度器、PanguMetaTool/Clang Plugin 实现、移动设备运行与商店部署策略。
 
 **不能接受：** 只复制 DLL 就宣称已激活；以裸函数指针代替 CodePin；Busy 时强行释放对象或动态库；复制一套静态 Runtime 到每个 DLL；通过删除回归或将真实库测试改成 Mock 来获得通过。
 
@@ -87,7 +87,7 @@ Android Monolithic 的最终宿主 `.so` 是静态 Module 的聚合承载者，�
 - 移除 `ModuleDefinition::LinkedStaticModules` 及同库多逻辑 Module 的查询/接纳协议。Monolithic 的 Catalog 是宿主装配源，不是额外库；Modular 的每个 Query 只返回本 Module 的定义。
 - 公共非模板函数、类型的必要成员、运行控制入口及跨 DLL 类型契约采用逐 Module 的导出/导入策略。允许用途明确的导出宏或生成 export header，它们不是反射标记宏；不依赖 Windows 自动导出全部符号，不依赖 ELF 偶然可见性。
 - 定义、Query 包装、Catalog 和导出定义归属原有 Module/Host Target，不增加第二份 Module 库，不引入全局构造注册。
-- 本轮可沿用显式 C++ Definition/Query 和最小固定包装模板，生成自动化不依赖 PanguMeta 先完成。Plugin.toml 仍只管源码插件身份；构建链接边不是第二份运行期依赖声明。
+- 本轮可沿用显式 C++ Definition/Query 和最小固定包装模板，生成自动化不依赖 PanguMetaTool 先完成。Plugin.toml 仍只管源码插件身份；构建链接边不是第二份运行期依赖声明。
 - Engine standalone、独立 Project、宿主工具与交叉构建继续各自拥有正确的工具链上下文；独立宿主工具属于另一 CMake 图，其模式配置不能被目标平台配置污染。
 
 ## 5. ModuleManager：接纳、身份与依赖
@@ -193,7 +193,7 @@ Manager 析构延续现有契约：正常调用方显式推进 Shutdown；持续
 5. 将现有 `StaticModuleHost`、状态/记录命名及调用迁往统一接口，去掉仅用于旧切片的兼容别名，保留所有仍有效的测试行为。
 6. 为 Foundation/Module 建立持久 ModuleId、统一 Definition/Query 和宿主常驻登记，补齐其显式启动及 Shutdown 逻辑收尾测试；保留宿主原生链接驻留。
 
-PanguMeta 不在本轮实施依赖中。显式 Definition/Query、宿主 Catalog 及内部 RTTI 校验均按本文契约独立落地，不引入反射元数据系统或持久 TypeId。未来若设计生成器，应遵守 Monolithic 宿主 Catalog、Modular 单 Module Query 和强类型接口边界；生成自动化不改变本轮运行协议，也不恢复混合模式或 SHARED 内嵌 STATIC 逻辑 Module。未来持久类型身份与本轮运行期 RTTI 校验分别按各自用途设计。
+PanguMetaTool 不在本轮实施依赖中。显式 Definition/Query、宿主 Catalog 及内部 RTTI 校验均按本文契约独立落地，不引入反射元数据系统或持久 TypeId。未来若设计生成器，应遵守 Monolithic 宿主 Catalog、Modular 单 Module Query 和强类型接口边界；生成自动化不改变本轮运行协议，也不恢复混合模式或 SHARED 内嵌 STATIC 逻辑 Module。未来持久类型身份与本轮运行期 RTTI 校验分别按各自用途设计。
 
 ## 9. 正式验收要求
 

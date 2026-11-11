@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 4.0)
 
-# Platform/toolchain validation is performed by the PanguEngine root project.
-if(NOT TARGET PanguBuildOptions)
-    message(FATAL_ERROR "NlohmannJson must be configured through the PanguEngine root project.")
+# 平台/工具链由根工程或显式验证过的独立宿主工程负责。
+if(NOT TARGET PanguBuildOptions AND NOT PANGU_VALIDATED_STANDALONE_HOST)
+    message(FATAL_ERROR "NlohmannJson requires the PanguEngine root or a validated standalone host project.")
 endif()
 
 set(nlohmannJsonIncludeDir "${CMAKE_CURRENT_SOURCE_DIR}/Repo/single_include")

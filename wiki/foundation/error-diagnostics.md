@@ -187,7 +187,7 @@ return BuildFromInput(*input);
 Fatal / 致命 OOM -> 常驻的最小应急路径 -> 平台终止
 ```
 
-Error/Result 不依赖 Diagnostics。最小应急路径只依赖常驻 Foundation 代码和经过验证的少量平台原语，不依赖 EngineHost、ServiceRegistry、VFS、TaskScheduler、PanguMeta 或引擎 Allocator。
+Error/Result 不依赖 Diagnostics。最小应急路径只依赖常驻 Foundation 代码和经过验证的少量平台原语，不依赖 EngineHost、ServiceRegistry、VFS、TaskScheduler、PanguMetaTool 或引擎 Allocator。
 
 普通 Diagnostics 由明确的 EngineHost 实例配置并拥有，可以作为强类型持有的 Concrete Service；Context/World 通过明确依赖使用它，并携带所属作用域的值标签。每个实例具有固定的日志资源预算，运行时不自动扩容，不争用隐式进程全局队列，也不依赖全局“当前 Host”。这只冻结所有权和接口边界，不承诺 v1 已支持多个 Host 同时运行；多 Host 生命周期留给 EngineHost 专项规范。上述划分不要求新增三个 Pangu Module，也不引入第四种 Service Scope。
 

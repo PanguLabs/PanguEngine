@@ -11,9 +11,13 @@ function(pangu_discover_plugins)
     # 只追踪当前工具的固定源码输入；不遍历插件的源码文件。
     set(toolRoot "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../BuildTools/PanguBuildTool")
     set(thirdParty "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../Source/ThirdParty/TomlPlusPlus")
+    file(REAL_PATH "${toolRoot}" toolRoot)
+    file(REAL_PATH "${thirdParty}" thirdParty)
     set(toolInputs
         "${toolRoot}/CMakeLists.txt"
         "${toolRoot}/Private/Main.cpp"
+        "${toolRoot}/Private/BuildLayout.h"
+        "${toolRoot}/Private/BuildLayout.cpp"
         "${toolRoot}/Private/PathEncoding.h"
         "${toolRoot}/Private/PluginDiscovery.cpp"
         "${toolRoot}/Private/PluginDiscovery.h"
@@ -162,6 +166,13 @@ function(pangu_add_enabled_plugins)
             set(testsEnabled "${projectTests}")
         endif()
         pangu_test_context(OWNER "${owner}" ENABLED "${testsEnabled}" PLUGIN_ID "${id}")
-        add_subdirectory("${pluginSource_${id}}" "${CMAKE_BINARY_DIR}/Plugins/${id}" EXCLUDE_FROM_ALL)
+        if(owner STREQUAL "engine")
+            set(sourceRoot "${PAEP_ENGINE_ROOT}")
+        else()
+            set(sourceRoot "${PAEP_PROJECT_ROOT}")
+        endif()
+        file(RELATIVE_PATH relative "${sourceRoot}" "${pluginSource_${id}}")
+        pangu_add_owned_subdirectory(SOURCE_DIR "${pluginSource_${id}}" OWNER "${owner}"
+            RELATIVE_BINARY_DIR "${relative}" EXCLUDE_FROM_ALL)
     endforeach()
 endfunction()

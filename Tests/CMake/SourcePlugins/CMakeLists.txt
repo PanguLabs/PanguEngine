@@ -8,9 +8,13 @@ function(pangu_source_plugin_test name script)
             "-DPANGU_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
             "-DPANGU_TEST_ROOT=${CMAKE_BINARY_DIR}/Tests/Work/${name}"
             "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
+            "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
+            "-DPANGU_META_SDK_CONFIG=${PANGU_META_SDK_CONFIG}"
+            "-DPANGU_META_HOST_BUILD_ROOT=${CMAKE_BINARY_DIR}/Tests"
             ${ARGN} -P "${script}"
         BOUNDARY system AREA plugins TIER full TYPES regression
         REQUIRES subprocess nested-build PROCESSORS "${PANGU_TEST_BUILD_JOBS}" TIMEOUT 900)
+    set_tests_properties("${name}" PROPERTIES RESOURCE_LOCK PanguMetaHostBuild)
 endfunction()
 
 pangu_source_plugin_test(SourcePluginBuildTool "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolConfigureTests.cmake")

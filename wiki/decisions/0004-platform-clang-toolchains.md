@@ -26,7 +26,7 @@ PanguEngine 需要可预测的 C++23、Clang 语义处理、`pga` 元数据和 M
 ## Consequences
 
 - Android 更换 NDK 仍需重新验证 C++23、Clang 属性/生成产物、标准库和 Module ABI。
-- PanguClang/PanguMeta 可以按 LLVM23 开发，但必须验证生成结果与 Android 实际 NDK Clang 的兼容性。
+- PanguClang/PanguMetaTool 可以按 LLVM23 开发，但必须验证生成结果与 Android 实际 NDK Clang 的兼容性。
 - 不同目标平台使用不同 Clang 主版本，不意味着**同一进程**的 Module 可以混用不兼容 ABI。
 - 平台探针通过不代表引擎集成、移动端签名、打包或真机运行已完成。
 

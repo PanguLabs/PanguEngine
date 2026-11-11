@@ -27,7 +27,7 @@
 - Windows/Android 正式 BuildRoot 为仓库 Build/Windows、Build/Android；Linux 正式源码 `/home/moozen/WindowsGit/PanguEngine`、BuildRoot `$HOME/PanguEngineBuild/Linux`；macOS/iOS 正式源码 `/Users/moozen/WindowsGit/PanguEngine`、BuildRoot `$HOME/PanguEngineBuild/macOS`、`$HOME/PanguEngineBuild/iOS`，通过 `ssh -o BatchMode=yes moozen-macos`，不复制共享源码。
 - 同一 BuildRoot 同时一个验证会话；新模式矩阵夹具在宿主 BuildRoot 的独立测试子目录配置，不与外层 CTest/构建递归、不混用平台根。正式配置/构建使用根 preset。
 - 正式测试长期保留并按 boundary/area/tier 接线；交叉编译不发现/运行目标 GTest。Android Monolithic 的 `.a` 链入原生宿主 `.so`，iOS 的 `.a` 链入最小 Mach-O executable；两平台 Modular 必须真实 Runtime/业务动态库、Query 导出和最小宿主链接，不能用空 Probe 替代。
-- 不实现设备运行、APK/IPA 打包、Hot Reload、完整 EngineHost、ServiceRegistry、PanguMeta、调度器或独立二进制插件 Preflight。平台阻塞如实报告，不默默退回 STATIC 冒充 Modular。
+- 不实现设备运行、APK/IPA 打包、Hot Reload、完整 EngineHost、ServiceRegistry、PanguMetaTool、调度器或独立二进制插件 Preflight。平台阻塞如实报告，不默默退回 STATIC 冒充 Modular。
 - 修改 C++ 使用仓库 clang-format/clang-tidy 和实际编译数据库，所有新/改 CMakeLists.txt 使用 cmake_minimum_required(VERSION 4.0)。提交、注释和文档中文优先，无工具署名。
 - 临时上下文统一 `.superpowers/sdd/2026-11-06-module-manager-link-modes/`；原始验收结果写各宿主 BuildRoot。完成 Review 与验收、归档必要结论并确认无运行依赖后，仅清理该临时目录。
 

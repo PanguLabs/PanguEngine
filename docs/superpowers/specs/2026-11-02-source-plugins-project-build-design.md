@@ -104,7 +104,7 @@ Configure 时扫描候选并建立 ID → 源码目录映射，按稳定 ID 排�
 
 ## 5. PanguBuildTool：配置期 Manifest 解析
 
-`PanguBuildTool` 是 **Build Tool（不是 Host Tool 这个架构名称）**，首版只负责发现、解析和验证 Plugin Manifest、输出稳定的身份映射。使用固定版本的开源 `toml++` 解析 TOML（按 ThirdParty 版本与许可规范接入），以 `TOML_EXCEPTIONS=0` 的无异常模式读取显式解析结果并处理错误；工具本身遵守 C++23、Clang 与无异常规范。`toml++` 只作为构建工具的私有依赖，不传播到 Runtime Module 公共接口；不引入新的 Module 描述文件或 ABI 采集。PanguMeta、Shader Compiler、Asset Cooker 等后续仍作为各自独立、按需触发的 Build Tool，不并入一个万能工具。
+`PanguBuildTool` 是 **Build Tool（不是 Host Tool 这个架构名称）**，首版只负责发现、解析和验证 Plugin Manifest、输出稳定的身份映射。使用固定版本的开源 `toml++` 解析 TOML（按 ThirdParty 版本与许可规范接入），以 `TOML_EXCEPTIONS=0` 的无异常模式读取显式解析结果并处理错误；工具本身遵守 C++23、Clang 与无异常规范。`toml++` 只作为构建工具的私有依赖，不传播到 Runtime Module 公共接口；不引入新的 Module 描述文件或 ABI 采集。PanguMetaTool、Shader Compiler、Asset Cooker 等后续仍作为各自独立、按需触发的 Build Tool，不并入一个万能工具。
 
 其启动边界：
 
@@ -183,11 +183,11 @@ SHARED 部署通过 CMake Target 关系及 `$<TARGET_FILE:...>` 等原生生成�
 
 **Plugin 是能力集合，Module 是引擎逻辑代码单元**：一个 Plugin 可含多个 Module，也可只有 Assets。纯 Assets Plugin 的 `CMakeLists.txt` 不需要创建 Module Library；资产处理由真实消费 Target 或显式命令触发，不因插件被发现/启用就进入 `ALL`。
 
-- **STATIC**：每个 Game/Editor Host 维护自身 `pg::module::StaticModuleCatalog`，精确引用其静态装配集合。首版最小 fixture 可以显式手写 Catalog；后续由 PanguMeta 生成，并把生成代码附着到既有 Module/Host 消费 Target，不在 CMake 插件发现阶段生成全局 Catalog，也不依赖静态初始化顺序。
+- **STATIC**：每个 Game/Editor Host 维护自身 `pg::module::StaticModuleCatalog`，精确引用其静态装配集合。首版最小 fixture 可以显式手写 Catalog；后续由 PanguMetaTool 生成，并把生成代码附着到既有 Module/Host 消费 Target，不在 CMake 插件发现阶段生成全局 Catalog，也不依赖静态初始化顺序。
 - **SHARED**：EngineHost/ModuleManager 仅加载其运行时配置明确指定的 Module 路径，不按目录扫描所有动态库并自动赋予执行权限。部署可以生成宿主所需的路径清单，但 **`Plugin.toml` 首版不是运行时加载/激活配置**，不要求在运行时解析源码 Manifest。
 - **生命周期**：STATIC 与 SHARED 延续现有 `ModuleDefinition`/Registration 行为；SHARED 使用版本化导出符号定位原生 C++23 Query，继续执行入口、ModuleId、依赖、注册回滚、CodePin 与安全卸载检查。STATIC 链入可卸载 DLL 时仍按真实代码承载体实施驻留保护；不引入独立 BinaryImage 层。
 
-运行时插件启停清单、安装包格式、PanguMeta 生成协议、完整 Hot Reload 与移动平台装载策略尚未在本 Spec 中冻结。构建期 Manifest 不得成为第二份源码编译清单。
+运行时插件启停清单、安装包格式、PanguMetaTool 生成协议、完整 Hot Reload 与移动平台装载策略尚未在本 Spec 中冻结。构建期 Manifest 不得成为第二份源码编译清单。
 
 ## 8. ABI 边界与现有规范的迁移
 

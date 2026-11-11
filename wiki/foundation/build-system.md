@@ -3,7 +3,7 @@
 测试构建目标与累计运行集合的契约见[测试分类与运行契约](testing.md)；实际命令和维护要求见 [Tests](../../Tests/README.md)。普通 ALL 与测试专用准备目标是不同入口。
 
 > 状态：Partially Frozen（CMake 4.0+、Ninja 原生增量、单 Module 单库、Target 命名空间及源码 Plugin/独立 Project 构建政策已冻结；源码插件与统一 ModuleManager/Loader 已实现，实际平台验收单独记录，完整发布未实现）
-> 更新：2026-11-07
+> 更新：2026-11-11
 > 决策：[ADR-0001：采用 CMake](../decisions/0001-adopt-cmake.md)、[ADR-0005：一个 Module 一个库](../decisions/0005-one-module-one-library.md)、[ADR-0012：构建树按宿主本地化](../decisions/0012-host-local-build-trees.md)、[ADR-0013：原生构建](../decisions/0013-native-build-abi-boundary.md)、[ADR-0014：源码 Plugin 与独立 Project](../decisions/0014-source-plugins-project-build.md)
 
 ## 已确定的决策
@@ -24,7 +24,7 @@
 
 依据 [ADR-0014](../decisions/0014-source-plugins-project-build.md)：Engine 可独立顶层构建；Game Project 自行选择 Toolchain、CTest、隔离 BuildRoot，通过 Engine 源码 `add_subdirectory()` 进入同一目标图。配置期仅从 Engine/Project 两个固定 `Plugins/` 根扫描直接子目录，所有候选必须同时包含 `Plugin.toml` + `CMakeLists.txt`，严格验证稳定 ID 和可选 SemVer。顶层每次 Configure（**包括无 Plugin**）都须通过宿主 Clang/C++23 独立增量构建并运行 `PanguBuildTool`（`toml++`、JSON）；不能因插件为空跳过。Plugin 显式启用后仍用 `EXCLUDE_FROM_ALL`，只由实际 Game/Editor/Tool Target 链接/依赖触发编译，部署和激活另行控制。
 
-已实现 `BuildTools/PanguBuildTool`、`cmake/PanguPlugins.cmake` 的发现/启用接线及 `cmake/PanguEngineRevision.cmake` 的 Project Git 锁定校验。`ENGINE_ROOT` / `PROJECT_ROOT` 参数指向持有 `Plugins/` 的工程根。Engine standalone 默认启用内部测试；嵌入 Project 时内部测试默认关闭，父级拥有 `BUILD_TESTING`，需要时另开 `PANGU_BUILD_ENGINE_TESTS`。Project 及 Game/Editor STATIC Catalog、Assets 和显式 SHARED 部署以正式测试夹具验收；ModuleManager 原生 Loader 的当前实现与双模式实际验收见[新验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)；PanguMeta 和 App 发布未因此实现。平台命令、结果和性能证据见[本次验收](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md)。
+已实现 `BuildTools/PanguBuildTool`、`cmake/PanguPlugins.cmake` 的发现/启用接线及 `cmake/PanguEngineRevision.cmake` 的 Project Git 锁定校验。`ENGINE_ROOT` / `PROJECT_ROOT` 参数指向持有 `Plugins/` 的工程根。Engine standalone 默认启用内部测试；嵌入 Project 时内部测试默认关闭，父级拥有 `BUILD_TESTING`，需要时另开 `PANGU_BUILD_ENGINE_TESTS`。Project 及 Game/Editor STATIC Catalog、Assets 和显式 SHARED 部署以正式测试夹具验收；ModuleManager 原生 Loader 的当前实现与双模式实际验收见[新验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)；PanguMetaTool 首版现已单独实现，App 发布未因此实现。平台命令、结果和性能证据见[本次验收](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md)。
 
 ## CMake Target 命名与职责（Frozen）
 
@@ -156,9 +156,9 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 
 当前统一链接选项为 `PANGU_LINK_MODE=Monolithic|Modular`：同图全部 Pangu Module 分别使用原生 STATIC 或 SHARED Target，桌面默认 Modular，Android/iOS 默认 Monolithic。Engine 子目录服从父 Project 的缓存或普通变量选择；非法值及同图中途改值在配置期拒绝。ThirdParty 不受该选项影响。同一构建树可重新配置切换模式。
 
-`pangu_configure_module(target EXPORT_MACRO macro)` 验证目标类型并生成 PUBLIC 构建包含目录中的 `<Target>Export.h`；Foundation/Module 分别使用 `PG_FOUNDATION_API`、`PG_MODULE_API`，显式标注所需符号，不使用自动导出全部符号。`pangu_export_module_query(TARGET target QUERY function HEADER header)` 仅为 SHARED Target 编译固定 `PanguModuleQueryV1` 包装。ModuleManager 已消费真实 Loader，当前阶段证据与最终平台矩阵分别记录于[正式验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。
+`pangu_configure_module(target EXPORT_MACRO macro)` 验证目标类型并生成 PUBLIC 构建包含目录中的 `<Target>Export.h`；Foundation/Module 分别使用 `PG_FOUNDATION_API`、`PG_MODULE_API`，显式标注所需符号，不使用自动导出全部符号。`pangu_export_module_query(TARGET target ID id_symbol ID_HEADER identity_header QUERY function HEADER query_header)` 在两种模式均登记 Module 身份与 Query binding，供 Meta 描述和 Host Catalog 消费；仅 SHARED Target 发射并编译固定 `PanguModuleQueryV1` 包装。ID 引用 C++ 公共 ModuleId 常量，ID_HEADER 声明该常量，HEADER 声明 Query；两者可为同一头文件。ModuleManager 已消费真实 Loader，当前阶段证据与最终平台矩阵分别记录于[正式验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。
 
-**尚未冻结/实现**：`pangu_configure_module` 的长期包装 API、完整工具链锁定（Windows SDK/MSVC STL、Linux libc++ ABI 配置、各平台 SDK 的精确 Profile）、PanguMeta、完整安装/分发和多配置产物政策。源码 Plugin/独立 Project 已提供最小构建接线，不将测试夹具提升为完整发布链路或跨平台 ABI 安全证明。
+**尚未冻结/实现**：`pangu_configure_module` 的长期包装 API、完整工具链锁定（Windows SDK/MSVC STL、Linux libc++ ABI 配置、各平台 SDK 的精确 Profile）、PanguMetaTool 长期 API、完整安装/分发和多配置产物政策。源码 Plugin/独立 Project 已提供最小构建接线，不将测试夹具提升为完整发布链路或跨平台 ABI 安全证明。
 
 ## “一个 Module 一个库”的范围
 
@@ -187,10 +187,23 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 
 按 [C++ 规范与最佳实践](cpp-guidelines.md)，类型与静态分发应尽量在编译期解决。Module 依赖、编译器/标准库配置和按需生成代码属于 CMake 与目标工具链职责；Shader/Asset 处理与打包只由实际消费者或显式命令触发。独立 Pangu 原生 Plugin/SDK 二进制交付不再是产品路线，普通 ThirdParty/系统库仍遵守自身 ABI/Toolchain 约束。
 
-- CMake 仍是构建依赖的权威来源；可由 PanguMeta 等工具按需要生成代码，生成源文件归入对应 Module 唯一库 Target。
+- CMake 仍是构建依赖的权威来源；可由 PanguMetaTool 等工具按需要生成代码，生成源文件归入对应 Module 唯一库 Target。
+- PanguMetaTool 的 MetaIR 是进程内拥有数据的强类型模型；类型语义与 GenerationRequest 中的编译上下文、输入输出及 Host 装配分开。原生图按已登记消费者选择生成头、实现或类型描述，不要求所有元数据转换为 C++ 静态表；首版不增加 Meta 文件或 Exporter 构建阶段。
 - 编译器与目标平台配置仍由真实 Toolchain/Target 表达并验证；历史 [ABI Profile v1](abi-profile-fingerprint.md) 不再参与同树普通构建。独立 Pangu 原生插件二进制接纳及下一版 ABI Preflight 不再规划；Loader 运行时有效性与 CodePin 不受影响。
 - 预生成并不取代 Runtime 对外部输入、动态模块状态、设备能力以及资源版本的必要验证。
-- 元数据生成、Shader/Asset Pipeline 和完整增量构建协议均为后续设计，不因通用最佳实践而自动视为已实现。
+- Meta 的工具路线及生成代码存放/编译归属已有明确设计，首版生产生成与原生增量接线已实现；Shader/Asset Pipeline 也不因通用最佳实践而自动视为已实现。
+
+### PanguMetaTool 生成产物（首版已实现，长期 API 未冻结）
+
+权威目录树、生成头依赖方向和验收要求见 [Reflection / Meta 第 6 节](../core/reflection-meta.md#6-生成代码存放编译与原生构建依赖)，决策见 [ADR-0017](../decisions/0017-standalone-pangu-meta.md)。**生成代码按 Engine / Game Project 源码归属分根存放**：Engine 自有 Module/Plugin 输出到 `<EngineBuildRoot>/Generated/PanguMeta/<Config>/<CMakeTarget>/`，Project 自有 Module/Plugin 及 Game/Editor Host Catalog 输出到 `<ProjectBuildRoot>/Generated/PanguMeta/<Config>/<CMakeTarget>/`。即使 Project 通过 `add_subdirectory()` 引用 Engine 源码，也不把 Engine 生成结果写入 Project 构建树；`CMakeTarget` 是实际编译实现的库或 Host 目标名，不是逻辑 Module 名或 Alias。
+
+头文件/实现使用 `.gen.h` / `.gen.cpp`，代码目录仅保留 Public / Private，不另设 Source 层。公开生成头进入 Public，内部头与所有生成实现进入 Private；只有确需目标非内联实现或类型描述时才生成相应实现，加入所属 Module 的唯一库，Host Catalog 加入对应 Host，不另建 Meta 库。纯模板/强类型访问可仅生成头，构建期检查数据可止于 MetaIR。原始类型头默认不包含自身生成头，只在消费者需要编译期接口时按需包含伴随 `.gen.h`；不要求业务 `.cpp` 手写包含 `.gen.cpp`。
+
+CMake 按源码所有者选择生成根，登记唯一生产者及消费者顺序。PanguMetaTool 按内容差异发布，保留内容不变文件的 mtime；Meta.d 跟踪传递输入，Meta.outputs.json 只列本批次拥有文件，Meta.stamp 最后提交。失败期间清单可为旧新并集，只有成功 stamp 表示完成。
+
+Engine 对象、库、导出头与 Meta 产物已实际分根。同一 EngineBuildRoot 会话串行；A→B→直接 A 通过原生重配恢复共享状态，包括失败恢复和跨配置请求。每 Target/Config 唯一批次，scan 可联合 Query 槽位；不建立第二套调度图或 Project 变体目录。Export 仍由 CMake 生成，Query/Catalog 已由 Meta 唯一生产者接管。
+
+Meta 输入头登记同时接入目标源码登记，每头有唯一 Module 所有者；按头选择消费需求、按 Module Target 汇总，当前图拒绝重复归属。未登记但含 pga 的项目头报错，已登记的其他 Module 作为依赖处理；每 Module 首版只有一套明确 Meta 上下文。ModuleId 仍在 C++ 公共常量中唯一定义，Definition 与生成入口共同引用，CMake 只登记符号和声明头。具体登记 API、外部输出依赖与缓存迁移已按[首版规格](../../docs/superpowers/specs/2026-11-09-pangumeta-tool-design.md)的实施计划落实，不另建人工 Manifest。
 
 ## 必须解决的设计问题（尚未冻结）
 
@@ -199,7 +212,7 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 | CMake 组织 | 根工程、五平台 Presets 和最小 Module 设置已经落地；长期封装 API、Generator 组合、多配置与完整目标 Toolchain 管理尚未冻结 |
 | 库类型与部署策略 | `PANGU_LINK_MODE` 已统一 Module 的 STATIC/SHARED 类型和平台默认值；完整安装与部署政策仍待实现 |
 | 产物布局 | 库、Manifest、符号文件、动态库导出、安装和分发目录 |
-| Meta 生成 | Clang 属性提取、代码生成、增量依赖、多配置构建 |
+| Meta 生成 | 首版生成、输入映射、增量依赖已实现；仅 Ninja 单配置，多配置暂不支持，见 Reflection / Meta 第 6 节 |
 | ABI | 同树构建普通零 AbiProfile 由 ADR-0013 保留；Pangu Plugin/SDK 独立二进制 Preflight 已被 ADR-0014 取消。运行时 SHARED Query、ModuleId、CodePin 与第三方 ABI 审核仍有各自责任 |
 | ThirdParty | Source/Binary 版本、目标导出与平台链接 |
 | 交叉编译 | Android/iOS 两模式正式根构建、Runtime/业务库和独立 Project 最终链接按新验收记录；设备执行、打包、签名不在本轮范围 |
@@ -225,3 +238,5 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 `PanguEngineHost`（`Pangu::EngineHost`）为跟随统一链接模式的第三常驻 Module；不修改基础两项 BuiltinResidentQueries。根 `PANGU_BUILD_SAMPLES` 默认 OFF，开启后构建 MinimalHost 与独立服务 Module，并将 MinimalHostSmoke 接入 precommit/full。Project 的 Game/Editor/MobileHost 消费同一宿主协议；Modular 不通过隐式业务导入替代显式候选，部署集合仍与消费集合分开。
 
 正式桌面矩阵逐宿主按 Monolithic → Modular 配置 Samples ON，构建并执行对应 full；Modular ModuleRegression 保留旧 Mono 与 Host Mono 覆盖。完成后恢复桌面 Modular、Samples/Benchmark OFF、测试 ON 并验证 fast；移动根恢复 Monolithic、Samples/Benchmark/测试 OFF，构建 EngineHost，另用隔离 Project 的 CrossCompileTests 重验 MobileHost 最终链接。BuildRoot/共享源码规则不变。精确 SHA、完整命令、结果与局限见[EngineHost 验收](../../docs/superpowers/plans/2026-11-07-engine-host-lifecycle-validation.md)。
+
+正式入口为 cmake/PanguMeta.cmake（headers/consume/module/host_catalog）；启用任一任务须显式准备完整宿主 SDK，包括仅 Query/Catalog。宿主工具缓存与测试缓存分离，移动图只调用宿主程序，不导入 LLVM targets。结果与限制见[Meta 验收](../../docs/superpowers/plans/2026-11-09-pangumeta-tool-validation.md)。

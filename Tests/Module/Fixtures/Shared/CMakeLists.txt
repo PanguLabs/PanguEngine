@@ -32,11 +32,11 @@ foreach(name IN ITEMS Provider Consumer)
     pangu_configure_module(PanguScope${name})
     target_include_directories(PanguScope${name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     target_link_libraries(PanguScope${name} PRIVATE PanguModule PanguScopeTestSupport)
-    pangu_export_module_query(TARGET PanguScope${name} QUERY pg::module::fixture::QueryScope${name} HEADER SharedFixtureContract.h)
+    pangu_export_module_query(TARGET PanguScope${name} ID pg::module::fixture::kScope${name}Id ID_HEADER SharedFixtureContract.h QUERY pg::module::fixture::QueryScope${name} HEADER SharedFixtureContract.h)
 endforeach()
-pangu_export_module_query(TARGET PanguSharedProvider QUERY pg::module::fixture::QuerySharedProvider HEADER SharedFixtureContract.h)
-pangu_export_module_query(TARGET PanguSharedConsumer QUERY pg::module::fixture::QuerySharedConsumer HEADER SharedFixtureContract.h)
-pangu_export_module_query(TARGET PanguNullQuery QUERY pg::module::fixture::QueryNullDefinition HEADER SharedFixtureContract.h)
+pangu_export_module_query(TARGET PanguSharedProvider ID pg::module::fixture::kSharedProviderId ID_HEADER SharedFixtureContract.h QUERY pg::module::fixture::QuerySharedProvider HEADER SharedFixtureContract.h)
+pangu_export_module_query(TARGET PanguSharedConsumer ID pg::module::fixture::kSharedConsumerId ID_HEADER SharedFixtureContract.h QUERY pg::module::fixture::QuerySharedConsumer HEADER SharedFixtureContract.h)
+# 无身份的恶意 ABI 夹具保留手写空包装，不参与正常 Module 登记。
 
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/SharedFixturePaths.h" CONTENT
 "#pragma once

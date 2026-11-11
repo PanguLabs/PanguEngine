@@ -3,6 +3,8 @@
 #include <Error.h>
 #ifdef PANGU_FIXTURE_MODULAR
 #include "ModuleCandidates.h"
+#else
+#include <GeneratedModuleCatalog.h>
 #endif
 
 namespace
@@ -18,7 +20,7 @@ namespace
 #ifdef PANGU_FIXTURE_MODULAR
     return pg::fixture::VerifyCandidates(pg::fixture::ConsumerCandidates(), pg::fixture::kGameplayId, true);
 #else
-    return pg::fixture::VerifyCatalog(pg::fixture::GameCatalog(), pg::fixture::kGameplayId);
+    return pg::fixture::VerifyCatalog(pg::module::GeneratedStaticModuleCatalog(), pg::fixture::kGameplayId);
 #endif
 }
 } // namespace

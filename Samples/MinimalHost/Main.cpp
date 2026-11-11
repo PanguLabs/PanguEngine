@@ -1,7 +1,9 @@
 #include "MinimalService.h"
 #include <EngineHost.h>
+#include <HostMetaAccess.h>
 #include <HostOperation.h>
 #include <HostStartupConfig.h>
+#include <MinimalService.gen.h>
 #include <ModuleManager.h>
 #include <array>
 #include <cstdio>
@@ -9,6 +11,8 @@
 #ifdef PG_SAMPLE_MODULAR
 #include <filesystem>
 #include <span>
+#else
+#include <GeneratedModuleCatalog.h>
 #endif
 
 namespace
@@ -45,7 +49,8 @@ namespace
         {
             return false;
         }
-        ++(*firstBorrow)->Value;
+        const auto& valueField = std::get<0>(pg::meta::TypeTraits<pg::sample::CounterService>::Fields);
+        valueField.Write(**firstBorrow, valueField.Read(**firstBorrow) + 1);
         if ((*firstBorrow)->Value != 8 || (*secondBorrow)->Value != 7)
         {
             return false;
@@ -84,8 +89,9 @@ int main(int argc, char** argv)
         std::fputs("Monolithic 示例不接受动态库路径。\n", stderr);
         return 1;
     }
+    const auto catalog = pg::module::GeneratedStaticModuleCatalog();
     const std::array<pg::module::ModuleLoadCandidate, 1> candidates{
-        pg::module::StaticModuleCandidate{pg::sample::QueryMinimalServices},
+        pg::module::StaticModuleCandidate{catalog.Entries.front().Query},
     };
 #endif
     pg::engine::EngineHost host;
@@ -100,7 +106,16 @@ int main(int argc, char** argv)
         const bool closed = Shutdown(host);
         return closed && report.StartupFailure && report.PrimaryError ? 2 : 3;
     }
-    const bool valid = UseCounters(host);
+    bool valid = UseCounters(host);
+    {
+        auto description = pg::meta::BorrowTypeInfo<pg::sample::CounterService>(host);
+        valid = valid && description && description->Get()->Fields.size() == 1;
+        if (description && description->Get()->Fields.size() == 1)
+        {
+            std::cout << "Generated metadata: " << description->Get()->Name
+                      << "; field=" << description->Get()->Fields.front().Name << '\n';
+        }
+    }
     const bool closed = Shutdown(host);
     if (!valid || !closed)
     {

@@ -13,7 +13,7 @@
 ## Decision
 
 1. **统一数据和行为**：STATIC/SHARED 共享原生 C++23 `pg::module::ModuleDefinition`、`ModuleDescriptor`、`RegistrationContext` 与 `RegisterModuleFn` 语义。Module 注册是可回滚事务，注册成功不代表 Service Ready；不要求统一 `IModule` 虚基类、`ExtensionDescriptor` 或 `BinaryImage`。
-2. **STATIC**：CMake/PanguMeta 生成显式 Catalog，通过按 Module 唯一化的 C++ 查询函数指针直接引用 ModuleDefinition；不依赖全局静态初始化顺序。**ADR-0013 修订**：同树 STATIC 最终组合不再要求额外 v1 Profile/逐对象校验。
+2. **STATIC**：CMake/PanguMetaTool 生成显式 Catalog，通过按 Module 唯一化的 C++ 查询函数指针直接引用 ModuleDefinition；不依赖全局静态初始化顺序。**ADR-0013 修订**：同树 STATIC 最终组合不再要求额外 v1 Profile/逐对象校验。
 3. **SHARED**：使用一个版本化稳定名称的导出符号（候选 `PanguModuleQueryV1`），以 `extern "C"` 保证可被 `GetProcAddress/dlsym` 按名称定位；返回原生 C++23 `ModuleDefinition` 指针。C Language Linkage 只用于符号定位，不等于稳定 C ABI。
 4. **不用独立 C Discovery**：取消 `PgModuleDiscoveryV1` / `PgModuleDependencyV1`、C 状态码转换和 `void*` RegistrationContext Bridge。发现后使用同一 C++ RegisterModuleFn 执行事务注册。
 5. **独立交付插件的历史规定（已被替代）**：本 ADR 曾要求单独交付给已有宿主的 Pangu 原生 C++ 插件在 OS Load 之前完成可信 ABI/Public API Preflight；[ADR-0014](0014-source-plugins-project-build.md) 已结束此 Pangu 交付路线，不应据此恢复 AbiProfile、config-v2 或可信产物绑定工具。

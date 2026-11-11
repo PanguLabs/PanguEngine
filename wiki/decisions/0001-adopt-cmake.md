@@ -22,7 +22,7 @@ PanguEngine 以 C++23 和全平台 Clang 为基础，仍需要正确表达 Modul
 - 早期“PanguBuild 必须自研完整构建核心”的路线被替代。
 - `Module.toml` **不再自动是每个 Module 的必需文件**；`CMakeLists.txt` 与剩余模块元数据如何分工须另行决策。
 - Plugin 的分发、安装与运行时发现仍可能需要独立 Manifest，不能简单用构建系统替代。
-- `PanguBuild` 名称是否保留为上层工具、PanguClang/PanguMeta 如何接入、ABI Fingerprint 何时生成，均未冻结。
+- `PanguBuild` 名称是否保留为上层工具、PanguClang/PanguMetaTool 如何接入、ABI Fingerprint 何时生成，均未冻结。
 
 ## Open Questions
 

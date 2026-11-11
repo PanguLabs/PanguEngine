@@ -57,7 +57,7 @@ Service Contract Identity 独立于 Provider ModuleId；同一单 Provider Contr
 
 动态 Contract 的 Scoped Registry 仅承担 Provider 注册/撤销、单 Provider 唯一性、生命周期借用与依赖解析；业务 Registry 的多 Provider 语义由该 Registry 自行约定。二者均**不负责**扫描所有 C++ 对象、分配任意 Gameplay 对象、自动 Tick 或充当全能 DI Container。
 
-服务接口默认面向 C++23 强类型契约。插件 ABI 仍必须遵守 [ABI](../foundation/abi.md)；ServiceId 持久稳定，不能来自 `std::hash` 或不受控 RTTI。必要时由 PanguMeta 提供生成值，但 v1 不强制引入 `pga::service`。
+服务接口默认面向 C++23 强类型契约。插件 ABI 仍必须遵守 [ABI](../foundation/abi.md)；ServiceId 持久稳定，不能来自 `std::hash` 或不受控 RTTI。必要时由 PanguMetaTool 提供生成值，但 v1 不强制引入 `pga::service`。
 
 ## 生命周期与依赖
 
@@ -115,7 +115,7 @@ class ServiceRef;
 
 冻结：No Subsystems；Concrete / Contract / Registry Service 三种模式；静态访问优先；Host/Context/World 作用域；单 Provider Contract 唯一性与业务 Registry 多 Provider 原则；Module 与 Service 独立职责；依赖 Borrow/Lease 和有序撤销；不自动 Tick；CodePin 与实例销毁顺序。
 
-未冻结：C++ Public API 签名、Registry 的匹配/优先级与 Contribution 身份、物理容器、线程同步策略、错误枚举、Factory 函数签名、PanguMeta 注册生成协议、Hot Swap / Hot Reload。
+未冻结：C++ Public API 签名、Registry 的匹配/优先级与 Contribution 身份、物理容器、线程同步策略、错误枚举、Factory 函数签名、PanguMetaTool 注册生成协议、Hot Swap / Hot Reload。
 
 ## EngineHost Concrete 访问实现范围
 

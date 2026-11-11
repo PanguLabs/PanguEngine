@@ -42,6 +42,7 @@ target_link_libraries(PanguPluginDiscovery PUBLIC PanguPluginManifest)
 target_compile_options(PanguPluginDiscovery PRIVATE -fno-exceptions)
 
 add_executable(PanguBuildTool Private/Main.cpp)
+target_sources(PanguBuildTool PRIVATE Private/BuildLayout.cpp)
 target_link_libraries(PanguBuildTool PRIVATE PanguPluginDiscovery)
 target_compile_options(PanguBuildTool PRIVATE -fno-exceptions)
 

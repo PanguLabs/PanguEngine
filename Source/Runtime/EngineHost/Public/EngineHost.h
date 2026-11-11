@@ -12,6 +12,7 @@ namespace pg::engine
 namespace detail
 {
 class HostResourceAccess;
+class HostMetaAccess;
 struct EngineHostTestAccess;
 } // namespace detail
 
@@ -44,6 +45,7 @@ public:
 
 private:
     friend class detail::HostResourceAccess;
+    friend class detail::HostMetaAccess;
     friend struct detail::EngineHostTestAccess;
     struct State;
     std::unique_ptr<State> Data;

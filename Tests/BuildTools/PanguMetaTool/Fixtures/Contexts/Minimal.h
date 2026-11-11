@@ -1,0 +1,4 @@
+struct ContextValue
+{
+    int Value;
+};

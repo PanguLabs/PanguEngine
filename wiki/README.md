@@ -1,7 +1,7 @@
 # PanguEngine 设计文档索引
 
 > 状态：维护中（Index）
-> 更新：2026-11-02
+> 更新：2026-11-08
 > 约定：文档文件名使用英文 kebab-case，正文中文优先，专业术语可使用英文。
 
 ## 如何阅读
@@ -50,7 +50,7 @@
 | [Module 注册与生命周期 v1](core/module-registration-lifetime.md) | STATIC/SHARED 统一注册、可回滚事务、生命周期与 CodePin | Frozen（设计语义）；具体 API 未冻结 |
 | [ModuleDescriptor & Registration API v1](core/module-api.md) | 身份/依赖、统一 C++ 入口、ModuleManager、强类型 RTTI、Scope 装配、Pin 与清理契约 | Partially Frozen（现行行为见 ADR-0015；Public API/ABI 未冻结） |
 | [内存管理](core/memory-management.md) | Pangu Memory Ownership Contract v1 | Frozen（规范 v1） |
-| [反射和元数据](core/reflection-meta.md) | pga 属性、禁止反射标记宏、不 Fork LLVM | Partially Frozen |
+| [反射 / 元数据与 PanguMetaTool](core/reflection-meta.md) | 独立 Build Tool、统一语义/MetaIR、强类型访问与受保护描述、按头登记及按需生成 | Partially Frozen（首版行为经 grilling 确认；具体 API/ABI、框架及生产集成待完成） |
 | [Service / Context](core/service.md) | No Subsystem、Host/Context/World 与 Concrete / Contract / Registry Service 三模式 | Frozen（设计语义）；API PoC |
 
 ## Runtime
@@ -73,6 +73,7 @@
 - [ADR-0011：冻结 Module API v1 的行为契约](decisions/0011-module-api-behavior-contract.md)
 - [ADR-0012：宿主本地构建树](decisions/0012-host-local-build-trees.md)
 - [ADR-0013：原生增量构建与 ABI 交付边界](decisions/0013-native-build-abi-boundary.md)
+- [ADR-0017：独立 PanguMetaTool 与受控属性诊断豁免](decisions/0017-standalone-pangu-meta.md)
 
 ## 文档维护规则
 

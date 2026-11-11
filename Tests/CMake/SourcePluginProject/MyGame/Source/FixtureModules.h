@@ -15,6 +15,4 @@ inline constexpr module::DeclarationId kPhysicsDeclaration{.Bytes = {std::byte{0
 inline constexpr module::DeclarationId kGameplayDeclaration{.Bytes = {std::byte{0x12}}};
 inline constexpr module::DeclarationId kEditorDeclaration{.Bytes = {std::byte{0x13}}};
 
-[[nodiscard]] module::StaticModuleCatalog GameCatalog() noexcept;
-[[nodiscard]] module::StaticModuleCatalog EditorCatalog() noexcept;
 } // namespace pg::fixture

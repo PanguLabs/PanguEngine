@@ -37,7 +37,7 @@
 
 1. 构建/生成阶段显式产生静态 Module Catalog；宿主启动时将确定的 Catalog 项交给 Module 管理器。
 2. Catalog 直接引用每个 Module 的注册入口，强制链接器保留所需代码；不依赖跨 Translation Unit 的静态初始化顺序、全局构造副作用或对所有静态库无条件 `whole-archive`。
-3. Catalog 不需要新的 Module Library Target；PanguMeta 生成代码属于对应 Module 的唯一 Library Target。未引入 PanguMeta 前允许由 CMake/明确编写的桥接入口生成 Catalog 验证探针。
+3. Catalog 不需要新的 Module Library Target；PanguMetaTool 生成代码属于对应 Module 的唯一 Library Target。未引入 PanguMetaTool 前允许由 CMake/明确编写的桥接入口生成 Catalog 验证探针。
 4. STATIC 库归档本身不可卸载；同图所有逻辑 Module 按 Monolithic/Modular 统一为 STATIC/SHARED，不再允许嵌入逻辑 STATIC Module；普通 ThirdParty 的驻留仍跟随实际承载代码。
 
 ### SHARED Module
@@ -45,7 +45,7 @@
 1. Module 加载器通过一个版本化稳定 `extern "C"` 导出名定位**原生 C++23 ModuleDefinition Query**（候选 `PanguModuleQueryV1`），该 C Language Linkage 仅用于**按名找符号**，不是 C POD 交换协议或全引擎 C Bootstrap。同树、同配置的源码插件不需要 AbiProfile；ADR-0014 不支持向既有宿主独立交付 Pangu 原生二进制插件。
 2. STATIC 和 SHARED 使用同一种原生 C++23 `ModuleDefinition`、Descriptor 和 `RegistrationContext`，SHARED **不再要求窄 C POD Discovery、数值 C 状态码转换或 `void*` 注册桥**。装载后仍须复核协议、ModuleId、依赖与入口有效性，再执行统一 C++ 注册事务；源码交付不取消 CodePin 和安全卸载要求。
 3. `LoadLibrary`/`dlopen` 可能在取得导出入口之前运行 DLL 初始化器/全局构造，因此运行时符号校验**不能**宣称不可信插件代码已在执行前受到安全隔离。历史 ABI Profile v1 不再是活动格式，独立 Pangu 插件 Preflight 路线已取消。禁止依赖全局构造产生业务注册副作用。
-4. 动态导出入口由 CMake/PanguMeta 等生成，不要求业务 Module 手写导出符号或注册桥。查询函数返回的 C++ Descriptor/依赖字符串等数据在 CodePin 有效期内借用并由 Host 复制；精确符号名称、C++ Public API 布局/契约和平台调用约定仍待验证。此技术路线依 [ADR-0010](../decisions/0010-unified-cpp-module-entry.md)、[ADR-0013](../decisions/0013-native-build-abi-boundary.md) 与 [ADR-0014](../decisions/0014-source-plugins-project-build.md) 修订。
+4. 动态导出入口由 CMake/PanguMetaTool 等生成，不要求业务 Module 手写导出符号或注册桥。查询函数返回的 C++ Descriptor/依赖字符串等数据在 CodePin 有效期内借用并由 Host 复制；精确符号名称、C++ Public API 布局/契约和平台调用约定仍待验证。此技术路线依 [ADR-0010](../decisions/0010-unified-cpp-module-entry.md)、[ADR-0013](../decisions/0013-native-build-abi-boundary.md) 与 [ADR-0014](../decisions/0014-source-plugins-project-build.md) 修订。
 5. 加载后的动态库句柄与 CodePin 由 Module 机制拥有和协调；不为文件句柄再建独立 BinaryImage/管理层。
 
 两种装载来源通过不同的物理定位方式取得**同一种 C++23 ModuleDefinition**，之后使用完全一致的 C++23 注册、依赖、事务与生命周期协议；SHARED 的固定符号名不构成独立的 C 数据交换层。

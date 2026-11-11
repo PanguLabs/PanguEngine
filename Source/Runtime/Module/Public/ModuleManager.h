@@ -1,6 +1,7 @@
 #pragma once
 #include <ModuleCodePin.h>
 #include <ModuleDescriptor.h>
+#include <ModuleMetaBorrow.h>
 #include <ModuleOperation.h>
 #include <PanguModuleExport.h>
 #include <Result.h>
@@ -19,6 +20,7 @@ namespace detail
 {
 struct ModuleManagerTestAccess;
 class ScopeResourceAccess;
+class ModuleMetadataAccess;
 struct ScopeResourceQuery;
 struct ScopeObjectControl;
 } // namespace detail
@@ -103,7 +105,7 @@ public:
     [[nodiscard]] Status Activate(ModuleHandle handle, ModuleOperationReport& report) noexcept;
     [[nodiscard]] Status BeginUnload(ModuleHandle handle, ModuleOperationReport& report) noexcept;
     [[nodiscard]] Status TryFinishUnload(ModuleHandle handle, ModuleOperationReport& report) noexcept;
-    [[nodiscard]] Result<ModuleCodePin> TryPinForBusiness(ModuleHandle handle) noexcept;
+    [[nodiscard]] Result<ModuleCodePin> TryPinForBusiness(ModuleHandle handle) const noexcept;
     [[nodiscard]] std::optional<ModuleHandle> Find(ModuleId id) const noexcept;
     [[nodiscard]] Result<ModuleSnapshot> Inspect(ModuleHandle handle) const noexcept;
     [[nodiscard]] std::vector<ModuleHandle> Modules() const;
@@ -120,6 +122,8 @@ public:
 private:
     friend struct detail::ModuleManagerTestAccess;
     friend class detail::ScopeResourceAccess;
+    friend class detail::ModuleMetadataAccess;
+    [[nodiscard]] Result<ModuleMetaBorrow> AcquireMetadata(ModuleId owner, const std::type_info& type) const noexcept;
     [[nodiscard]] Result<std::shared_ptr<detail::ScopeObjectControl>>
     AcquireScopeResource(const detail::ScopeResourceQuery& query, const std::type_info& type) const noexcept;
     struct State;

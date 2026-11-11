@@ -9,6 +9,9 @@
 #include <array>
 #include <expected>
 #include <memory>
+#if PG_META_HAS_DESCRIPTION
+#include <ModuleMeta.gen.h>
+#endif
 
 namespace pg::sample
 {
@@ -39,6 +42,9 @@ constexpr module::ModuleDefinition kDefinition{
             .BuildIdentity = "minimal-host",
         },
     .RegisterModule = Register,
+#if PG_META_HAS_DESCRIPTION
+    .Metadata = &meta::generated::T_PanguMinimalServices::kModuleMetadata,
+#endif
 };
 } // namespace
 const module::ModuleDefinition* QueryMinimalServices() noexcept { return &kDefinition; }

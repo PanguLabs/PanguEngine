@@ -1,7 +1,10 @@
 #include "FixtureModules.h"
 
 #include "Fixtures/ManagerFixture.h"
+#include <GeneratedModuleCatalog.h>
 #include <ModuleDescriptor.h>
+#include <ModuleHandle.h>
+#include <ModuleOperation.h>
 #include <RegistrationContext.h>
 #include <ScopeIdentity.h>
 
@@ -12,7 +15,7 @@ TEST(StaticCatalog, RetainsArchiveRootsAndRunsRealFactories)
     using namespace pg::module;
     RegistrationScope scope;
     ModuleOperationReport report;
-    const auto catalog = fixture::GeneratedCatalog();
+    const auto catalog = GeneratedStaticModuleCatalog();
     auto host = pg::module::test::CreateManager(catalog, scope, {}, report);
     ASSERT_TRUE(host);
     ASSERT_EQ(pg::module::test::BusinessSnapshots(*host).size(), 2U);

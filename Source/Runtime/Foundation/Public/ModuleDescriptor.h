@@ -39,6 +39,7 @@ struct ModuleDescriptor
 };
 
 class RegistrationContext;
+struct ModuleMetaProvider;
 struct StaticModuleCatalog;
 using RegisterModuleFn = pg::Status (*)(RegistrationContext&) noexcept;
 
@@ -46,6 +47,7 @@ struct ModuleDefinition
 {
     ModuleDescriptor Descriptor{};
     RegisterModuleFn RegisterModule{};
+    const ModuleMetaProvider* Metadata{};
 };
 
 using QueryModuleFn = const ModuleDefinition* (*)() noexcept;

@@ -15,6 +15,8 @@
 #include <ModuleBuiltin.h>
 #include <ModuleError.h>
 #include <ModuleManager.h>
+#include <ModuleMetaBorrow.h>
+#include <ModuleMetaProvider.h>
 #include <RegistrationContext.h>
 #include <algorithm>
 #include <array>
@@ -195,6 +197,7 @@ struct ModuleManager::State
         for (const auto handle : batch.ReleaseOrder)
         {
             auto* record = Resolve(handle);
+            record->Metadata = nullptr;
             if (record->Library)
             {
                 const auto released = record->Library->Release();
@@ -578,7 +581,7 @@ std::vector<ModuleHandle> ModuleManager::RegistrationOrder() const
     return result;
 }
 
-Result<ModuleCodePin> ModuleManager::TryPinForBusiness(ModuleHandle handle) noexcept
+Result<ModuleCodePin> ModuleManager::TryPinForBusiness(ModuleHandle handle) const noexcept
 {
     if (!Data || handle.Domain != Data->Domain || handle.Slot == 0 || handle.Slot > Data->Slots.size())
     {
@@ -805,6 +808,7 @@ Status ModuleManager::FinishRecord(ModuleHandle handle, ModuleOperationReport& r
         report = completed;
         return std::unexpected(*completed.CleanupError);
     }
+    record->Metadata = nullptr;
     if (record->Resident)
     {
         report = completed;
@@ -865,6 +869,43 @@ Status ModuleManager::TryFinishUnload(ModuleHandle handle, ModuleOperationReport
     return result;
 }
 ScopeHandle ModuleManager::HostScope() const noexcept { return Data ? Data->Runtime->HostScope() : ScopeHandle{}; }
+Result<ModuleMetaBorrow> ModuleManager::AcquireMetadata(ModuleId owner, const std::type_info& type) const noexcept
+{
+    if (Data && Data->Operating)
+    {
+        return std::unexpected(MakeModuleError(ModuleError::kBusy));
+    }
+    if (!Data || Data->Closed || Data->Runtime->IsShuttingDown())
+    {
+        return std::unexpected(MakeModuleError(ModuleError::kInvalidState));
+    }
+    const auto handle = Find(owner);
+    if (!handle)
+    {
+        return std::unexpected(MakeModuleError(ModuleError::kNotFound));
+    }
+    const auto* record = Data->Resolve(*handle);
+    if (record->State != ModuleState::kActive)
+    {
+        return std::unexpected(MakeModuleError(ModuleError::kNotReady));
+    }
+    auto pin = TryPinForBusiness(*handle);
+    if (!pin)
+    {
+        return std::unexpected(pin.error());
+    }
+    if (record->Metadata != nullptr)
+    {
+        for (const auto& entry : record->Metadata->Entries)
+        {
+            if (*entry.CppType == type)
+            {
+                return ModuleMetaBorrow(std::move(*pin), entry.Info);
+            }
+        }
+    }
+    return std::unexpected(MakeModuleError(ModuleError::kNotFound));
+}
 Result<std::shared_ptr<detail::ScopeObjectControl>>
 ModuleManager::AcquireScopeResource(const detail::ScopeResourceQuery& query, const std::type_info& type) const noexcept
 {

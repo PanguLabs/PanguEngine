@@ -64,5 +64,4 @@ inline constexpr DeclarationId kSecondDeclaration{.Bytes = {std::byte{0xd2}}};
 
 [[nodiscard]] PG_CATALOG_FIRST_API const ModuleDefinition* QueryFirst() noexcept;
 [[nodiscard]] PG_CATALOG_SECOND_API const ModuleDefinition* QuerySecond() noexcept;
-[[nodiscard]] StaticModuleCatalog GeneratedCatalog() noexcept;
 } // namespace pg::module::fixture

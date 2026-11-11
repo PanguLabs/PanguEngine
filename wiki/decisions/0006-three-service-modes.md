@@ -24,7 +24,7 @@
 - Service 访问模式清晰，不引入重复的 Subsystem / ServiceManager / ExtensionManager。
 - Registry Service 多 Provider 与 Contract Service 单 Provider 唯一性语义不同。
 - 对多 Context/World 的实例，Module 注册声明需在所属 Scope 中安装实际 Provider/Contribution，不能假定单一全局 Registry。
-- 具体 API、注册方式、Provider 匹配、PanguMeta 是否参与自动化等仍须在后续协议设计中确认。
+- 具体 API、注册方式、Provider 匹配、PanguMetaTool 是否参与自动化等仍须在后续协议设计中确认。
 
 ## Open Questions
 

@@ -1,8 +1,0 @@
-#include <@ARG_HEADER@>
-#include <@ARG_TARGET@Export.h>
-#include <ModuleDescriptor.h>
-
-extern "C" @exportMacro@ const pg::module::ModuleDefinition* PanguModuleQueryV1() noexcept
-{
-    return @ARG_QUERY@();
-}

@@ -6,7 +6,7 @@
 
 **Goal:** 在保留 PanguEngine 独立构建的前提下，以 `Plugin.toml` 稳定识别源码插件，使用 `PanguBuildTool` 配置期解析，并由同一 CMake/Ninja 图按真实消费者构建独立 MyGame 的 Plugin/Module。
 
-**Architecture:** 顶层 Engine 或 Project 负责 Toolchain/CTest；独立构建宿主上的 `PanguBuildTool` 使用 `toml++` 解析两个固定插件根，向 CMake 返回 JSON。CMake 只接入显式启用的插件目录，应用的静态链接和显式动态库依赖决定哪些目标进入构建；运行时加载器与 PanguMeta 不在本期实现。
+**Architecture:** 顶层 Engine 或 Project 负责 Toolchain/CTest；独立构建宿主上的 `PanguBuildTool` 使用 `toml++` 解析两个固定插件根，向 CMake 返回 JSON。CMake 只接入显式启用的插件目录，应用的静态链接和显式动态库依赖决定哪些目标进入构建；运行时加载器与 PanguMetaTool 不在本期实现。
 
 **Tech Stack:** CMake ≥4.0、Ninja、C++23、Clang（Windows/Linux/macOS/iOS 23.x；Android NDK Clang）、toml++、CTest、Git。
 
@@ -227,7 +227,7 @@ WSL 使用 `R=/home/moozen/WindowsGit/PanguEngine`、`T=$HOME/PanguEngineBuild/P
 - [x] **Step 1：写独立 Catalog RED。** 断言构建 `--target MyGame` 时 Game Catalog 含 Physics+Gameplay 两个稳定 ModuleId、可创建/注册，EditorExtras 的库/对象不构建；单独 `--target MyEditor` 时 Editor Catalog 含 Physics+EditorExtras，Gameplay 不因这一单目标构建被需要。
 - [x] **Step 2：写纯 Assets RED。** 启用 `mygame.assets-only` 且存在合法 `Plugin.toml` 与空代码 `CMakeLists.txt` 时 Configure 成功、没有代码 Module Target/资产命令进入默认 `ALL`；若其 Manifest 缺失仍必须失败。
 - [x] **Step 3：运行 RED。** `cmake "-DPANGU_ENGINE_SOURCE_DIR=$R" "-DPANGU_TEST_ROOT=$T" -P Tests/CMake/SourcePluginProject/StaticCatalogIntegrationTests.cmake`；没有独立 Catalog/Target 或错误目标集合时失败。
-- [x] **Step 4：最小实现。** 参照现有 `Tests/Module/Fixtures/{StaticCatalog.cpp.in,FixtureModules.h}` 用显式 Query 函数指针建立两个 Catalog；例子中的真实 C++ ModuleId 与 Plugin ID 分离。fixture 内 Catalog 是手写测试装配，**不实现 PanguMeta**。
+- [x] **Step 4：最小实现。** 参照现有 `Tests/Module/Fixtures/{StaticCatalog.cpp.in,FixtureModules.h}` 用显式 Query 函数指针建立两个 Catalog；例子中的真实 C++ ModuleId 与 Plugin ID 分离。fixture 内 Catalog 是手写测试装配，**不实现 PanguMetaTool**。
 - [x] **Step 5：运行 GREEN。** 先在全新隔离 BinaryDir 分别构建 `MyGame`、`MyEditor` 并运行桌面可执行文件，检查 RegistrationOrder、`Modules().size()` 与 Ninja object/link 命令；之后单独构建默认 `ALL` 也不能产生未启用 Plugin 的 Target。
 - [x] **Step 6：Review 并提交。** 核实静态库唯一性、Catalog 强引用、Assets 仅由消费者触发；提交 `test: 验证 Game Editor 独立静态装配及纯资源插件`。
 
@@ -299,5 +299,5 @@ WSL 使用 `R=/home/moozen/WindowsGit/PanguEngine`、`T=$HOME/PanguEngineBuild/P
 - Task 7–10：`f3761f5` Git 锁，`eebed2f` 按消费者启用，`72f44df` 独立 STATIC/Assets，`88fba18` 显式 SHARED 部署。
 - Task 11：`0aa72f2` 正式增量/规模回归与性能记录；最终 Review 五项 Important 由 `fca8669` 修复，均有 RED→GREEN 证据。
 - 最终验收：Windows Engine CTest 22/22，Linux/macOS 各 21/21，独立工具三桌面各 3/3；Android/iOS ARM64 Engine 与独立 Project 最终链接及文件部署通过。最终 Linux 同条件 A/B ALL 中位数 2.874/2.875 秒（+0.035%），普通 Ninja 零动作。完整数据、命令、环境修复和失败保留记录见[验收文档](2026-11-04-source-plugins-project-build-validation.md)。
-- 遗留：独立工具 64 条非阻断 clang-tidy 提示延期清理；Windows symlink 删除/改指子案例因创建权限不足未运行，Linux/macOS 已验证；生产 Loader、动态 CodePin、PanguMeta、完整 App/签名及设备运行不在本次交付范围。WSL timesyncd 停用已获用户授权，保留 Hyper-V 同步，可用官方命令回滚。
+- 遗留：独立工具 64 条非阻断 clang-tidy 提示延期清理；Windows symlink 删除/改指子案例因创建权限不足未运行，Linux/macOS 已验证；生产 Loader、动态 CodePin、PanguMetaTool、完整 App/签名及设备运行不在本次交付范围。WSL timesyncd 停用已获用户授权，保留 Hyper-V 同步，可用官方命令回滚。
 - 执行裁决：沿用专用分支及共享源码路径；toml++ 最终采用固定 Submodule；根参数使用工程根；旧时钟条件数据不改写，追加同条件性能对照；symlink 必需文件追踪入口/目标及目录项；未跟踪文件不属于 Git 干净性保证。必要结论与 Review 摘要归档后清理本计划专属临时目录，正式 Tests 保留。

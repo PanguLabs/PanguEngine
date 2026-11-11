@@ -14,9 +14,9 @@ pangu_require_googletest(RTTI ON)
 add_subdirectory(Support)
 add_subdirectory(Fixtures)
 add_executable(PanguEngineHostTests EngineHostStartupTests.cpp EngineHostFailureTests.cpp EngineHostShutdownTests.cpp
-    EngineHostScopeTests.cpp EngineHostServiceTests.cpp EngineHostLifetimeTests.cpp)
+    EngineHostScopeTests.cpp EngineHostServiceTests.cpp EngineHostLifetimeTests.cpp EngineHostMetadataTests.cpp)
 target_link_libraries(PanguEngineHostTests PRIVATE PanguBuildOptions PanguEngineHost ThirdParty::GoogleTestMain)
-target_link_libraries(PanguEngineHostTests PRIVATE PanguHostTestSupport)
+target_link_libraries(PanguEngineHostTests PRIVATE PanguHostTestSupport PanguManualMetaFixture)
 target_include_directories(PanguEngineHostTests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/Fixtures" "${CMAKE_CURRENT_BINARY_DIR}/Fixtures"
     "${PROJECT_SOURCE_DIR}/Source/Runtime/EngineHost/Private"

@@ -1,7 +1,7 @@
 # Architecture Decision Records (ADR)
 
 > 状态：规范性索引
-> 更新：2026-11-06
+> 更新：2026-11-08
 
 本目录记录影响架构长期演化的重要决策，包括备选方案、选择原因、后果及被替代关系。**ADR 不是子系统的第二份详细规范**；日常实施以相应 Foundation/Core/Runtime 文档为准。
 
@@ -25,6 +25,7 @@
 | [0014](0014-source-plugins-project-build.md) | 源码 Plugin 与独立 Project 构建边界 | Accepted（设计；实施验收进行中） | [Plugin / Module](../core/plugin-module.md)、[Build System](../foundation/build-system.md) |
 | [0015](0015-unified-link-modes-module-manager.md) | 统一链接模式与 ModuleManager | Accepted（Public API/ABI 未冻结） | [Module API](../core/module-api.md)、[Build System](../foundation/build-system.md) |
 | [0016](0016-engine-host-lifecycle.md) | 单次 EngineHost 生命周期与只读具名服务访问 | Accepted（Public API/ABI 未冻结） | [EngineHost](../core/engine-host.md)、[Service](../core/service.md) |
+| [0017](0017-standalone-pangu-meta.md) | 独立 PanguMetaTool、具体 Attribute/CamelCase、生成代码归属与受控属性诊断豁免 | Accepted（路线、命名与生成布局；通用框架及生产接线待完成） | [Reflection / Meta](../core/reflection-meta.md)、[Toolchain](../foundation/toolchain.md)、[Build System](../foundation/build-system.md) |
 
 ## 推荐格式
 

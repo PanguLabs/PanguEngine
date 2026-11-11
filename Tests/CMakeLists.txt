@@ -17,11 +17,15 @@ pangu_register_test(NAME BuildEnvironment
 )
 add_subdirectory(ThirdParty/NlohmannJson)
 add_subdirectory(Foundation)
+add_subdirectory(Meta/Fixtures)
 add_subdirectory(Module)
 add_subdirectory(EngineHost)
+add_subdirectory(Meta)
 add_subdirectory(CMake/SourcePlugins)
 add_subdirectory(CMake/Testing)
 add_subdirectory(CMake/ModuleLinkModes)
+set(PANGU_META_SDK_CONFIG "" CACHE FILEPATH "Explicitly prepared host Meta SDK configuration")
+add_subdirectory(CMake/PanguMeta)
 
 include("${PROJECT_SOURCE_DIR}/cmake/PanguBuildToolsTesting.cmake")
 pangu_add_build_tools_tests(TOOL_NAME PanguBuildTool
@@ -36,3 +40,34 @@ pangu_add_build_tools_tests(TOOL_NAME PanguBuildTool
     SOURCE_DIR "${PROJECT_SOURCE_DIR}/BuildTools/PanguBuildTool"
     GROUP PluginCli BOUNDARY system TIER precommit
     BUILD_TARGETS PanguBuildTool TEST_REGEX "^PluginCli$")
+
+if(PANGU_META_SDK_CONFIG)
+    pangu_add_build_tools_tests(TOOL_NAME PanguMetaTool
+        SOURCE_DIR "${PROJECT_SOURCE_DIR}/BuildTools/PanguMetaTool"
+        GROUP MetaSdk BOUNDARY integration TIER precommit
+        BUILD_TARGETS PanguMetaTool PanguMetaSdkTests TEST_REGEX "^MetaSdk[.]"
+        CMAKE_ARGS "-DPANGU_META_SDK_CONFIG:FILEPATH=${PANGU_META_SDK_CONFIG}")
+    foreach(group IN ITEMS Model Request Context Ownership Attr CodeGen Publish Cli)
+        set(target "PanguMeta${group}Tests")
+        set(expression "^Meta${group}[.]")
+        set(rootGroup "Meta${group}")
+        set(boundary integration)
+        if(group STREQUAL "Model")
+            set(expression "^MetaIR[.]")
+            set(rootGroup MetaIR)
+            set(boundary unit)
+        elseif(group STREQUAL "Ownership")
+            set(target PanguMetaContextTests)
+            set(boundary unit)
+        elseif(group STREQUAL "Cli")
+            set(target PanguMetaTool)
+        elseif(group STREQUAL "Request" OR group STREQUAL "CodeGen")
+            set(boundary unit)
+        endif()
+        pangu_add_build_tools_tests(TOOL_NAME PanguMetaTool
+            SOURCE_DIR "${PROJECT_SOURCE_DIR}/BuildTools/PanguMetaTool"
+            GROUP "${rootGroup}" BOUNDARY "${boundary}" TIER precommit
+            BUILD_TARGETS "${target}" TEST_REGEX "${expression}"
+            CMAKE_ARGS "-DPANGU_META_SDK_CONFIG:FILEPATH=${PANGU_META_SDK_CONFIG}")
+    endforeach()
+endif()

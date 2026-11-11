@@ -56,6 +56,7 @@ function(ProjectCommand expected diagnostic)
     endif()
     set(commandOutput "${output}\n${error}" PARENT_SCOPE)
     set(commandStdout "${output}" PARENT_SCOPE)
+    set(commandResult "${result}" PARENT_SCOPE)
 endfunction()
 
 function(ConfigureFixture name enabled expected diagnostic)
@@ -63,6 +64,9 @@ function(ConfigureFixture name enabled expected diagnostic)
         -S "${source}" -B "${PANGU_TEST_ROOT}/${name}" -G Ninja
         "${compilerArgs}" -DCMAKE_BUILD_TYPE=Release
         "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PANGU_ENGINE_SOURCE_DIR}"
+        "-DPANGU_META_SDK_CONFIG:FILEPATH=${PANGU_META_SDK_CONFIG}"
+        "-DPANGU_META_HOST_BUILD_ROOT:PATH=${PANGU_META_HOST_BUILD_ROOT}"
+        "-DPANGU_ENGINE_BUILD_ROOT:PATH=${PANGU_TEST_ROOT}/${name}/EngineBuild"
         "-DPANGU_FIXTURE_ENGINE_ROOT:PATH=${PANGU_TEST_ROOT}/FixtureEngine"
         "-DPANGU_ENABLED_PLUGINS:STRING=${enabled}"
         "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}" -DBUILD_TESTING=OFF
@@ -115,6 +119,29 @@ function(CheckConsumer host mode dependent unused)
         RejectText("${commandOutput}" "Pangu${dependent}")
         RejectText("${commandOutput}" "PanguPhysics")
         RejectText("${commandOutput}" "Pangu${unused}")
+        file(STRINGS "${binary}/${host}DeployManifest.txt" paths)
+        foreach(index IN ITEMS 0 2)
+            math(EXPR next "${index}+1")
+            list(GET paths ${index} original)
+            list(GET paths ${next} deployed)
+            file(SHA256 "${original}" originalHash)
+            file(SHA256 "${deployed}" deployedHash)
+            if(NOT originalHash STREQUAL deployedHash)
+                message(FATAL_ERROR "Business Module deployment differs from its native target")
+            endif()
+            if(CMAKE_HOST_WIN32)
+                ProjectCommand(PASS "" "$ENV{LLVM_ROOT}/bin/llvm-readobj${suffix}" --coff-exports "${original}")
+            elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+                ProjectCommand(PASS "" nm -gU "${original}")
+            else()
+                ProjectCommand(PASS "" "$ENV{LLVM_ROOT}/bin/llvm-nm" --dynamic --defined-only "${original}")
+            endif()
+            string(REGEX MATCHALL "PanguModuleQueryV1" nativeQueries "${commandOutput}")
+            list(LENGTH nativeQueries nativeCount)
+            if(NOT nativeCount EQUAL 1)
+                message(FATAL_ERROR "Expected exactly one native Query export: ${original}")
+            endif()
+        endforeach()
     else()
         RequireText("${consumer}" "Pangu::${dependent}")
         RequireText("${consumer}" "Pangu::Physics")
