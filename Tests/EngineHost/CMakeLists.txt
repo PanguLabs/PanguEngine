@@ -39,12 +39,21 @@ if(PANGU_LINK_MODE STREQUAL "Modular")
 endif()
 pangu_register_gtest(TARGET PanguEngineHostTests BOUNDARY integration AREA engine-host TIER fast)
 
+add_executable(PanguLogHostTests EngineHostLogTests.cpp)
+target_link_libraries(PanguLogHostTests PRIVATE PanguBuildOptions PanguEngineHost ThirdParty::GoogleTestMain)
+target_include_directories(PanguLogHostTests PRIVATE
+    "${PROJECT_SOURCE_DIR}/Source/Runtime/EngineHost/Private"
+    "${PROJECT_SOURCE_DIR}/Source/Runtime/Log/Private")
+set_target_properties(PanguLogHostTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")
+pangu_register_gtest(TARGET PanguLogHostTests BOUNDARY integration AREA engine-host TIER precommit REQUIRES threads)
+
 add_executable(PanguEngineHostDestructorFixture EngineHostDestructorFixture.cpp)
 target_link_libraries(PanguEngineHostDestructorFixture PRIVATE PanguBuildOptions PanguEngineHost PanguHostTestSupport)
 target_include_directories(PanguEngineHostDestructorFixture PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/Fixtures" "${CMAKE_CURRENT_BINARY_DIR}/Fixtures"
     "${PROJECT_SOURCE_DIR}/Source/Runtime/EngineHost/Private"
-    "${PROJECT_SOURCE_DIR}/Source/Runtime/Module/Private")
+    "${PROJECT_SOURCE_DIR}/Source/Runtime/Module/Private"
+    "${PROJECT_SOURCE_DIR}/Source/Runtime/Log/Private")
 target_compile_definitions(PanguEngineHostDestructorFixture PRIVATE $<$<STREQUAL:${PANGU_LINK_MODE},Modular>:PG_TEST_MODULAR=1>)
 add_dependencies(PanguEngineHostDestructorFixture PanguHostServiceFixture)
 if(NOT PANGU_LINK_MODE STREQUAL "Modular")

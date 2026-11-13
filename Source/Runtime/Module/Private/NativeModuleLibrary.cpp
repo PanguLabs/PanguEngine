@@ -1,16 +1,19 @@
 #include "NativeModuleLibrary.h"
+#include "FailureContext.h"
+#include <Check.h>
 
 #include <ModuleError.h>
 #include <Result.h>
 
-#include <exception>
 #include <expected>
+#include <filesystem>
 #include <utility>
 
 namespace pg::module::detail
 {
-NativeModuleLibrary::NativeModuleLibrary(void* handle) noexcept
-    : Handle(handle)
+NativeModuleLibrary::NativeModuleLibrary(void* handle, std::filesystem::path path) noexcept
+    : Path(std::move(path))
+    , Handle(handle)
 {
 }
 NativeModuleLibrary::~NativeModuleLibrary()
@@ -18,11 +21,12 @@ NativeModuleLibrary::~NativeModuleLibrary()
     if (!Release())
     {
         // 失败仍拥有原生持有；不能丢失清理责任并继续运行。
-        std::terminate();
+        pg::Fatal("native module ownership lost during destruction");
     }
 }
 NativeModuleLibrary::NativeModuleLibrary(NativeModuleLibrary&& other) noexcept
-    : Handle(std::exchange(other.Handle, nullptr))
+    : Path(std::move(other.Path))
+    , Handle(std::exchange(other.Handle, nullptr))
     , FailNextClose(std::exchange(other.FailNextClose, false))
 {
 }
@@ -32,14 +36,15 @@ NativeModuleLibrary& NativeModuleLibrary::operator=(NativeModuleLibrary&& other)
     {
         if (!Release())
         {
-            std::terminate();
+            pg::Fatal("native module ownership lost during destruction");
         }
+        Path = std::move(other.Path);
         Handle = std::exchange(other.Handle, nullptr);
         FailNextClose = std::exchange(other.FailNextClose, false);
     }
     return *this;
 }
-Status NativeModuleLibrary::Release() noexcept
+Status NativeModuleLibrary::Release(FailureContext* failure) noexcept
 {
     if (Handle == nullptr)
     {
@@ -47,9 +52,15 @@ Status NativeModuleLibrary::Release() noexcept
     }
     if (std::exchange(FailNextClose, false))
     {
-        return std::unexpected(MakeModuleError(ModuleError::kLibraryCloseFailed));
+        const auto error = MakeModuleError(ModuleError::kLibraryCloseFailed);
+        if (failure != nullptr)
+        {
+            failure->SetPrimary(error, "injected native close failure");
+            AddPath(failure, Path);
+        }
+        return std::unexpected(error);
     }
-    const auto closed = CloseNative();
+    const auto closed = CloseNative(failure);
     if (closed)
     {
         Handle = nullptr;

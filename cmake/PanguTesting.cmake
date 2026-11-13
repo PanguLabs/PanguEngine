@@ -131,7 +131,7 @@ function(_pangu_claim_test kind name)
 endfunction()
 
 function(pangu_register_gtest)
-    cmake_parse_arguments(PARSE_ARGV 0 arg "" "TARGET;BOUNDARY;AREA;TIER;TIMEOUT" "TYPES;REQUIRES")
+    cmake_parse_arguments(PARSE_ARGV 0 arg "" "TARGET;BOUNDARY;AREA;TIER;TIMEOUT;DISCOVERY_TIMEOUT" "TYPES;REQUIRES")
     if(arg_UNPARSED_ARGUMENTS OR arg_KEYWORDS_MISSING_VALUES OR NOT arg_TARGET OR NOT TARGET "${arg_TARGET}")
         message(FATAL_ERROR "pangu_register_gtest requires an existing TARGET and valid arguments")
     endif()
@@ -147,9 +147,14 @@ function(pangu_register_gtest)
     set(testList "_pangu_discovered_${key}")
     set(testRoot "${CMAKE_BINARY_DIR}/Tests")
     set(testTarget "${arg_TARGET}")
+    set(discoveryArgs)
+    if(DEFINED arg_DISCOVERY_TIMEOUT)
+        list(APPEND discoveryArgs DISCOVERY_TIMEOUT "${arg_DISCOVERY_TIMEOUT}")
+    endif()
     file(MAKE_DIRECTORY "${testRoot}/Results/${testTarget}")
     gtest_discover_tests("${arg_TARGET}" TEST_PREFIX "${arg_TARGET}."
         NO_PRETTY_TYPES NO_PRETTY_VALUES DISCOVERY_MODE PRE_TEST
+        ${discoveryArgs}
         TEST_LIST "${testList}" XML_OUTPUT_DIR "${testRoot}/Results/${testTarget}"
         PROPERTIES LABELS "${_pangu_labels}" TIMEOUT "${_pangu_timeout}")
     set(configured "${CMAKE_CURRENT_BINARY_DIR}/${testTarget}_work.cmake")

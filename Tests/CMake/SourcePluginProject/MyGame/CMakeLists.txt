@@ -84,7 +84,13 @@ if(projectTestsEnabled)
         target_link_libraries(MyGamePluginCollaborationTests PRIVATE
             PanguBuildOptions Pangu::Gameplay Pangu::Physics ThirdParty::GoogleTestMain)
         pangu_stage_host_runtime(TARGET MyGamePluginCollaborationTests)
-        pangu_register_gtest(TARGET MyGamePluginCollaborationTests BOUNDARY integration AREA build TIER fast)
+        set(collaborationDiscoveryArgs)
+        if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+            # 仅本机共享库消费者显式保留首次启动窗口，不改变测试或外层场景时限。
+            list(APPEND collaborationDiscoveryArgs DISCOVERY_TIMEOUT 30)
+        endif()
+        pangu_register_gtest(TARGET MyGamePluginCollaborationTests BOUNDARY integration AREA build TIER fast
+            ${collaborationDiscoveryArgs})
     endif()
 endif()
 

@@ -14,4 +14,6 @@ ctest --preset windows -R '^MinimalHostSmoke$' --no-tests=error --output-on-fail
 
 默认关闭 `PANGU_BUILD_SAMPLES`。Monolithic 直接运行 `PanguMinimalHost`，静态 Query 是显式链接根；Modular 运行 `PanguMinimalHost <PanguMinimalServices 动态库的绝对路径>`，程序不搜索目录，主程序不隐式导入业务库。Linux Modular 主程序导出 RTTI，公开服务类型使用 default visibility。
 
-本例只有同步结束的资源，因此一次 Finish 应完成；失败会报告诊断并返回非零，析构兜底若仍无法关闭将按宿主契约终止。真实应用的异步任务、Fence 和 I/O 等待由 Application 协调，在完成事件到达后再次推进关闭；不能照抄无限空转或强制卸载。此示例不提供后台清理线程。
+Application 创建当前工作目录下的 `MinimalHostLogs` 专属目录，并设置非零稳定 PartitionId；文件输出为必需能力，同一分区被占用时启动失败。Host 在业务注册前显式初始化异步 Log，业务结束后先销毁 Manager，再排空日志和回收原生消费者线程。
+
+关闭 helper 最多重试两秒，每轮让出线程；输出同时显示 `ResourcesReleased` 和 `OutputComplete`。安全关闭可以伴随日志不完整，本例对此返回非零。仍未释放资源时通过必要检查终止，不能离开作用域假装成功。真实应用的异步任务、Fence 和 I/O 等待由 Application 协调，在完成事件到达后再次推进关闭；不能照抄无限空转或强制卸载。

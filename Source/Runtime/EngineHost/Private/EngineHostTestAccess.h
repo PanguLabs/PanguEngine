@@ -1,6 +1,7 @@
 #pragma once
 
 #include <EngineHost.h>
+#include <LogSystem.h>
 
 namespace pg::engine::detail
 {
@@ -8,5 +9,6 @@ namespace pg::engine::detail
 struct EngineHostTestAccess
 {
     [[nodiscard]] static PG_ENGINE_HOST_API module::ModuleManager* Manager(EngineHost& host) noexcept;
+    [[nodiscard]] static PG_ENGINE_HOST_API log::LogSystem& Log(EngineHost& host) noexcept;
 };
 } // namespace pg::engine::detail

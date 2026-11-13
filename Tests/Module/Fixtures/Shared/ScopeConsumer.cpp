@@ -1,3 +1,4 @@
+#include "FailureContext.h"
 #include "ScopeTestSupport.h"
 #include "SharedFixtureContract.h"
 
@@ -71,13 +72,13 @@ struct ConsumerDeleter final
         Observer().Record(Event::kDeleterDestroy);
     }
 };
-pg::Status Start(ConsumerState& /*state*/) noexcept
+pg::Status Start(ConsumerState& /*state*/, pg::FailureContext& /*failure*/) noexcept
 {
     Observer().Record(Event::kConsumerStart);
     return {};
 }
 void Stop(ConsumerState& /*state*/) noexcept { Observer().Record(Event::kConsumerStop); }
-pg::Status Poll(ConsumerState& /*state*/) noexcept
+pg::Status Poll(ConsumerState& /*state*/, pg::FailureContext& /*failure*/) noexcept
 {
     Observer().Record(Event::kConsumerPoll);
     return {};

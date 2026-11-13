@@ -36,6 +36,7 @@ int main(int argc, char* argv[])
     HostOperationReport report;
     const auto candidates = test::HostCandidates();
     HostStartupConfig config;
+    config.Logging = pg::engine::test::DisabledLogging();
     config.Modules = candidates;
     if (!host.Start(config, report))
     {

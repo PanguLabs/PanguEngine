@@ -13,6 +13,13 @@ namespace pg::engine::test
 {
 inline const auto kStartupError = pg::MakeError(pg::ErrorDomainId::Constant<0x741>(), 101);
 inline const auto kStopError = pg::MakeError(pg::ErrorDomainId::Constant<0x741>(), 102);
+inline log::LogConfig DisabledLogging()
+{
+    log::LogConfig config;
+    config.Enabled = log::OutputMask::kNone;
+    config.Required = log::OutputMask::kNone;
+    return config;
+}
 inline auto HostCandidates()
 {
 #ifdef PG_TEST_MODULAR

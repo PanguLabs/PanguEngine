@@ -27,7 +27,8 @@ pangu_owned_build_root(_pangu_engine_root engine)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${_pangu_engine_root}/Lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${_pangu_engine_root}/Bin")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${_pangu_engine_root}/Bin")
-foreach(directory IN ITEMS Source/ThirdParty/NlohmannJson Source/Runtime/Foundation Source/Runtime/Module Source/Runtime/EngineHost)
+foreach(directory IN ITEMS Source/ThirdParty/NlohmannJson Source/ThirdParty/Fmt Source/ThirdParty/Spdlog
+        Source/Runtime/Foundation Source/Runtime/Log Source/Runtime/Module Source/Runtime/EngineHost)
     pangu_add_owned_subdirectory(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${directory}"
         OWNER engine RELATIVE_BINARY_DIR "${directory}")
 endforeach()
@@ -72,4 +73,6 @@ if(PANGU_BUILD_BENCHMARKS AND NOT CMAKE_CROSSCOMPILING)
     pangu_require_googlebenchmark()
     pangu_add_owned_subdirectory(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Tests/Module/Benchmarks"
         OWNER engine RELATIVE_BINARY_DIR Tests/Module/Benchmarks)
+    pangu_add_owned_subdirectory(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Tests/Log/Benchmarks"
+        OWNER engine RELATIVE_BINARY_DIR Tests/Log/Benchmarks)
 endif()

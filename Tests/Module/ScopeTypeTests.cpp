@@ -1,3 +1,5 @@
+#include "FailureContext.h"
+#include "FailureReport.h"
 #include "Support/ScopeTestSupport.h"
 
 #include <ModuleDeclaration.h>
@@ -31,7 +33,9 @@ static_assert(std::is_same_v<decltype(std::declval<const detail::ErasedScopeObje
 TEST(ScopeType, NontrivialValueSupportsExactTypeAndReadOnlyDependency)
 {
     ScopeTestSink sink;
-    ScopeBuildContext context(sink);
+    pg::FailureReport failureReport;
+    pg::FailureContext failureContext(failureReport);
+    ScopeBuildContext context(sink, failureContext);
     const auto access =
         context.Own(std::make_unique<ProbeState>("World A", std::vector<int>{1, 2, 3}), pg::test::ProbeHooks());
     ASSERT_TRUE(access);
@@ -69,7 +73,9 @@ struct Derived final : Base
 TEST(ScopeType, UniquePtrBaseErasesTheDeclaredType)
 {
     ScopeTestSink sink;
-    ScopeBuildContext context(sink);
+    pg::FailureReport failureReport;
+    pg::FailureContext failureContext(failureReport);
+    ScopeBuildContext context(sink, failureContext);
     std::unique_ptr<Base> object = std::make_unique<Derived>();
     const auto owned = context.Own(std::move(object));
     ASSERT_TRUE(owned);
@@ -86,16 +92,18 @@ TEST(ScopeType, ObserverOwnsAccessAfterResourceDestruction)
     observer.Reset();
     {
         ScopeTestSink sink;
-        ScopeBuildContext context(sink);
+        pg::FailureReport failureReport;
+        pg::FailureContext failureContext(failureReport);
+        ScopeBuildContext context(sink, failureContext);
         const auto owned =
             context.Own(std::make_unique<ProbeState>("World A", std::vector<int>{1, 2, 3}), pg::test::ProbeHooks());
         ASSERT_TRUE(owned);
         observer.SetAccess(*owned);
-        ASSERT_TRUE(sink.Object->Start());
+        ASSERT_TRUE(sink.Object->Start(failureContext));
         sink.Publish();
         ASSERT_TRUE(observer.Access().TryBorrow());
         sink.Object->RequestStop();
-        ASSERT_TRUE(sink.Object->PollStopped());
+        ASSERT_TRUE(sink.Object->PollStopped(failureContext));
     }
     EXPECT_FALSE(observer.Access().TryBorrow());
     EXPECT_EQ(observer.Events(),

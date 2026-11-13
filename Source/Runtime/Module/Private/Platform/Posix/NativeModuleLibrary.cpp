@@ -1,17 +1,35 @@
 #include "NativeModuleLibrary.h"
+#include "FailureContext.h"
 
 #include <ModuleDescriptor.h>
 #include <ModuleError.h>
 #include <Result.h>
 
+#include <cstddef>
 #include <dlfcn.h>
 
 #include <expected>
 #include <filesystem>
+#include <string_view>
 
 namespace pg::module::detail
 {
-Result<NativeModuleLibrary> NativeModuleLibrary::Open(const std::filesystem::path& path) noexcept
+namespace
+{
+std::string_view LoaderMessage(const char* text) noexcept
+{
+    std::size_t size{};
+    // Loader 文本只同步借用；最多读取 1024 字节，随后由 Context 立即复制。
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
+    while (size < 1024 && text[size] != 0)
+    {
+        ++size;
+    }
+    return {text, size};
+}
+} // namespace
+Result<NativeModuleLibrary> NativeModuleLibrary::Open(const std::filesystem::path& path,
+                                                      FailureContext* failure) noexcept
 {
     if (!path.is_absolute())
     {
@@ -23,12 +41,22 @@ Result<NativeModuleLibrary> NativeModuleLibrary::Open(const std::filesystem::pat
     if (handle == nullptr)
     {
         // dlerror 文本由 Loader 借出；立即消费，不让错误值借用可卸载状态。
-        dlerror();
-        return std::unexpected(MakeModuleError(ModuleError::kLibraryOpenFailed));
+        const auto* text = dlerror();
+        const auto error = MakeModuleError(ModuleError::kLibraryOpenFailed);
+        if (failure != nullptr)
+        {
+            failure->SetPrimary(error, "dlopen failed");
+            if (text != nullptr)
+            {
+                failure->AddContext("loader", LoaderMessage(text));
+            }
+        }
+        AddPath(failure, path);
+        return std::unexpected(error);
     }
-    return NativeModuleLibrary(handle);
+    return NativeModuleLibrary(handle, path);
 }
-Result<QueryModuleFn> NativeModuleLibrary::ResolveQuery() const noexcept
+Result<QueryModuleFn> NativeModuleLibrary::ResolveQuery(FailureContext* failure) const noexcept
 {
     if (Handle == nullptr)
     {
@@ -36,21 +64,55 @@ Result<QueryModuleFn> NativeModuleLibrary::ResolveQuery() const noexcept
     }
     dlerror();
     auto* symbol = dlsym(Handle, "PanguModuleQueryV1");
-    if (dlerror() != nullptr || symbol == nullptr)
+    const auto* text = dlerror();
+    if (text != nullptr || symbol == nullptr)
     {
-        return std::unexpected(MakeModuleError(ModuleError::kQuerySymbolMissing));
+        const auto error = MakeModuleError(ModuleError::kQuerySymbolMissing);
+        if (failure != nullptr)
+        {
+            failure->SetPrimary(error, "dlsym failed");
+            if (text != nullptr)
+            {
+                failure->AddContext("loader", LoaderMessage(text));
+            }
+        }
+        AddPath(failure, Path);
+        return std::unexpected(error);
     }
     // POSIX 允许 dlsym 的地址转换为函数指针；仅此平台接缝承担该约定。
     return reinterpret_cast<QueryModuleFn>(symbol); // NOLINT(cppcoreguidelines-pro-type-reinterpret-cast)
 }
-Status NativeModuleLibrary::CloseNative() noexcept
+Status NativeModuleLibrary::CloseNative(FailureContext* failure) noexcept
 {
     dlerror();
     if (dlclose(Handle) != 0)
     {
-        dlerror();
-        return std::unexpected(MakeModuleError(ModuleError::kLibraryCloseFailed));
+        const auto* text = dlerror();
+        const auto error = MakeModuleError(ModuleError::kLibraryCloseFailed);
+        if (failure != nullptr)
+        {
+            failure->SetPrimary(error, "dlclose failed");
+            if (text != nullptr)
+            {
+                failure->AddContext("loader", LoaderMessage(text));
+            }
+        }
+        AddPath(failure, Path);
+        return std::unexpected(error);
     }
     return {};
+}
+void NativeModuleLibrary::AddPath(FailureContext* failure, const std::filesystem::path& path) noexcept
+{
+    if (failure == nullptr)
+    {
+        return;
+    }
+    const std::string_view native(path.native());
+    failure->AddContext("path", native.substr(0, 1024));
+    if (native.size() > 1024)
+    {
+        failure->AddContext("path.truncated", "true");
+    }
 }
 } // namespace pg::module::detail

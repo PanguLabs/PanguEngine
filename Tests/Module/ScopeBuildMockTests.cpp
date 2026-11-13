@@ -1,3 +1,5 @@
+#include "FailureContext.h"
+#include "FailureReport.h"
 #include <Error.h>
 #include <ModuleDeclaration.h>
 #include <ModuleError.h>
@@ -35,7 +37,9 @@ TEST(ScopeBuildMock, InvalidHooksRejectBeforeStage)
     EXPECT_CALL(sink, Stage).Times(0);
     EXPECT_CALL(sink, Reject(pg::module::MakeModuleError(pg::module::ModuleError::kInvalidDeclaration)))
         .WillOnce(::testing::ReturnArg<0>());
-    pg::module::ScopeBuildContext context(sink);
+    pg::FailureReport failureReport;
+    pg::FailureContext failureContext(failureReport);
+    pg::module::ScopeBuildContext context(sink, failureContext);
     const auto result = context.Own(std::make_unique<int>(7), pg::module::ScopeHooks<int>{.RequestStop = RequestStop});
     ASSERT_FALSE(result);
     EXPECT_EQ(result.error(), pg::module::MakeModuleError(pg::module::ModuleError::kInvalidDeclaration));
@@ -51,7 +55,9 @@ TEST(ScopeBuildMock, WrongRttiRejectsBeforePointerConversion)
             ::testing::Return(pg::module::detail::ScopeDependencyObject{.Object = nullptr, .Type = typeid(double)}));
     EXPECT_CALL(sink, Reject(pg::module::MakeModuleError(pg::module::ModuleError::kTypeMismatch)))
         .WillOnce(::testing::ReturnArg<0>());
-    pg::module::ScopeBuildContext context(sink);
+    pg::FailureReport failureReport;
+    pg::FailureContext failureContext(failureReport);
+    pg::module::ScopeBuildContext context(sink, failureContext);
     const auto result = context.Dependency<int>(id);
     ASSERT_FALSE(result);
     EXPECT_EQ(result.error(), pg::module::MakeModuleError(pg::module::ModuleError::kTypeMismatch));

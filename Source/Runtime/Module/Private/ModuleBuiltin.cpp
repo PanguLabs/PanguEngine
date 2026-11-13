@@ -1,4 +1,5 @@
 #include <FoundationModule.h>
+#include <LogModule.h>
 #include <ModuleBuiltin.h>
 #include <ModuleDescriptor.h>
 #include <Result.h>
@@ -10,7 +11,8 @@ namespace
 {
 Status Register(RegistrationContext& /*context*/) noexcept { return {}; }
 constexpr auto kDependencies =
-    std::array{ModuleDependency{.Id = kFoundationModuleId, .Version = {.Major = 1, .Minor = 0, .Patch = 0}}};
+    std::array{ModuleDependency{.Id = kFoundationModuleId, .Version = {.Major = 1, .Minor = 0, .Patch = 0}},
+               ModuleDependency{.Id = log::kLogModuleId, .Version = {.Major = 1, .Minor = 0, .Patch = 0}}};
 constexpr ModuleDefinition kDefinition{
     .Descriptor =
         {
@@ -27,7 +29,7 @@ constexpr ModuleDefinition kDefinition{
 const ModuleDefinition* QueryModuleRuntime() noexcept { return &kDefinition; }
 std::span<const QueryModuleFn> BuiltinResidentQueries() noexcept
 {
-    static const std::array kQueries{QueryFoundationModule, QueryModuleRuntime};
+    static const std::array kQueries{QueryFoundationModule, log::QueryLogModule, QueryModuleRuntime};
     return kQueries;
 }
 } // namespace pg::module

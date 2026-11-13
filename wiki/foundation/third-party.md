@@ -85,6 +85,12 @@ Source/ThirdParty/<DependencyName>/
 
 ## 当前接入
 
+日志适配固定 fmt 12.2.1（208219daff58f2a7438f6931cc2ddc358acf33ef）与 spdlog v1.17.0（79524ddd08a4ec981b7fea76afd08ee05f83755d），来源及许可证见各自 Source/ThirdParty 外层 README。ThirdParty::Fmt/ThirdParty::Spdlog 都是编译型 STATIC/PIC 库，统一外部 fmt；设置 FMT_EXCEPTIONS=0、SPDLOG_FMT_EXTERNAL、SPDLOG_NO_EXCEPTIONS、SPDLOG_NO_THREAD_ID、SPDLOG_DISABLE_DEFAULT_LOGGER，保持 RTTI，不继承 PanguBuildOptions 的警告策略，不启用上游 tests/examples/install。无上游补丁。私有 SpdlogBackend 直接通过两个内联 RawSink（spdlog 同步 Sink）消费已经编码的有界文本，不实例化 logger 的字符串、sinks/backtracer 容器，避开 formatter、默认 logger/registry/thread pool；无分配和可恢复初始化的结论限定在已审计路径与实际探针覆盖，详见[正式验收](../../docs/superpowers/plans/2026-11-12-foundation-diagnostics-validation.md)。
+
+这两个普通目标的翻译单元显式关闭CXX_SCAN_FOR_MODULES，避免共享原生产物在跨Project配置回切时
+受无用模块扫描影响。未为第三方注入Pangu强制上下文或诊断宏；正式ProjectSwitch同时读取实际对象的
+CRT/Debug信息并验证消费链接和no-op，私有上下文依赖实验已撤回。扫描接线调整不修改上游源码。
+
 `NlohmannJson/Repo` 固定到官方 v3.12.0 正式发布版，外层直接暴露 `single_include` 并设置
 `JSON_USE_GLOBAL_UDLS=0`。当前保留 `ThirdParty::NlohmannJson` 和独立 JSON 回归测试，
 不再依赖已退役的 ABI Profile 工具；没有新增 Runtime Module、上游测试或配置时下载。

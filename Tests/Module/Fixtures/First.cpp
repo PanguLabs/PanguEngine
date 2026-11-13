@@ -1,3 +1,4 @@
+#include "FailureContext.h"
 #include "FixtureModules.h"
 
 #include <ModuleDescriptor.h>
@@ -18,7 +19,7 @@ namespace pg::module::fixture
 {
 namespace
 {
-[[nodiscard]] pg::Status Validate(FixtureValue& value) noexcept
+[[nodiscard]] pg::Status Validate(FixtureValue& value, pg::FailureContext& /*failure*/) noexcept
 {
     return value.Values.size() == 1 && value.Values.front() == 33
                ? pg::Status{}

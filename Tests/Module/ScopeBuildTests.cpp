@@ -1,4 +1,6 @@
 #include "Error.h"
+#include "FailureContext.h"
+#include "FailureReport.h"
 #include "ScopeAccess.h"
 #include "ScopeIdentity.h"
 #include <ModuleDeclaration.h>
@@ -87,13 +89,13 @@ struct Sink final : detail::ScopeBuildSink
 
 // ScopeHooks<Object> 要求准确的可变引用签名。
 // NOLINTNEXTLINE(misc-const-correctness)
-[[nodiscard]] pg::Status Start(Object& object) noexcept
+[[nodiscard]] pg::Status Start(Object& object, pg::FailureContext& /*failure*/) noexcept
 {
     ++*object.Started;
     return {};
 }
 void Stop(Object& /*object*/) noexcept {}
-[[nodiscard]] pg::Status Poll(Object& /*object*/) noexcept { return {}; }
+[[nodiscard]] pg::Status Poll(Object& /*object*/, pg::FailureContext& /*failure*/) noexcept { return {}; }
 
 TEST(ScopeBuild, OwnershipPrecedesStartAndTokensAreInitiallyClosed)
 {
@@ -102,7 +104,9 @@ TEST(ScopeBuild, OwnershipPrecedesStartAndTokensAreInitiallyClosed)
     ScopeAccess<Object> token;
     {
         Sink sink;
-        ScopeBuildContext context(sink);
+        pg::FailureReport failureReport;
+        pg::FailureContext failureContext(failureReport);
+        ScopeBuildContext context(sink, failureContext);
         auto object = std::make_unique<Object>(&destroyed, &started, 17);
         auto owned = context.Own(std::move(object),
                                  ScopeHooks<Object>{.Start = Start, .RequestStop = Stop, .PollStopped = Poll});
@@ -114,7 +118,7 @@ TEST(ScopeBuild, OwnershipPrecedesStartAndTokensAreInitiallyClosed)
         EXPECT_EQ(context.Scope().Slot, 2);
         token = *owned;
         ASSERT_TRUE(sink.Object);
-        EXPECT_TRUE(sink.Object->Start());
+        EXPECT_TRUE(sink.Object->Start(failureContext));
         EXPECT_EQ(started, 1);
         sink.Control->Module->Open();
         sink.Control->Scope->Open();
@@ -137,7 +141,9 @@ TEST(ScopeBuild, InvalidOwnershipAndTypeErrorsAreSticky)
     int destroyed = 0;
     int started = 0;
     Sink sink;
-    ScopeBuildContext context(sink);
+    pg::FailureReport failureReport;
+    pg::FailureContext failureContext(failureReport);
+    ScopeBuildContext context(sink, failureContext);
     const auto invalid = context.Own(std::unique_ptr<Object>());
     ASSERT_FALSE(invalid);
     EXPECT_EQ(invalid.error(), MakeModuleError(ModuleError::kInvalidDeclaration));
@@ -147,7 +153,9 @@ TEST(ScopeBuild, InvalidOwnershipAndTypeErrorsAreSticky)
     EXPECT_EQ(destroyed, 1);
     EXPECT_FALSE(sink.Object);
     Sink second;
-    ScopeBuildContext other(second);
+    pg::FailureReport otherReport;
+    pg::FailureContext otherFailure(otherReport);
+    ScopeBuildContext other(second, otherFailure);
     const auto badHooks =
         other.Own(std::make_unique<Object>(&destroyed, &started, 2), ScopeHooks<Object>{.RequestStop = Stop});
     ASSERT_FALSE(badHooks);
@@ -155,7 +163,9 @@ TEST(ScopeBuild, InvalidOwnershipAndTypeErrorsAreSticky)
     EXPECT_FALSE(second.Object);
     EXPECT_EQ(destroyed, 2);
     Sink third;
-    ScopeBuildContext dependency(third);
+    pg::FailureReport dependencyReport;
+    pg::FailureContext dependencyFailure(dependencyReport);
+    ScopeBuildContext dependency(third, dependencyFailure);
     third.Provider = std::make_unique<detail::ScopeObjectModel<int, std::default_delete<int>>>(std::make_unique<int>(7),
                                                                                                ScopeHooks<int>{});
     const auto wrong = dependency.Dependency<double>(kDependency);
@@ -165,7 +175,9 @@ TEST(ScopeBuild, InvalidOwnershipAndTypeErrorsAreSticky)
     ASSERT_FALSE(sticky);
     EXPECT_EQ(sticky.error(), wrong.error());
     Sink missing;
-    ScopeBuildContext undeclared(missing);
+    pg::FailureReport undeclaredReport;
+    pg::FailureContext undeclaredFailure(undeclaredReport);
+    ScopeBuildContext undeclared(missing, undeclaredFailure);
     const auto rejected = undeclared.Dependency<int>(kFirst);
     ASSERT_FALSE(rejected);
     EXPECT_EQ(rejected.error(), MakeModuleError(ModuleError::kUndeclaredDependency));
@@ -192,8 +204,12 @@ TEST(ScopeBuild, FactoryIsReusableAndCreatesSeparateObjects)
         });
     Sink firstSink;
     Sink secondSink;
-    ScopeBuildContext firstContext(firstSink);
-    ScopeBuildContext secondContext(secondSink);
+    pg::FailureReport firstContextReport;
+    pg::FailureContext firstContextFailure(firstContextReport);
+    ScopeBuildContext firstContext(firstSink, firstContextFailure);
+    pg::FailureReport secondContextReport;
+    pg::FailureContext secondContextFailure(secondContextReport);
+    ScopeBuildContext secondContext(secondSink, secondContextFailure);
     ASSERT_TRUE(factory(firstContext));
     destination = &second;
     ASSERT_TRUE(factory(secondContext));

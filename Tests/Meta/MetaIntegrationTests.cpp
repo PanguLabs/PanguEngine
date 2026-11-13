@@ -15,6 +15,7 @@
 #include <FoundationModule.h>
 #include <HostError.h>
 #include <HostMetaAccess.h>
+#include <LogModule.h>
 #include <MetaIdentity.h>
 #include <ModuleBuiltin.h>
 #include <ModuleError.h>
@@ -189,7 +190,7 @@ TEST(MetaIntegration, LoadedAndRegisteredAreNotActive)
 {
     module::RegistrationScope declarations;
     module::ModuleOperationReport report;
-    const std::array queries{module::QueryFoundationModule, module::QueryModuleRuntime};
+    const std::array queries{module::QueryFoundationModule, pg::log::QueryLogModule, module::QueryModuleRuntime};
     auto manager = module::ModuleManager::Create(declarations, queries, {}, report);
     ASSERT_TRUE(manager);
     const std::array candidates{Candidate(kModuleId)};

@@ -1,4 +1,5 @@
 #include "EngineHostTestFixture.h"
+#include "FailureContext.h"
 #include <EngineHost.h>
 #include <EngineHostModule.h>
 #include <HostOperation.h>
@@ -19,7 +20,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
-#include <filesystem>
 #include <memory>
 #include <vector>
 #ifdef PG_TEST_MODULAR
@@ -37,7 +37,7 @@ struct ResidentService
 };
 // ScopeHooks 的固定签名接收可变服务引用。
 // NOLINTNEXTLINE(misc-const-correctness)
-Status ResidentStart(ResidentService& service) noexcept
+Status ResidentStart(ResidentService& service, pg::FailureContext& /*failure*/) noexcept
 {
     return service.State->FailStart ? Status{std::unexpected(*service.State->FailStart)} : Status{};
 }
@@ -126,6 +126,7 @@ TEST(EngineHostFailure, ResidentAndBusinessStagesStopAtFirstError)
 #endif
         }
         HostStartupConfig config;
+        config.Logging = pg::engine::test::DisabledLogging();
         config.Modules = candidates;
         if (resident)
         {
@@ -195,16 +196,23 @@ TEST(EngineHostFailure, StartupBusyIsFailure)
     EngineHost host;
     HostOperationReport report;
     const auto candidates = HostCandidates();
-    const auto started = host.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}}, report);
+    const auto started = host.Start({.AdditionalResidentQueries = {},
+                                     .ResidentBindings = {},
+                                     .Modules = candidates,
+                                     .ModuleBindings = {},
+                                     .Logging = pg::engine::test::DisabledLogging()},
+                                    report);
     ASSERT_FALSE(started);
     EXPECT_EQ(started.error(), *state->FailStart);
     EXPECT_EQ(report.Stage, HostOperationStage::kBusinessActivation);
     EXPECT_EQ(host.GetState(), HostState::kClosed);
     state->FailStart.reset();
-    EXPECT_FALSE(host.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-        report));
+    EXPECT_FALSE(host.Start({.AdditionalResidentQueries = {},
+                             .ResidentBindings = {},
+                             .Modules = candidates,
+                             .ModuleBindings = {},
+                             .Logging = pg::engine::test::DisabledLogging()},
+                            report));
     EXPECT_EQ(state->FactoryCount, 1U);
 }
 
@@ -212,19 +220,22 @@ TEST(EngineHostFailure, ResidentLimitChecksBeforeQuery)
 {
     const auto state = std::make_shared<HostTestState>();
     SetHostTestState(state);
-    // 253 项允许进入 Query（此处故意非法），254 项必须在调用前拒绝。
-    for (const std::size_t count : {253U, 254U})
+    // 四个固定常驻项占用容量；252 项进入 Query，253 项必须在调用前拒绝。
+    for (const std::size_t count : {252U, 253U})
     {
         state->Reset();
         const std::vector<module::QueryModuleFn> residents(count, QueryInvalid);
         EngineHost host;
         HostOperationReport report;
-        const auto result = host.Start(
-            {.AdditionalResidentQueries = residents, .ResidentBindings = {}, .Modules = {}, .ModuleBindings = {}},
-            report);
+        const auto result = host.Start({.AdditionalResidentQueries = residents,
+                                        .ResidentBindings = {},
+                                        .Modules = {},
+                                        .ModuleBindings = {},
+                                        .Logging = pg::engine::test::DisabledLogging()},
+                                       report);
         ASSERT_FALSE(result);
         EXPECT_EQ(report.Stage, HostOperationStage::kResidentAdmission);
-        if (count == 254U)
+        if (count == 253U)
         {
             EXPECT_EQ(result.error(), module::MakeModuleError(module::ModuleError::kLimitExceeded));
             EXPECT_EQ(state->QueryCount, 0U);
@@ -251,6 +262,7 @@ TEST(EngineHostFailure, BusinessLimitChecksBeforeQuery)
     EngineHost host;
     HostOperationReport report;
     HostStartupConfig config;
+    config.Logging = pg::engine::test::DisabledLogging();
     config.Modules = candidates;
     const auto result = host.Start(config, report);
     ASSERT_FALSE(result);
@@ -290,6 +302,7 @@ TEST(EngineHostFailure, InvalidBusinessBatchReleasesAlreadyLoadedCandidate)
     };
     EngineHost host;
     HostStartupConfig config;
+    config.Logging = pg::engine::test::DisabledLogging();
     config.Modules = candidates;
     HostOperationReport report;
     const auto result = host.Start(config, report);

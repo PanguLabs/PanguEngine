@@ -1,4 +1,6 @@
 #include "ScopeTestSupport.h"
+#include "FailureContext.h"
+#include <Check.h>
 
 #include <Error.h>
 #include <ModuleDeclaration.h>
@@ -11,7 +13,6 @@
 
 #include <algorithm>
 #include <cstddef>
-#include <exception>
 #include <expected>
 #include <memory>
 #include <mutex>
@@ -138,13 +139,13 @@ ScopeTestObserver& Observer() noexcept
 }
 namespace
 {
-pg::Status Start(ProbeState& /*state*/) noexcept
+pg::Status Start(ProbeState& /*state*/, pg::FailureContext& /*failure*/) noexcept
 {
     Observer().Record(Event::kStart);
     return {};
 }
 void Stop(ProbeState& /*state*/) noexcept { Observer().Record(Event::kStop); }
-pg::Status Poll(ProbeState& /*state*/) noexcept { return {}; }
+pg::Status Poll(ProbeState& /*state*/, pg::FailureContext& /*failure*/) noexcept { return {}; }
 } // namespace
 module::ScopeHooks<ProbeState> ProbeHooks() noexcept
 {
@@ -157,7 +158,7 @@ ScopeTestSink::~ScopeTestSink()
         Control->Gate.Close();
         if (Control->Gate.Count() != 0)
         {
-            std::terminate();
+            pg::Fatal("test scope destroyed while borrowed");
         }
         Object.reset();
         Control->Object = nullptr;

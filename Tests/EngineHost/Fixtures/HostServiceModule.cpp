@@ -1,4 +1,5 @@
 #include "HostServiceModule.h"
+#include "FailureContext.h"
 #include <EngineHostModule.h>
 #include <HostTestState.h>
 #include <ModuleDescriptor.h>
@@ -67,7 +68,7 @@ NativeLifetime& NativeObservations()
 
 // ScopeHooks 固定以可变引用接收服务。
 // NOLINTNEXTLINE(misc-const-correctness)
-pg::Status Start(HostServiceValue& value) noexcept
+pg::Status Start(HostServiceValue& value, pg::FailureContext& /*failure*/) noexcept
 {
     const auto& service = Observation(value);
     Record(*service.State, HostTestEvent::kStart, service.Scope);
@@ -86,7 +87,7 @@ void Stop(HostServiceValue& value) noexcept
 }
 // ScopeHooks 固定以可变引用接收服务。
 // NOLINTNEXTLINE(misc-const-correctness)
-pg::Status Poll(HostServiceValue& value) noexcept
+pg::Status Poll(HostServiceValue& value, pg::FailureContext& /*failure*/) noexcept
 {
     const auto& service = Observation(value);
     ++service.State->PollCount;
@@ -100,6 +101,10 @@ struct ServiceDeleter
         ++service->State->DestroyCount;
         Record(*service->State, HostTestEvent::kDestroy, service->Scope);
         Record(*service->State, HostTestEvent::kDeleter, service->Scope);
+        if (service->State->OnDestroy)
+        {
+            service->State->OnDestroy();
+        }
         std::default_delete<HostService>{}(service);
     }
 };

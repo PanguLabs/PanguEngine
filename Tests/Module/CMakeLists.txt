@@ -41,6 +41,8 @@ set_target_properties(PanguScopeBuildMockTests PROPERTIES RUNTIME_OUTPUT_DIRECTO
 pangu_register_gtest(TARGET PanguScopeBuildMockTests BOUNDARY unit AREA module TIER fast)
 
 add_executable(PanguModuleIntegrationTests
+    ModuleDiagnosticsTests.cpp
+    ModuleWaitTests.cpp
     ModuleMetadataTests.cpp
     ScopeResourceAccessTests.cpp
     ModuleManagerTests.cpp
@@ -49,6 +51,8 @@ add_executable(PanguModuleIntegrationTests
 )
 add_subdirectory(Fixtures/ResourceAccess)
 target_include_directories(PanguModuleIntegrationTests PRIVATE
+    "${PROJECT_SOURCE_DIR}/Source/Runtime/Module/Private"
+    "${PROJECT_SOURCE_DIR}/Source/Runtime/Log/Private"
     "${CMAKE_CURRENT_SOURCE_DIR}/Fixtures/ResourceAccess" "${CMAKE_CURRENT_BINARY_DIR}/Fixtures/ResourceAccess")
 if(PANGU_LINK_MODE STREQUAL "Monolithic")
     target_link_libraries(PanguModuleIntegrationTests PRIVATE PanguScopeResourceFixture)
@@ -89,6 +93,7 @@ if(PANGU_LINK_MODE STREQUAL "Modular")
         BOUNDARY integration AREA module TIER precommit
         BUILD_TARGETS PanguModuleLifetimeFixture REQUIRES subprocess)
     target_sources(PanguModuleUnloadTests PRIVATE ModuleUnloadTests.cpp ModuleUnloadConcurrencyTests.cpp)
+    add_dependencies(PanguModuleUnloadTests PanguScopeProvider PanguDiagnosticsCleanup)
     target_include_directories(PanguModuleUnloadTests PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/Fixtures/Shared" "${CMAKE_CURRENT_BINARY_DIR}/Fixtures/Shared")
     add_dependencies(PanguModuleUnloadTests PanguSharedProvider PanguSharedConsumer PanguMissingQuery PanguNullQuery)

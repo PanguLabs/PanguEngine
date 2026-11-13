@@ -54,6 +54,7 @@ TEST(EngineHostService, TwoHostsAndScopesStayIndependent)
     HostOperationReport report;
     const auto candidates = HostCandidates();
     HostStartupConfig config;
+    config.Logging = pg::engine::test::DisabledLogging();
     config.Modules = candidates;
     SetHostTestState(std::make_shared<HostTestState>());
     ASSERT_TRUE(first.Start(config, report));
@@ -104,13 +105,19 @@ TEST(EngineHostService, MetadataAndIdentityAreExact)
     EngineHost other;
     HostOperationReport report;
     const auto candidates = HostCandidates();
-    ASSERT_TRUE(host.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-        report));
+    ASSERT_TRUE(host.Start({.AdditionalResidentQueries = {},
+                            .ResidentBindings = {},
+                            .Modules = candidates,
+                            .ModuleBindings = {},
+                            .Logging = pg::engine::test::DisabledLogging()},
+                           report));
     SetHostTestState(std::make_shared<HostTestState>());
-    ASSERT_TRUE(other.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-        report));
+    ASSERT_TRUE(other.Start({.AdditionalResidentQueries = {},
+                             .ResidentBindings = {},
+                             .Modules = candidates,
+                             .ModuleBindings = {},
+                             .Logging = pg::engine::test::DisabledLogging()},
+                            report));
     const auto context = host.CreateContext(report);
     const auto foreign = other.CreateContext(report);
     ASSERT_TRUE(context);
@@ -147,9 +154,12 @@ TEST(EngineHostService, NoImplicitAncestorLookup)
     EngineHost host;
     HostOperationReport report;
     const auto candidates = HostCandidates();
-    ASSERT_TRUE(host.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-        report));
+    ASSERT_TRUE(host.Start({.AdditionalResidentQueries = {},
+                            .ResidentBindings = {},
+                            .Modules = candidates,
+                            .ModuleBindings = {},
+                            .Logging = pg::engine::test::DisabledLogging()},
+                           report));
     const auto context = host.CreateContext(report);
     ASSERT_TRUE(context);
     const auto world = host.CreateWorld(*context, report);
@@ -170,9 +180,12 @@ TEST(EngineHostService, FailedScopeReuseDoesNotAlias)
     EngineHost host;
     HostOperationReport report;
     const auto candidates = HostCandidates();
-    ASSERT_TRUE(host.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-        report));
+    ASSERT_TRUE(host.Start({.AdditionalResidentQueries = {},
+                            .ResidentBindings = {},
+                            .Modules = candidates,
+                            .ModuleBindings = {},
+                            .Logging = pg::engine::test::DisabledLogging()},
+                           report));
     const auto stable = host.CreateContext(report);
     const auto old = host.CreateContext(report);
     ASSERT_TRUE(stable);
@@ -225,9 +238,12 @@ TEST(EngineHostService, QueryFailurePreservesStartupFailure)
     EngineHost host;
     HostOperationReport report;
     const auto candidates = HostCandidates();
-    EXPECT_FALSE(host.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-        report));
+    EXPECT_FALSE(host.Start({.AdditionalResidentQueries = {},
+                             .ResidentBindings = {},
+                             .Modules = candidates,
+                             .ModuleBindings = {},
+                             .Logging = pg::engine::test::DisabledLogging()},
+                            report));
     if (!report.StartupFailure.has_value())
     {
         FAIL() << "缺少启动首错";

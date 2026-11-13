@@ -93,7 +93,7 @@ struct Object
 };
 // ScopeHooks<Object> 要求可变引用回调签名。
 // NOLINTNEXTLINE(misc-const-correctness)
-[[nodiscard]] inline pg::Status Start(Object& object) noexcept
+[[nodiscard]] inline pg::Status Start(Object& object, pg::FailureContext& /*failure*/) noexcept
 {
     ++object.State->Started;
     if (object.Provider)
@@ -105,7 +105,7 @@ struct Object
 // NOLINTNEXTLINE(misc-const-correctness)
 inline void Stop(Object& object) noexcept { ++object.State->Stopped; }
 // NOLINTNEXTLINE(misc-const-correctness)
-[[nodiscard]] inline pg::Status Poll(Object& object) noexcept
+[[nodiscard]] inline pg::Status Poll(Object& object, pg::FailureContext& /*failure*/) noexcept
 {
     if (object.State->PollError)
     {

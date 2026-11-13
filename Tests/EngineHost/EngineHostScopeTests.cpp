@@ -21,9 +21,12 @@ TEST(EngineHostScope, LocalFailureKeepsOtherScopesReady)
     EngineHost host;
     HostOperationReport report;
     const auto candidates = HostCandidates();
-    ASSERT_TRUE(host.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-        report));
+    ASSERT_TRUE(host.Start({.AdditionalResidentQueries = {},
+                            .ResidentBindings = {},
+                            .Modules = candidates,
+                            .ModuleBindings = {},
+                            .Logging = pg::engine::test::DisabledLogging()},
+                           report));
     const auto stable = host.CreateContext(report);
     ASSERT_TRUE(stable);
     for (const bool factory : {true, false})
@@ -87,9 +90,12 @@ TEST(EngineHostScope, SameReportReentryKeepsOuterResult)
     EngineHost host;
     HostOperationReport report;
     const auto candidates = HostCandidates();
-    ASSERT_TRUE(host.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-        report));
+    ASSERT_TRUE(host.Start({.AdditionalResidentQueries = {},
+                            .ResidentBindings = {},
+                            .Modules = candidates,
+                            .ModuleBindings = {},
+                            .Logging = pg::engine::test::DisabledLogging()},
+                           report));
     report.PrimaryError = kStopError;
     report.Stage = HostOperationStage::kBusinessAdmission;
     std::size_t entries{};
@@ -174,9 +180,12 @@ TEST(EngineHostScope, StateAndParentPreconditionsAreExplicit)
     };
     reject();
     const auto candidates = HostCandidates();
-    ASSERT_TRUE(host.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-        report));
+    ASSERT_TRUE(host.Start({.AdditionalResidentQueries = {},
+                            .ResidentBindings = {},
+                            .Modules = candidates,
+                            .ModuleBindings = {},
+                            .Logging = pg::engine::test::DisabledLogging()},
+                           report));
     const auto wrongParent = host.CreateWorld(host.HostScope(), report);
     ASSERT_FALSE(wrongParent);
     EXPECT_EQ(wrongParent.error(), module::MakeModuleError(module::ModuleError::kInvalidScope));
@@ -197,9 +206,12 @@ TEST(EngineHostScope, ManagerShutdownReportSynchronizesClosing)
         EngineHost host;
         HostOperationReport report;
         const auto candidates = HostCandidates();
-        ASSERT_TRUE(host.Start(
-            {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-            report));
+        ASSERT_TRUE(host.Start({.AdditionalResidentQueries = {},
+                                .ResidentBindings = {},
+                                .Modules = candidates,
+                                .ModuleBindings = {},
+                                .Logging = pg::engine::test::DisabledLogging()},
+                               report));
         const auto context = host.CreateContext(report);
         ASSERT_TRUE(context);
         const auto access = AcquireContextValue(host, *context);

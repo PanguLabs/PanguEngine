@@ -5,8 +5,8 @@
 #include "ModuleOperation.h"
 #include "Result.h"
 #include <FoundationModule.h>
+#include <LogModule.h>
 #include <ManualModule.h>
-#include <ManualModulePath.h>
 #include <ModuleBuiltin.h>
 #include <ModuleError.h>
 #include <ModuleManager.h>
@@ -19,6 +19,10 @@
 #include <optional>
 #include <typeinfo>
 #include <utility>
+
+#ifdef PG_TEST_MODULAR
+#include <ManualModulePath.h>
+#endif
 
 namespace pg::module
 {
@@ -54,7 +58,8 @@ void ExpectRejected(const ModuleMetaProvider& provider)
     AdmissionFixture::gDefinition.Metadata = &provider;
     RegistrationScope declarations;
     ModuleOperationReport report;
-    const std::array queries{QueryFoundationModule, QueryModuleRuntime, AdmissionFixture::Query};
+    const std::array queries{QueryFoundationModule, pg::log::QueryLogModule, QueryModuleRuntime,
+                             AdmissionFixture::Query};
     auto result = ModuleManager::Create(declarations, queries, {}, report);
     ASSERT_FALSE(result);
     EXPECT_EQ(result.error(), MakeModuleError(ModuleError::kInvalidDefinition));
@@ -110,7 +115,8 @@ TEST(ModuleMetadata, DistinctTypesMayOmitExplicitIds)
     AdmissionFixture::gDefinition.Metadata = &provider;
     RegistrationScope declarations;
     ModuleOperationReport report;
-    const std::array queries{QueryFoundationModule, QueryModuleRuntime, AdmissionFixture::Query};
+    const std::array queries{QueryFoundationModule, pg::log::QueryLogModule, QueryModuleRuntime,
+                             AdmissionFixture::Query};
     auto manager = ModuleManager::Create(declarations, queries, {}, report);
     ASSERT_TRUE(manager);
     const auto handle = manager->Find(test::kManualModuleId).value_or(ModuleHandle{});
@@ -128,7 +134,8 @@ TEST(ModuleMetadata, AdmissionAndLookupErrorOrder)
 {
     RegistrationScope declarations;
     ModuleOperationReport report;
-    const std::array queries{QueryFoundationModule, QueryModuleRuntime, test::QueryManualModule};
+    const std::array queries{QueryFoundationModule, pg::log::QueryLogModule, QueryModuleRuntime,
+                             test::QueryManualModule};
     auto manager = ModuleManager::Create(declarations, queries, {}, report);
     ASSERT_TRUE(manager);
     const auto acquire = [&](ModuleId owner, const std::type_info& type)
@@ -159,7 +166,8 @@ TEST(ModuleMetadata, MissingMetadataRemainsLegal)
     AdmissionFixture::gDefinition.Metadata = nullptr;
     RegistrationScope declarations;
     ModuleOperationReport report;
-    const std::array queries{QueryFoundationModule, QueryModuleRuntime, AdmissionFixture::Query};
+    const std::array queries{QueryFoundationModule, pg::log::QueryLogModule, QueryModuleRuntime,
+                             AdmissionFixture::Query};
     auto manager = ModuleManager::Create(declarations, queries, {}, report);
     ASSERT_TRUE(manager);
     const auto handle = manager->Find(test::kManualModuleId).value_or(ModuleHandle{});
@@ -180,7 +188,8 @@ TEST(ModuleMetadata, ReentryBusyPrecedesMissingOwnerAndInactiveRecord)
     AdmissionFixture::gReentryError.reset();
     RegistrationScope declarations;
     ModuleOperationReport report;
-    const std::array queries{QueryFoundationModule, QueryModuleRuntime, AdmissionFixture::Query};
+    const std::array queries{QueryFoundationModule, pg::log::QueryLogModule, QueryModuleRuntime,
+                             AdmissionFixture::Query};
     auto manager = ModuleManager::Create(declarations, queries, {}, report);
     ASSERT_TRUE(manager);
     AdmissionFixture::gManager = &*manager;

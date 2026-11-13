@@ -1,0 +1,75 @@
+cmake_minimum_required(VERSION 4.0)
+include("${PANGU_PARENT_CONFIG}")
+file(SHA256 "${PANGU_PARENT_CONTEXT}" parentContextBefore)
+if(CMAKE_HOST_WIN32)
+    set(suffix .exe)
+endif()
+function(Run)
+    execute_process(COMMAND ${ARGN} RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 120)
+    file(APPEND "${PANGU_TEST_ROOT}/commands.log" "${ARGN}\nexit=${result}\n${output}\n${error}\n")
+    if(NOT result STREQUAL "0")
+        message(FATAL_ERROR "Command failed: ${ARGN}\n${result}\n${output}\n${error}")
+    endif()
+endfunction()
+string(RANDOM LENGTH 10 ALPHABET 0123456789abcdef runId)
+set(PANGU_TEST_ROOT "${PANGU_TEST_ROOT}/${runId}")
+file(MAKE_DIRECTORY "${PANGU_TEST_ROOT}")
+foreach(config IN ITEMS Release Debug)
+    foreach(asserts IN ITEMS ON OFF)
+        set(root "${PANGU_TEST_ROOT}/${config}-${asserts}")
+        if(asserts)
+            set(expected 1)
+        else()
+            set(expected 0)
+        endif()
+        Run("${CMAKE_COMMAND}" -S "${CMAKE_CURRENT_LIST_DIR}/Fixture" -B "${root}" -G Ninja
+            ${parentArgs} "-DPANGU_SOURCE_ROOT=${PANGU_SOURCE_ROOT}"
+            "-DPANGU_ENGINE_BUILD_ROOT=${root}/EngineArtifacts"
+            "-DPANGU_META_HOST_BUILD_ROOT=${PANGU_META_HOST_BUILD_ROOT}"
+            "-DCMAKE_BUILD_TYPE=${config}" "-DPANGU_ENABLE_ASSERTS=${asserts}"
+            -DPANGU_LOG_COMPILED_MIN_LEVEL=3 "-DEXPECT_ASSERTS=${expected}")
+        Run("${CMAKE_COMMAND}" --build "${root}" --target AssertConfigFixtures --parallel "${PANGU_TEST_BUILD_JOBS}")
+        Run("${root}/EngineArtifacts/Bin/AssertConfigConsumer${suffix}")
+        set(iteratorArgs)
+        if(CMAKE_HOST_WIN32)
+            if(config STREQUAL "Debug")
+                set(iteratorLevel 2)
+            else()
+                set(iteratorLevel 0)
+            endif()
+            list(APPEND iteratorArgs "-DEXPECT_ITERATOR_DEBUG_LEVEL=${iteratorLevel}")
+        endif()
+        Run("${CMAKE_COMMAND}" "-DFIXTURE=${root}/EngineArtifacts/Bin/PanguLogNoAllocationFixture${suffix}" ${iteratorArgs}
+            -P "${PANGU_SOURCE_ROOT}/Tests/Log/RunNoAllocation.cmake")
+        file(READ "${root}/compile_commands.json" database)
+        string(JSON commandCount LENGTH "${database}")
+        math(EXPR last "${commandCount} - 1")
+        foreach(index RANGE 0 ${last})
+            string(JSON source GET "${database}" ${index} file)
+            string(JSON command GET "${database}" ${index} command)
+            if(source MATCHES "/Source/ThirdParty/" AND command MATCHES "PG_ENABLE_ASSERTS|PG_LOG_COMPILED_MIN_LEVEL|[-/]UNDEBUG")
+                message(FATAL_ERROR "Engine configuration leaked to third party: ${source}")
+            endif()
+        endforeach()
+        Run("${CMAKE_COMMAND}" "-DPANGU_FATAL_FIXTURE=${root}/EngineArtifacts/Bin/PanguFoundationFatalFixture${suffix}"
+            "-DPANGU_ASSERTS=${asserts}" "-DPANGU_TEST_ROOT=${root}/Work"
+            -P "${PANGU_SOURCE_ROOT}/Tests/Foundation/FatalTests.cmake")
+    endforeach()
+endforeach()
+
+foreach(level IN ITEMS -1 5 1.5 invalid)
+    execute_process(COMMAND "${CMAKE_COMMAND}" -S "${CMAKE_CURRENT_LIST_DIR}/Fixture"
+        -B "${PANGU_TEST_ROOT}/Invalid-${level}" -G Ninja ${parentArgs}
+        "-DPANGU_SOURCE_ROOT=${PANGU_SOURCE_ROOT}"
+        "-DPANGU_ENGINE_BUILD_ROOT=${PANGU_TEST_ROOT}/Invalid-${level}/EngineArtifacts"
+        "-DPANGU_LOG_COMPILED_MIN_LEVEL=${level}" -DCMAKE_BUILD_TYPE=Release
+        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 30)
+    file(APPEND "${PANGU_TEST_ROOT}/commands.log" "Invalid level=${level}: exit=${result}\n${output}\n${error}\n")
+    if(result STREQUAL "0" OR NOT error MATCHES "PANGU_LOG_COMPILED_MIN_LEVEL must be an integer from 0 to 4")
+        message(FATAL_ERROR "Invalid level '${level}' was not rejected correctly: ${result}: ${error}")
+    endif()
+endforeach()
+file(SHA256 "${PANGU_PARENT_CONTEXT}" parentContextAfter)
+if(NOT parentContextBefore STREQUAL parentContextAfter)
+    message(FATAL_ERROR "Isolated Assert config matrix modified parent CurrentContext")
+endif()

@@ -1,14 +1,14 @@
 # Pangu EngineHost 启动与生命周期
 
 > 状态：Partially Frozen（宿主职责、单次启动、Scope 与安全关闭行为已确定；Public C++ API/ABI 未冻结）
-> 更新：2026-11-11
+> 更新：2026-11-13
 > 决策：[ADR-0002](../decisions/0002-name-engine-host.md)、[ADR-0016](../decisions/0016-engine-host-lifecycle.md)
 
 ## 职责与所有权
 
 Application 拥有 `pg::engine::EngineHost`。它不可复制、不可移动，构造不执行 Query、Load 或 Register；内部声明域比 ModuleManager 活得更久。同一进程可拥有多个独立宿主。Game、Editor、Tool 共用此协议，窗口、渲染和主循环仍由 Application 负责。
 
-`PanguEngineHost` / `Pangu::EngineHost` 是独立第三常驻 Module，单一真实 STATIC/SHARED Target 跟随统一链接模式。身份为 `8b07b8da6c9647469f8a31608f7e2193`，版本 1.0.0、协议 1，Required 依赖 Module Runtime 1.0.0。`BuiltinResidentQueries()` 仍只返回 Foundation/Module 两项，EngineHost 自行组合自己的 Query；不反向依赖业务 Module。
+`PanguEngineHost` / `Pangu::EngineHost` 是独立常驻 Module，单一真实 STATIC/SHARED Target 跟随统一链接模式。身份为 `8b07b8da6c9647469f8a31608f7e2193`，版本 1.0.0、协议 1，Required 依赖 Module Runtime 1.0.0。`BuiltinResidentQueries()` 返回 Foundation/Log/Module 三项，EngineHost 自行组合自己的 Query；不反向依赖业务 Module。
 
 EngineHost 复用 [ModuleManager](module-api.md) 的资源 DAG、Scope、原生持有与清理器，不引入第二套加载/资源管理系统。Plugin 仍管理发现和分发，Module 管理代码与能力声明；Module 可以完全没有 Service。三种 [Service](service.md) 模式的既有语义不变。
 
@@ -18,7 +18,9 @@ EngineHost 复用 [ModuleManager](module-api.md) 的资源 DAG、Scope、原生�
 
 `HostStartupConfig` 的四个 span 借用额外常驻 Query/Bindings 与业务 Candidates/Bindings，仅在调用期间使用。Ready 后业务集合固定；首版不提供增量加载、通用构造参数注入、ConfigureInstance 或额外 Register 回调。
 
-`HostOperationReport` 是拥有型值快照，区分当前阶段/错误与 `StartupFailure` 的首次启动阶段/错误/Module 报告。清理重试返回非 Busy 错误也不能覆盖首错或丢失所有者。回调重入管理操作返回 Host Busy，局部报告在外部代码返回后整体发布，复用同一 report 不污染外层结果。
+`HostOperationReport` 是拥有型值快照，区分当前阶段/错误与 `StartupFailure` 的首次启动阶段/错误。历史 ModuleReport 是拥有型启动摘要，Origin 是独立 optional FailureSite；当前完整失败现场由 Failure() const 访问器借用报告自身，不存自指针。DetailsOmitted、Unknown 和历史截断如实保留，历史摘要不等同于完整旧 Module 报告。清理重试返回非 Busy 错误也不能覆盖首错或丢失所有者。回调重入管理操作返回 Host Busy，局部报告在外部代码返回后整体发布，复用同一 report 不污染外层结果。
+
+启动在业务前使用 HostStartupConfig::Logging 初始化自有 Log。可选输出 capability 降级可继续，Log 整体 Initialize 失败则 Host 启动失败；RequiredOutputs 只约束启动。GetLogWriter 提供显式 Writer，InspectLog 返回拥有型状态；运行输出故障不回调业务或反向关闭 Host。
 
 ## Scope 与具名 Concrete Service 访问
 
@@ -39,6 +41,8 @@ GetState/HostScope 为无副作用观察，Cold/Closed 无有效 HostScope。Ins
 真实物理卸载须由无额外导入持有的业务夹具库事件证明。新具名入口产生的 ScopeAccess 在业务库真实卸载后仍可复制、失败 TryBorrow 和最终释放，其控制块及释放实现位于常驻 Runtime。系统仍持有某库时不承诺它物理移除。
 
 ELF 可执行宿主参与跨 DSO 公共 RTTI 时需要正确的类型可见性及可执行文件动态符号导出（CMake `ENABLE_EXPORTS`）。这不替代受控 ABI/ODR 约束或最小公共导出，也不采用逐类型身份锚点。
+
+当前关闭先完成业务/Module 清理，再 Stop Log，最后发布 Closed。业务清理完成不代表日志线程资源已回收；Log Stop 超时保留 Closing 与责任，最终首错 E1、清理错误 E2 和 Log 错误分开保存。安全关闭与输出完整性分别表示，残留 Writer 在 Host 关闭后安全失效。此诊断扩展的正式平台与预算记录见[基础诊断验收](../../docs/superpowers/plans/2026-11-12-foundation-diagnostics-validation.md)。
 
 ## 实现与验收边界
 

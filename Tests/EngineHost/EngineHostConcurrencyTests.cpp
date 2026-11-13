@@ -24,6 +24,7 @@ TEST(EngineHostConcurrency, QueriedBorrowLinearizesWithClose)
     HostOperationReport report;
     const auto candidates = HostCandidates();
     HostStartupConfig config;
+    config.Logging = pg::engine::test::DisabledLogging();
     config.Modules = candidates;
     ASSERT_TRUE(host.Start(config, report));
     const auto context = host.CreateContext(report);

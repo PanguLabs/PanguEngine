@@ -3,6 +3,8 @@
 #include <EngineHost.h>
 #include <HostMetaAccess.h>
 #include <HostOperation.h>
+#include <HostStartupConfig.h>
+#include <LogTypes.h>
 #include <array>
 #include <iostream>
 #if PG_TEST_TYPED
@@ -62,8 +64,11 @@ bool Run()
     pg::engine::EngineHost host;
     pg::engine::HostOperationReport report;
     const std::array queries{pg::test::QueryActor};
-    if (!host.Start({.AdditionalResidentQueries = queries, .ResidentBindings = {}, .Modules = {}, .ModuleBindings = {}},
-                    report))
+    pg::engine::HostStartupConfig config;
+    config.AdditionalResidentQueries = queries;
+    config.Logging.Enabled = pg::log::OutputMask::kNone;
+    config.Logging.Required = pg::log::OutputMask::kNone;
+    if (!host.Start(config, report))
     {
         return false;
     }

@@ -1,4 +1,5 @@
 #pragma once
+#include <LogWriter.h>
 #include <ModuleCodePin.h>
 #include <ModuleDescriptor.h>
 #include <ModuleMetaBorrow.h>
@@ -97,14 +98,15 @@ public:
     [[nodiscard]] static Result<ModuleManager> Create(RegistrationScope& declarations,
                                                       std::span<const QueryModuleFn> queries,
                                                       std::span<const OptionalDependencyBinding> selections,
-                                                      ModuleOperationReport& report) noexcept;
+                                                      ModuleOperationReport& destination,
+                                                      log::LogWriter writer = {}) noexcept;
     [[nodiscard]] Result<ModuleLoadResult> Load(std::span<const ModuleLoadCandidate> candidates,
                                                 std::span<const OptionalDependencyBinding> selections,
-                                                ModuleOperationReport& report) noexcept;
-    [[nodiscard]] Status Register(ModuleHandle handle, ModuleOperationReport& report) noexcept;
-    [[nodiscard]] Status Activate(ModuleHandle handle, ModuleOperationReport& report) noexcept;
-    [[nodiscard]] Status BeginUnload(ModuleHandle handle, ModuleOperationReport& report) noexcept;
-    [[nodiscard]] Status TryFinishUnload(ModuleHandle handle, ModuleOperationReport& report) noexcept;
+                                                ModuleOperationReport& destination) noexcept;
+    [[nodiscard]] Status Register(ModuleHandle handle, ModuleOperationReport& destination) noexcept;
+    [[nodiscard]] Status Activate(ModuleHandle handle, ModuleOperationReport& destination) noexcept;
+    [[nodiscard]] Status BeginUnload(ModuleHandle handle, ModuleOperationReport& destination) noexcept;
+    [[nodiscard]] Status TryFinishUnload(ModuleHandle handle, ModuleOperationReport& destination) noexcept;
     [[nodiscard]] Result<ModuleCodePin> TryPinForBusiness(ModuleHandle handle) const noexcept;
     [[nodiscard]] std::optional<ModuleHandle> Find(ModuleId id) const noexcept;
     [[nodiscard]] Result<ModuleSnapshot> Inspect(ModuleHandle handle) const noexcept;
@@ -112,12 +114,12 @@ public:
     [[nodiscard]] std::vector<ModuleHandle> RegistrationOrder() const;
     [[nodiscard]] ScopeHandle HostScope() const noexcept;
     [[nodiscard]] Result<ScopeHandle> CreateScope(pg::service::Scope kind, ScopeHandle parent,
-                                                  ModuleOperationReport& report) noexcept;
-    [[nodiscard]] Status BeginCloseScope(ScopeHandle scope, ModuleOperationReport& report) noexcept;
-    [[nodiscard]] Status TryFinishCloseScope(ScopeHandle scope, ModuleOperationReport& report) noexcept;
-    [[nodiscard]] Status PollCleanup(ModuleOperationReport& report) noexcept;
-    [[nodiscard]] Status BeginShutdown(ModuleOperationReport& report) noexcept;
-    [[nodiscard]] Status TryFinishShutdown(ModuleOperationReport& report) noexcept;
+                                                  ModuleOperationReport& destination) noexcept;
+    [[nodiscard]] Status BeginCloseScope(ScopeHandle scope, ModuleOperationReport& destination) noexcept;
+    [[nodiscard]] Status TryFinishCloseScope(ScopeHandle scope, ModuleOperationReport& destination) noexcept;
+    [[nodiscard]] Status PollCleanup(ModuleOperationReport& destination) noexcept;
+    [[nodiscard]] Status BeginShutdown(ModuleOperationReport& destination) noexcept;
+    [[nodiscard]] Status TryFinishShutdown(ModuleOperationReport& destination) noexcept;
 
 private:
     friend struct detail::ModuleManagerTestAccess;

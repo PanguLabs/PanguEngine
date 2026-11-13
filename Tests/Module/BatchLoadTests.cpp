@@ -1,18 +1,13 @@
 #include "ModuleHandle.h"
 #include "ModuleOperation.h"
 #include <ModuleBuiltin.h>
-#include <ModuleDescriptor.h>
 #include <ModuleError.h>
 #include <ModuleManager.h>
 #include <RegistrationContext.h>
-#include <Result.h>
-#include <ScopeIdentity.h>
 #include <array>
-#include <cstddef>
 #include <gtest/gtest.h>
-#include <optional>
 #include <vector>
-#if defined(PG_TEST_MODULAR)
+#ifdef PG_TEST_MODULAR
 #include "SharedFixtureContract.h"
 #include "SharedFixturePaths.h"
 #include <ScopeTestSupport.h>
@@ -29,10 +24,10 @@ TEST(BatchLoad, EmptyBatchPreservesResidentSet)
     const auto result = manager->Load({}, {}, report);
     ASSERT_FALSE(result);
     EXPECT_EQ(result.error(), MakeModuleError(ModuleError::kInvalidDescriptor));
-    EXPECT_EQ(manager->Modules().size(), 2U);
+    EXPECT_EQ(manager->Modules().size(), 3U);
     EXPECT_EQ(report.Handle, ModuleHandle{});
 }
-#if defined(PG_TEST_MODULAR)
+#ifdef PG_TEST_MODULAR
 TEST(BatchLoad, RealLibrariesCommitInDependencyOrderAndSnapshotsOutliveUnload)
 {
     using namespace fixture;
@@ -88,7 +83,7 @@ TEST(BatchLoad, NativeFailurePublishesNoPartialHandlesAndCanRetry)
     EXPECT_EQ(report.OriginalError, failed.error());
     EXPECT_EQ(report.Handle, ModuleHandle{});
     EXPECT_FALSE(manager->Find(kSharedProviderId));
-    EXPECT_EQ(manager->Modules().size(), 2U);
+    EXPECT_EQ(manager->Modules().size(), 3U);
     EXPECT_TRUE(manager->Load(std::span(candidates).first(1), {}, report));
     const std::array wrong{ModuleLoadCandidate{StaticModuleCandidate{BuiltinResidentQueries().front()}}};
     {
@@ -115,7 +110,7 @@ TEST(BatchLoad, RejectsNativeIdentityMismatchNullDefinitionAndDuplicateBeforeOpe
         };
         const auto failed = manager->Load(candidates, {}, report);
         EXPECT_FALSE(failed);
-        EXPECT_EQ(manager->Modules().size(), 2U);
+        EXPECT_EQ(manager->Modules().size(), 3U);
     }
     const auto rootId = manager->Inspect(manager->Modules().front())->Descriptor.Id;
     const std::array duplicate{

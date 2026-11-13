@@ -1,11 +1,11 @@
 # Pangu 错误处理与基础诊断规范
 
 > 设计状态：Frozen（v1 设计语义；具体 API、数据布局与平台实现未冻结）
-> 更新：2026-10-21
+> 更新：2026-11-13
 > 决策：[ADR-0007：错误值、失败报告与基础诊断分离](../decisions/0007-error-diagnostics.md)
 > 前置约束：[C++ 规范](cpp-guidelines.md)、[ABI](abi.md)、[内存所有权](../core/memory-management.md)、[Service](../core/service.md)
 
-## 当前正式实现切片（2026-10-22）
+## 历史正式实现切片（2026-10-22）
 
 已新增 `Source/Runtime/Foundation/` 的真实 `PanguFoundation` STATIC Module（一个 CMake Library Target）：
 
@@ -15,6 +15,20 @@
 - `Tests/Foundation/ErrorTests.cpp`：覆盖常量构造、强类型身份、零域拒绝、显式 Native Code、`Status` 成败、`Result` 原错误传播，以及类型的拷贝/布局基本性质。Windows、WSL Ubuntu、macOS 的 CTest 运行已通过，Android/iOS 的 `PanguFoundation` 静态库目标编译已通过。
 
 **明确仍未冻结**：`ErrorDomainId` 临时采用 64 位数字的选择及其分配治理；`NativeErrorSourceId` 编码；`pg::Error` 的精确内存布局、对齐与五平台跨动态库 ABI；错误字典/外部报告的实现。当前实现使用 `std::optional<NativeErrorCode>` 按值存储，不应在 ABI 合同和验证通过前作为可卸载 Plugin 的已认证 Public ABI。此切片不包含 ErrorReport、Logging、Check/Fatal、全平台系统错误捕获，也不改变本文件既有 Frozen **语义**。
+
+## 当前失败现场与 Log 实现
+
+Foundation 已实现拥有型 FailureSite、固定偏移的 FailureReport、同步借用的 FailureContext，以及不依赖 fmt/spdlog/Log 的 Check/Fatal 应急入口。报告文本在采集时复制，原 Plugin 卸载后仍可读取；Unknown 起源、DetailsOmitted 和截断均显式表达，不编造调用点。Module 回调携带诊断上下文，父操作保留主错并追加清理次错。
+
+Source/Runtime/Log 是真实 PanguLog / Pangu::Log Module，命名空间 pg::log，Required Foundation 1.0.0；Module Runtime Required Foundation 与 Log，方向为 Module → Log → Foundation。fmt/spdlog 为普通静态第三方 Target，不取得 ModuleId。
+
+首版公开日志模式仅异步。每个 LogSystem 自有固定 FIFO、失效安全 Writer、专用原生消费者及文件分区；消费者调用私有 spdlog 同步后端，无默认 logger、全局 registry 或默认线程池。PG_LOG 在过滤与提交保护成功后才求值格式参数，接受编译期格式串和受控的有界文本/标量子集，不接任意 formatter、未知长度指针或运行期格式串。消息容量1024 B、分类64 B、文件/函数合计512 B，编码行12 KiB。默认队列256条/高等级预留32条；容量或竞争拒收可发生于任意等级，不驱逐已经接受的记录，累计损失保持可见。
+
+文件分区使用非零稳定 PartitionId、绝对 native 路径和独占锁，只管理自身当前/历史文件。默认分区64 MiB、单文件4 MiB，完整记录轮转，只回收最旧的已关闭受管理文件；外部文件和活跃文件保留。输出故障后不自动重开、恢复或热重配，应用主动查询状态。初始化可以降级不可用的可选输出；LogSystem::Initialize 整体返回错误时，Host 启动失败并正常回滚。
+
+Flush 冻结累计前缀 H，只允许一个未完成管理请求；Stop 保留旧 Flush 与最终前缀两份结果。Finished、序号已处理、业务关闭或输出 Close 均不单独证明资源安全；必须以 ResourcesReleased 判断可销毁，以 OutputComplete 单独判断完整性。超时保留所有权并重试，未结束即销毁走 Fatal。Cold/Closed 不隐式启动消费者，Closed Stop 幂等；残留 Writer 不阻止关闭，关闭后安全失效。
+
+PANGU_ENABLE_ASSERTS 默认 ON，经 Foundation 传播 PG_ENABLE_ASSERTS，与 NDEBUG/Release 解耦；OFF 时 Assert 条件/消息均不求值，Check/Fatal 所有配置保留。报告布局、宏签名、格式子集 API 与平台实现是当前实现，不能由本节推定为长期 Frozen ABI。批准的细化规格见[基础诊断设计](../../docs/superpowers/specs/2026-11-12-foundation-diagnostics-design.md)，实测范围、预算、无异常/OOM证据及未验证项见[正式验收](../../docs/superpowers/plans/2026-11-12-foundation-diagnostics-validation.md)。
 
 ## 1. 目标与适用范围
 
@@ -239,7 +253,7 @@ Host 诊断实例销毁后，调用方不能继续使用裸指针或失效引用
 | Quiescing / Draining | 清理中的诊断、排空已接受记录、停用 Sink | 先停业务工作；保留清理仍需的诊断能力和代码驻留 |
 | Diagnostics 已关闭 | 最小应急输出、Check/Fatal | 不再访问已经销毁的 Host 日志对象 |
 
-Diagnostics 初始化是明确支持可恢复 OOM 的接口。其缓冲、队列及必需初始化步骤不得依赖隐式的致命分配；失败时释放部分状态、返回失败并保留应急能力。普通日志无法初始化时，Host 默认降级到应急诊断并继续启动；若工具或运行模式显式声明某项报告保存能力是必需启动条件，该能力失败应返回启动失败并正常回滚，而非直接 Fatal。初始化失败的诊断实例不发布为 Ready。
+Diagnostics 初始化是明确支持可恢复 OOM 的接口。其缓冲、队列及必需初始化步骤不得依赖隐式的致命分配；失败时释放部分状态、返回失败并保留应急能力。当前首版按批准的基础诊断细化规格允许可选输出 capability 降级后继续；Required 输出失败、全部输出不可用或 Log 整体初始化错误均使 Host 启动失败并正常回滚，而非直接 Fatal。禁用日志是显式配置，不把整体初始化错误忽略为成功。初始化失败的诊断实例不发布为 Ready。
 
 正常关闭时，先停止相关业务生产者并完成其清理；然后关闭普通日志入口，等待正在提交的记录，确定最终排空范围。默认排空已接受记录后再停用并销毁 Sink、释放缓冲。超时、Sink 失败或主动丢弃都必须通过 Flush/Stop 结果明确报告，运行期间的累计丢弃统计也须保持可查询直至调用方取得关闭结果；不能悄悄丢弃后报告完整成功。
 
@@ -281,7 +295,7 @@ OOM 沿用 Memory v1：原生 Try 路径返回失败；失败即终止的分配�
 | 场景 | 必须验证的结果 |
 | --- | --- |
 | 无额外堆内存可用 | Error 创建/复制/传播成功；可恢复回滚不另触发 OOM |
-| Diagnostics 初始化中的分配或 Sink 创建失败 | 部分状态清理，实例不发布 Ready；默认降级，显式必需能力失败则回滚启动 |
+| Diagnostics 初始化中的分配或 Sink 创建失败 | 部分状态清理，失败实例不发布 Ready；仅可选输出 capability 可降级，整体初始化错误或必需能力失败回滚启动 |
 | Result 成功、失败及 void | 分支与载荷正确；忽略结果有诊断；无异常配置不依赖 `value()` |
 | 原始系统调用失败后再记日志 | 保留的是原始错误值，不是日志操作覆盖后的错误 |
 | 未知 Error Domain / 插件卸载 | 可传播并输出数值；无悬空字符串、类别对象或格式化回调 |

@@ -6,13 +6,16 @@
 #include <FixtureModules.h>
 #include <HostOperation.h>
 #include <HostStartupConfig.h>
+#include <LogTypes.h>
 #include <ModuleIdentityParse.h>
 
 int main()
 {
     pg::engine::EngineHost host;
     pg::engine::HostOperationReport report;
-    const pg::engine::HostStartupConfig config;
+    pg::engine::HostStartupConfig config;
+    config.Logging.Enabled = pg::log::OutputMask::kNone;
+    config.Logging.Required = pg::log::OutputMask::kNone;
     if (!host.Start(config, report) || !host.BeginShutdown(report) || !host.TryFinishShutdown(report) ||
         host.GetState() != pg::engine::HostState::kClosed ||
         pg::engine::QueryEngineHostModule()->Descriptor.Id != pg::engine::kEngineHostModuleId)

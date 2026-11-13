@@ -12,7 +12,6 @@
 
 #include <array>
 #include <cstdlib>
-#include <exception>
 #include <fstream>
 #include <memory>
 #include <span>
@@ -21,23 +20,10 @@
 
 namespace
 {
-struct TerminationPhase
-{
-    bool Terminating{};
-    std::string Marker;
-};
-TerminationPhase& Phase() noexcept
-{
-    static TerminationPhase phase;
-    return phase;
-}
 void MarkUnload(void* context) noexcept
 {
-    // Windows 的 ExitProcess 还会执行 DLL 进程退出回调；只观察 Manager 仍可执行时的释放。
-    if (!Phase().Terminating)
-    {
-        std::ofstream(*static_cast<std::string*>(context) + ".unloaded") << "NativeUnload";
-    }
+    // Fatal 不执行进程退出回调；在正常协调期间观察到卸载就立即留下拥有型标记。
+    std::ofstream(*static_cast<std::string*>(context) + ".unloaded") << "NativeUnload";
 }
 template <class T>
 bool ExerciseAfterUnload(pg::module::ScopeAccess<T> access)
@@ -70,19 +56,8 @@ int main(int argc, char* const* argv)
     {
         return 2;
     }
-    std::set_terminate(
-        [] noexcept
-        {
-            if (!Phase().Marker.empty())
-            {
-                std::ofstream(Phase().Marker + ".terminating") << pg::test::Observer().NativeUnloadCount();
-            }
-            Phase().Terminating = true;
-            std::_Exit(91);
-        });
     const std::string mode(args.subspan<1>().front());
     std::string marker(args.back());
-    Phase().Marker = marker;
     auto& observer = pg::test::Observer();
     observer.Reset();
     observer.SetNativeUnloadCallback(MarkUnload, &marker);
@@ -126,6 +101,7 @@ int main(int argc, char* const* argv)
             return 8;
         }
         std::ofstream(marker + ".ready") << "ready";
+        std::ofstream(marker + ".before-destruction") << observer.NativeUnloadCount();
         manager.reset();
         return 9;
     }

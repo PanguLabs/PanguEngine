@@ -2,6 +2,7 @@
 
 #include <EngineHost.h>
 #include <HostError.h>
+#include <LogSystem.h>
 #include <optional>
 #include <utility>
 
@@ -9,12 +10,16 @@ namespace pg::engine
 {
 struct EngineHost::State
 {
-    // 反向析构：Manager 先释放，声明域最后销毁。
+    // 反向析构：Manager 先释放，Log 及其原生依赖随后，声明域最后销毁。
     module::RegistrationScope Declarations;
+    log::LogSystem Log;
     std::optional<module::ModuleManager> Manager;
     HostState Value{HostState::kCold};
     bool Operating{};
     std::optional<HostStartupFailure> StartupFailure;
+    HostLogInitialization LogInitialization;
+    log::LogState LogValue{log::LogState::kCold};
+    std::chrono::milliseconds DefaultWait{100};
 
     struct Operation
     {
@@ -39,6 +44,10 @@ struct EngineHost::State
             .PrimaryError = std::nullopt,
             .ModuleReport = std::nullopt,
             .StartupFailure = StartupFailure,
+            .LogState = LogValue,
+            .LogInitialization = LogInitialization,
+            .LogStop = std::nullopt,
+            .WaitingForLog = false,
         };
     }
     [[nodiscard]] Status Reject(HostOperationReport& report, HostError error) const noexcept
@@ -77,7 +86,12 @@ struct EngineHost::State
         return status;
     }
     [[nodiscard]] Status FailStartup(HostOperationReport& report, HostOperationStage stage, pg::Error cause,
-                                     std::optional<module::ModuleOperationReport> moduleReport) noexcept;
+                                     module::ModuleOperationReport* moduleReport) noexcept;
+    [[nodiscard]] Status FinishShutdown(HostOperationReport& report, module::ModuleOperationReport& moduleReport,
+                                        std::chrono::steady_clock::time_point deadline,
+                                        HostOperationStage stage = HostOperationStage::kShutdown,
+                                        std::optional<pg::Error> startupCause = {}, bool hasModuleReport = false,
+                                        bool begin = false) noexcept;
     [[nodiscard]] Status StartBatch(module::ModuleManager& manager, bool resident,
                                     HostOperationReport& report) noexcept;
 };

@@ -29,6 +29,8 @@ namespace pg::test::meta_fixture
 {
     const std::array candidates{Candidate(kModuleId), Candidate(kServiceModuleId)};
     engine::HostStartupConfig config;
+    config.Logging.Enabled = pg::log::OutputMask::kNone;
+    config.Logging.Required = pg::log::OutputMask::kNone;
     config.Modules = std::span(candidates).first(service ? 2U : 1U);
     return host.Start(config, report);
 }

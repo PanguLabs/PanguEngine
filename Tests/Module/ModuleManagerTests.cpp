@@ -1,17 +1,21 @@
+#include "ModuleDescriptor.h"
 #include "ModuleOperation.h"
+#include "Result.h"
 #include <ModuleBuiltin.h>
 #include <ModuleError.h>
 #include <ModuleManager.h>
 #include <RegistrationContext.h>
+#include <array>
+#include <cstddef>
 #include <gtest/gtest.h>
 #include <utility>
 
 namespace pg::module
 {
-#if !defined(PG_TEST_MODULAR)
+#ifndef PG_TEST_MODULAR
 namespace
 {
-Status Noop(RegistrationContext&) noexcept { return {}; }
+Status Noop(RegistrationContext& /*unused*/) noexcept { return {}; }
 template <std::size_t Index>
 const ModuleDefinition* QueryCapacity() noexcept
 {
@@ -24,7 +28,7 @@ const ModuleDefinition* QueryCapacity() noexcept
     return &kDefinition;
 }
 template <std::size_t... Index>
-auto CapacityCandidates(std::index_sequence<Index...>)
+auto CapacityCandidates(std::index_sequence<Index...> /*unused*/)
 {
     return std::array{ModuleLoadCandidate{StaticModuleCandidate{QueryCapacity<Index>}}...};
 }
@@ -35,8 +39,8 @@ TEST(ModuleManager, ResidentBudgetAndReloadGeneration)
     ModuleOperationReport report;
     auto manager = ModuleManager::Create(declarations, BuiltinResidentQueries(), {}, report);
     ASSERT_TRUE(manager);
-    const auto candidates = CapacityCandidates(std::make_index_sequence<255>{});
-    auto loaded = manager->Load(std::span(candidates).first(254), {}, report);
+    const auto candidates = CapacityCandidates(std::make_index_sequence<254>{});
+    auto loaded = manager->Load(std::span(candidates).first(253), {}, report);
     ASSERT_TRUE(loaded);
     EXPECT_EQ(manager->Modules().size(), 256U);
     const auto oldHandle = loaded->Modules.front();
@@ -82,7 +86,7 @@ TEST(ModuleManager, HandlesBelongToOneStableDomain)
         }
     }
     const auto host = first->HostScope();
-    auto moved = std::move(*first);
+    auto const moved = std::move(*first);
     EXPECT_TRUE(moved.Inspect(handle));
     EXPECT_EQ(moved.HostScope(), host);
 }

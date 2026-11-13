@@ -22,7 +22,8 @@ struct ScopeObjectControl;
 class ScopeRuntime final
 {
 public:
-    ScopeRuntime(std::uint64_t domain, RegistrationScope& declarations, std::span<ModuleRecord* const> modules);
+    ScopeRuntime(std::uint64_t domain, RegistrationScope& declarations, std::span<ModuleRecord* const> modules,
+                 log::LogWriter writer = {});
     ~ScopeRuntime();
     ScopeRuntime(const ScopeRuntime&) = delete;
     ScopeRuntime& operator=(const ScopeRuntime&) = delete;
@@ -31,6 +32,10 @@ public:
 
     [[nodiscard]] bool TryBeginOperation() noexcept;
     void EndOperation() noexcept;
+    void Explain(ModuleOperationReport& report, ModuleId waitModule = {}, ScopeHandle waitScope = {}) const noexcept;
+    [[nodiscard]] bool RememberFailure(ModuleHandle owner, ModuleId module, ScopeHandle scope,
+                                       DeclarationId declaration, const FailureReport& failure,
+                                       ModuleFailureOrigin origin) noexcept;
     [[nodiscard]] bool IsShuttingDown() const noexcept;
     [[nodiscard]] bool HasBusinessDependency(ModuleHandle handle) const noexcept;
     [[nodiscard]] std::optional<pg::Error> PendingFailure() const noexcept;

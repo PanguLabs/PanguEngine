@@ -6,6 +6,7 @@
 #include "Result.h"
 #include "ScopeIdentity.h"
 #include <FoundationModule.h>
+#include <LogModule.h>
 #include <ModuleBuiltin.h>
 #include <ModuleError.h>
 #include <ModuleManager.h>
@@ -53,7 +54,7 @@ TEST(ResidentModule, ExplicitStartupAndShutdownConfirmation)
     auto manager = ModuleManager::Create(declarations, BuiltinResidentQueries(), {}, report);
     ASSERT_TRUE(manager);
     const auto handles = manager->RegistrationOrder();
-    ASSERT_EQ(handles.size(), 2U);
+    ASSERT_EQ(handles.size(), 3U);
     const auto foundation = manager->Inspect(handles.front());
     const auto runtime = manager->Inspect(handles.back());
     ASSERT_TRUE(foundation);
@@ -62,7 +63,7 @@ TEST(ResidentModule, ExplicitStartupAndShutdownConfirmation)
     EXPECT_EQ(runtime->Descriptor.Id, kModuleRuntimeModuleId);
     EXPECT_EQ(foundation->Descriptor.Version, (ModuleVersion{1, 0, 0}));
     EXPECT_EQ(runtime->Descriptor.Version, (ModuleVersion{1, 0, 0}));
-    ASSERT_EQ(runtime->Bindings.size(), 1U);
+    ASSERT_EQ(runtime->Bindings.size(), 2U);
     EXPECT_EQ(runtime->Bindings.front().Dependency, foundation->Descriptor.Id);
     EXPECT_EQ(runtime->Bindings.front().Reason, DependencyBindingReason::kRequired);
     for (const auto handle : handles)
@@ -127,7 +128,7 @@ TEST(ResidentModule, RegisterFailureRequestsShutdownAndRetainsOriginal)
 {
     RegistrationScope declarations;
     ModuleOperationReport report;
-    const std::array queries{QueryFoundationModule, QueryModuleRuntime, QueryFailure};
+    const std::array queries{QueryFoundationModule, pg::log::QueryLogModule, QueryModuleRuntime, QueryFailure};
     auto manager = ModuleManager::Create(declarations, queries, {}, report);
     ASSERT_TRUE(manager);
     const auto handleFound = manager->Find(kResident);
@@ -168,7 +169,8 @@ TEST(ResidentModule, ResidentBusyShutdownRetainsOriginalAfterReportDestruction)
     ModuleOperationReport report;
     const auto state = std::make_shared<Counters>();
     ResidentFixture::gState = state;
-    const std::array queries{QueryFoundationModule, QueryModuleRuntime, ResidentFixture::Query};
+    const std::array queries{QueryFoundationModule, pg::log::QueryLogModule, QueryModuleRuntime,
+                             ResidentFixture::Query};
     auto manager = ModuleManager::Create(declarations, queries, {}, report);
     ASSERT_TRUE(manager);
     const auto handleFound = manager->Find(kResident);

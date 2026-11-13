@@ -1,5 +1,6 @@
 #pragma once
 
+#include <FailureContext.h>
 #include <ModuleDescriptor.h>
 #include <PanguModuleExport.h>
 #include <Result.h>
@@ -20,15 +21,18 @@ public:
     NativeModuleLibrary(NativeModuleLibrary&& other) noexcept;
     NativeModuleLibrary& operator=(NativeModuleLibrary&& other) noexcept;
 
-    [[nodiscard]] static Result<NativeModuleLibrary> Open(const std::filesystem::path& path) noexcept;
-    [[nodiscard]] Result<QueryModuleFn> ResolveQuery() const noexcept;
+    [[nodiscard]] static Result<NativeModuleLibrary> Open(const std::filesystem::path& path,
+                                                          FailureContext* failure = nullptr) noexcept;
+    [[nodiscard]] Result<QueryModuleFn> ResolveQuery(FailureContext* failure = nullptr) const noexcept;
     // 成功才移除本对象的持有，不承诺最后一个 OS 持有已经消失。
-    [[nodiscard]] Status Release() noexcept;
+    [[nodiscard]] Status Release(FailureContext* failure = nullptr) noexcept;
 
 private:
     friend struct ModuleManagerTestAccess;
-    explicit NativeModuleLibrary(void* handle) noexcept;
-    [[nodiscard]] Status CloseNative() noexcept;
+    NativeModuleLibrary(void* handle, std::filesystem::path path) noexcept;
+    [[nodiscard]] Status CloseNative(FailureContext* failure) noexcept;
+    static void AddPath(FailureContext* failure, const std::filesystem::path& path) noexcept;
+    std::filesystem::path Path;
     void* Handle{};
     bool FailNextClose{};
 };

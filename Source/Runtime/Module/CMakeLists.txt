@@ -26,7 +26,7 @@ target_include_directories(PanguModule PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/Priv
 
 add_library(Pangu::Module ALIAS PanguModule)
 pangu_configure_module(PanguModule EXPORT_MACRO PG_MODULE_API)
-target_link_libraries(PanguModule PUBLIC PanguFoundation)
+target_link_libraries(PanguModule PUBLIC PanguFoundation PanguLog)
 # 保持改造前的扫描策略：只对本目标关闭，不做全局关闭；A/B 验收要求扫描设置一致。
 set_property(TARGET PanguModule PROPERTY CXX_SCAN_FOR_MODULES OFF)
 

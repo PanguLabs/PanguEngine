@@ -46,6 +46,7 @@ struct HostTestState
     std::function<void()> OnQuery;
     std::function<void()> OnFactory;
     std::function<void()> OnStop;
+    std::function<void()> OnDestroy;
     std::function<void()> OnNativeUnload;
 };
 [[nodiscard]] PG_HOST_TEST_SUPPORT_API std::shared_ptr<HostTestState> CurrentHostTestState() noexcept;

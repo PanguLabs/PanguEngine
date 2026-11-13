@@ -1,3 +1,4 @@
+#include <Check.h>
 #pragma once
 
 #include "../Support/ScopeTestSupport.h"
@@ -13,11 +14,13 @@ struct ScopeAccessFixture
     module::ScopeAccess<int> Token;
     ScopeAccessFixture()
     {
-        module::ScopeBuildContext context(Sink);
+        pg::FailureReport failureReport;
+        pg::FailureContext failureContext(failureReport);
+        module::ScopeBuildContext context(Sink, failureContext);
         const auto owned = context.Own(std::make_unique<int>(42));
         if (!owned)
         {
-            std::terminate();
+            pg::Fatal("test fixture failed to own its object");
         }
         Token = *owned;
         Control = Sink.Control;

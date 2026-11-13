@@ -1,3 +1,4 @@
+#include "FailureContext.h"
 #include "ScopeTestSupport.h"
 #include "SharedFixtureContract.h"
 
@@ -85,14 +86,16 @@ struct ProbeDeleter final
         Observer().Record(Event::kDeleterDestroy);
     }
 };
-pg::Status Start(ProbeState& state) noexcept
+pg::Status Start(ProbeState& state, pg::FailureContext& failure) noexcept
 {
     ++state.Starts;
     Observer().Record(Event::kStart);
     if (state.SceneName.starts_with("Context") &&
         std::cmp_equal(Observer().SharedOptions().FailContextStartAt, state.Values.front()))
     {
-        return std::unexpected(MakeModuleError(ModuleError::kInvalidState));
+        const auto error = MakeModuleError(ModuleError::kInvalidState);
+        failure.SetPrimary(error, "shared fixture start failed");
+        return std::unexpected(error);
     }
     return {};
 }
@@ -101,7 +104,7 @@ void Stop(ProbeState& state) noexcept
     ++state.Stops;
     Observer().Record(Event::kStop);
 }
-pg::Status Poll(ProbeState& state) noexcept
+pg::Status Poll(ProbeState& state, pg::FailureContext& /*failure*/) noexcept
 {
     ++state.Polls;
     Observer().Record(Event::kPoll);

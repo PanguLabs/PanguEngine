@@ -36,6 +36,11 @@ foreach(name IN ITEMS Provider Consumer)
 endforeach()
 pangu_export_module_query(TARGET PanguSharedProvider ID pg::module::fixture::kSharedProviderId ID_HEADER SharedFixtureContract.h QUERY pg::module::fixture::QuerySharedProvider HEADER SharedFixtureContract.h)
 pangu_export_module_query(TARGET PanguSharedConsumer ID pg::module::fixture::kSharedConsumerId ID_HEADER SharedFixtureContract.h QUERY pg::module::fixture::QuerySharedConsumer HEADER SharedFixtureContract.h)
+add_library(PanguDiagnosticsCleanup SHARED DiagnosticsCleanup.cpp)
+pangu_configure_module(PanguDiagnosticsCleanup)
+target_include_directories(PanguDiagnosticsCleanup PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_link_libraries(PanguDiagnosticsCleanup PRIVATE PanguModule PanguScopeTestSupport)
+pangu_export_module_query(TARGET PanguDiagnosticsCleanup ID pg::module::fixture::kDiagnosticsCleanupId ID_HEADER SharedFixtureContract.h QUERY pg::module::fixture::QueryDiagnosticsCleanup HEADER SharedFixtureContract.h)
 # 无身份的恶意 ABI 夹具保留手写空包装，不参与正常 Module 登记。
 
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/SharedFixturePaths.h" CONTENT
@@ -47,6 +52,7 @@ inline constexpr auto kMissingQueryPath = R\"($<TARGET_FILE:PanguMissingQuery>)\
 inline constexpr auto kNullQueryPath = R\"($<TARGET_FILE:PanguNullQuery>)\";
 inline constexpr auto kScopeProviderPath = R\"($<TARGET_FILE:PanguScopeProvider>)\";
 inline constexpr auto kScopeConsumerPath = R\"($<TARGET_FILE:PanguScopeConsumer>)\";
+inline constexpr auto kDiagnosticsCleanupPath = R\"($<TARGET_FILE:PanguDiagnosticsCleanup>)\";
 }
 ")
 add_executable(PanguNativeModuleLibraryTests ../../NativeModuleLibraryTests.cpp)

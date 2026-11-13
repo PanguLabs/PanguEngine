@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 4.0)
+add_executable(PanguLogBenchmarks LogBenchmarks.cpp)
+target_include_directories(PanguLogBenchmarks PRIVATE "${PROJECT_SOURCE_DIR}/Source/Runtime/Log/Private")
+target_link_libraries(PanguLogBenchmarks PRIVATE PanguBuildOptions Pangu::Log ThirdParty::GoogleBenchmark)
+target_compile_definitions(PanguLogBenchmarks PRIVATE PG_LOG_BENCHMARK_ROOT="${CMAKE_CURRENT_BINARY_DIR}/Output")
+set_target_properties(PanguLogBenchmarks PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")

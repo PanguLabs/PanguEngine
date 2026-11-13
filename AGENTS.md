@@ -38,6 +38,7 @@
 
 ## Agent 工作方式
 
+- **Codex 默认使用 Sol，允许花更长时间解决问题。** 未经用户明确授权，不得自行选择或升级为 Astra；此规则同样适用于子代理、实施、重试和评审，Skill 中的模型选择或升级建议不构成授权。
 - 本项目可通过 **Codex** 或 **ChatGPT Web + Desktop Commander** 进入。
 - 从 **Codex** 进入时，使用当前 Agent 提供的本地文件和终端工具。
 - 从 **ChatGPT Web** 进入时，**不要调用 Codex**；优先使用 ChatGPT Web 中已安装的插件，通过 **Desktop Commander** 访问和操作本地仓库。

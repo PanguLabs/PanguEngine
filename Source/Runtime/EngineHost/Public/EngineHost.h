@@ -2,6 +2,7 @@
 
 #include <HostOperation.h>
 #include <HostStartupConfig.h>
+#include <LogWriter.h>
 #include <PanguEngineHostExport.h>
 #include <RegistrationContext.h>
 #include <memory>
@@ -21,7 +22,7 @@ class PG_ENGINE_HOST_API EngineHost final
 {
 public:
     EngineHost();
-    // 兜底只执行一轮 Begin/Finish；操作中销毁或未能完成关闭均终止进程。
+    // Module 兜底只推进一轮，Log 至多等待 DefaultWait；仍未安全关闭则 Fatal。
     ~EngineHost();
     EngineHost(const EngineHost&) = delete;
     EngineHost& operator=(const EngineHost&) = delete;
@@ -29,6 +30,9 @@ public:
     EngineHost& operator=(EngineHost&&) = delete;
 
     [[nodiscard]] HostState GetState() const noexcept;
+    // 只查询已有实例，Starting/业务清理期间同样可用；不隐式启动。
+    [[nodiscard]] log::LogWriter GetLogWriter(log::LogTags tags = {}) const noexcept;
+    [[nodiscard]] log::LogSnapshot InspectLog() const noexcept;
     [[nodiscard]] module::ScopeHandle HostScope() const noexcept;
     [[nodiscard]] Result<std::vector<module::ModuleSnapshot>> InspectModules() const noexcept;
     [[nodiscard]] Result<std::vector<module::RegisteredDeclaration>> InspectDeclarations() const noexcept;

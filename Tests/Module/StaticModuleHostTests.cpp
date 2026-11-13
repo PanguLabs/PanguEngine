@@ -2,6 +2,8 @@
 
 #include "Fixtures/ManagerFixture.h"
 #include "ModuleIdentity.h"
+#include "ModuleManager.h"
+#include "ModuleOperation.h"
 #include "Result.h"
 #include <ModuleDescriptor.h>
 #include <ModuleError.h>
@@ -319,7 +321,7 @@ TEST(ModuleManager, IncrementalBatchDoesNotRebindExistingOptionalDependencies)
     EXPECT_EQ(manager->Inspect(original)->Bindings.front().Reason, DependencyBindingReason::kMissing);
     const auto duplicate = manager->Load(added, {}, report);
     EXPECT_EQ(duplicate.error(), MakeModuleError(ModuleError::kDuplicateModule));
-    EXPECT_EQ(manager->Modules().size(), 4U);
+    EXPECT_EQ(manager->Modules().size(), 5U);
     EXPECT_TRUE(manager->Inspect(original));
 }
 

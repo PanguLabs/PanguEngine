@@ -24,6 +24,7 @@ TEST(Shutdown, NativeCloseFailureRetainsManager)
     HostOperationReport report;
     const auto candidates = HostCandidates();
     HostStartupConfig config;
+    config.Logging = pg::engine::test::DisabledLogging();
     config.Modules = candidates;
     ASSERT_TRUE(host.Start(config, report));
     auto* manager = detail::EngineHostTestAccess::Manager(host);
@@ -67,9 +68,12 @@ TEST(Shutdown, NonBusyStopFailurePreservesStartupFailure)
     const auto candidates = HostCandidates();
     {
         HostOperationReport report;
-        const auto started = host.Start(
-            {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-            report);
+        const auto started = host.Start({.AdditionalResidentQueries = {},
+                                         .ResidentBindings = {},
+                                         .Modules = candidates,
+                                         .ModuleBindings = {},
+                                         .Logging = pg::engine::test::DisabledLogging()},
+                                        report);
         ASSERT_FALSE(started);
         EXPECT_EQ(started.error(), kStartupError);
         EXPECT_EQ(report.PrimaryError, kStartupError);
@@ -145,7 +149,8 @@ TEST(Shutdown, SameReportReentryKeepsOuterResult)
     state->OnQuery = [&]
     {
         ++reentries;
-        const HostStartupConfig config;
+        HostStartupConfig config;
+        config.Logging = pg::engine::test::DisabledLogging();
         const auto nested = host.Start(config, report);
         ASSERT_FALSE(nested);
         EXPECT_EQ(nested.error(), MakeHostError(HostError::kBusy));
@@ -171,9 +176,12 @@ TEST(Shutdown, SameReportReentryKeepsOuterResult)
         EXPECT_FALSE(host.InspectDeclarations());
     };
     const auto candidates = HostCandidates();
-    EXPECT_TRUE(host.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-        report));
+    EXPECT_TRUE(host.Start({.AdditionalResidentQueries = {},
+                            .ResidentBindings = {},
+                            .Modules = candidates,
+                            .ModuleBindings = {},
+                            .Logging = pg::engine::test::DisabledLogging()},
+                           report));
     EXPECT_EQ(reentries, 2U);
     EXPECT_EQ(report.State, HostState::kReady);
     EXPECT_FALSE(report.PrimaryError);
@@ -212,26 +220,38 @@ TEST(Shutdown, RepeatedOperationsNeverRestartOrRequery)
     HostOperationReport report;
     EXPECT_FALSE(host.TryFinishShutdown(report));
     const auto candidates = HostCandidates();
-    ASSERT_TRUE(host.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-        report));
+    ASSERT_TRUE(host.Start({.AdditionalResidentQueries = {},
+                            .ResidentBindings = {},
+                            .Modules = candidates,
+                            .ModuleBindings = {},
+                            .Logging = pg::engine::test::DisabledLogging()},
+                           report));
     const auto queries = state->QueryCount;
-    EXPECT_FALSE(host.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-        report));
+    EXPECT_FALSE(host.Start({.AdditionalResidentQueries = {},
+                             .ResidentBindings = {},
+                             .Modules = candidates,
+                             .ModuleBindings = {},
+                             .Logging = pg::engine::test::DisabledLogging()},
+                            report));
     EXPECT_EQ(host.GetState(), HostState::kReady);
     ASSERT_TRUE(host.BeginShutdown(report));
     EXPECT_EQ(host.GetState(), HostState::kClosing);
     EXPECT_TRUE(host.BeginShutdown(report));
-    EXPECT_FALSE(host.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-        report));
+    EXPECT_FALSE(host.Start({.AdditionalResidentQueries = {},
+                             .ResidentBindings = {},
+                             .Modules = candidates,
+                             .ModuleBindings = {},
+                             .Logging = pg::engine::test::DisabledLogging()},
+                            report));
     ASSERT_TRUE(host.TryFinishShutdown(report));
     EXPECT_TRUE(host.TryFinishShutdown(report));
     EXPECT_TRUE(host.BeginShutdown(report));
-    EXPECT_FALSE(host.Start(
-        {.AdditionalResidentQueries = {}, .ResidentBindings = {}, .Modules = candidates, .ModuleBindings = {}},
-        report));
+    EXPECT_FALSE(host.Start({.AdditionalResidentQueries = {},
+                             .ResidentBindings = {},
+                             .Modules = candidates,
+                             .ModuleBindings = {},
+                             .Logging = pg::engine::test::DisabledLogging()},
+                            report));
     EXPECT_EQ(state->QueryCount, queries);
     EXPECT_EQ(state->FactoryCount, 1U);
     EXPECT_EQ(state->DestroyCount, 1U);
@@ -248,6 +268,7 @@ TEST(Shutdown, RegistrationsKeepIndependentObservationState)
     HostOperationReport report;
     const auto candidates = HostCandidates();
     HostStartupConfig config;
+    config.Logging = pg::engine::test::DisabledLogging();
     config.Modules = candidates;
     SetHostTestState(first);
     ASSERT_TRUE(firstHost.Start(config, report));

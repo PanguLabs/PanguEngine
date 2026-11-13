@@ -233,9 +233,13 @@ Meta 输入头登记同时接入目标源码登记，每头有唯一 Module 所�
 
 历史设计与验收仍可在 [2026-10-23 ABI Collection 实施计划](../../docs/superpowers/plans/2026-10-23-abi-collection.md) 和 [v1 历史协议](abi-profile-fingerprint.md) 中查阅；源码如需追溯使用历史 Git 提交，当前目录已不再有该工具。现行边界以 [ADR-0013](../decisions/0013-native-build-abi-boundary.md) 为准。
 
+## 基础诊断构建
+
+基础诊断增加真实 PanguLog / Pangu::Log Module，跟随统一 Monolithic/Modular 模式。依赖方向为 EngineHost → Module → Log → Foundation；fmt/spdlog 使用普通 STATIC 第三方目标，不导入宿主 STL/LLVM 到移动目标。Assert 经 PANGU_ENABLE_ASSERTS 显式控制，默认 ON，不以 NDEBUG 替代。固定源码的三桌面 Full 与两移动双模式最终链接、恢复配置和实测版本见[基础诊断验收](../../docs/superpowers/plans/2026-11-12-foundation-diagnostics-validation.md)。
+
 ## EngineHost 与样例验收入口
 
-`PanguEngineHost`（`Pangu::EngineHost`）为跟随统一链接模式的第三常驻 Module；不修改基础两项 BuiltinResidentQueries。根 `PANGU_BUILD_SAMPLES` 默认 OFF，开启后构建 MinimalHost 与独立服务 Module，并将 MinimalHostSmoke 接入 precommit/full。Project 的 Game/Editor/MobileHost 消费同一宿主协议；Modular 不通过隐式业务导入替代显式候选，部署集合仍与消费集合分开。
+`PanguEngineHost`（`Pangu::EngineHost`）为跟随统一链接模式的常驻 Module；BuiltinResidentQueries 已随 Log 接入扩展为 Foundation/Log/Module 三项。根 `PANGU_BUILD_SAMPLES` 默认 OFF，开启后构建 MinimalHost 与独立服务 Module，并将 MinimalHostSmoke 接入 precommit/full。Project 的 Game/Editor/MobileHost 消费同一宿主协议；Modular 不通过隐式业务导入替代显式候选，部署集合仍与消费集合分开。
 
 正式桌面矩阵逐宿主按 Monolithic → Modular 配置 Samples ON，构建并执行对应 full；Modular ModuleRegression 保留旧 Mono 与 Host Mono 覆盖。完成后恢复桌面 Modular、Samples/Benchmark OFF、测试 ON 并验证 fast；移动根恢复 Monolithic、Samples/Benchmark/测试 OFF，构建 EngineHost，另用隔离 Project 的 CrossCompileTests 重验 MobileHost 最终链接。BuildRoot/共享源码规则不变。精确 SHA、完整命令、结果与局限见[EngineHost 验收](../../docs/superpowers/plans/2026-11-07-engine-host-lifecycle-validation.md)。
 

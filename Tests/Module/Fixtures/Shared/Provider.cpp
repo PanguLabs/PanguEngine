@@ -1,3 +1,4 @@
+#include "FailureContext.h"
 #include "ScopeIdentity.h"
 #include "SharedFixtureContract.h"
 
@@ -28,12 +29,16 @@ struct NativeLifetime final
 };
 const NativeLifetime kLifetime;
 
-pg::Status StartProvider(pg::test::ProbeState& state) noexcept
+pg::Status StartProvider(pg::test::ProbeState& state, pg::FailureContext& failure) noexcept
 {
-    const auto started = pg::test::ProbeHooks().Start(state);
-    return pg::test::Observer().SharedOptions().FailProviderStart
-               ? pg::Status{std::unexpected(MakeModuleError(ModuleError::kInvalidState))}
-               : started;
+    const auto started = pg::test::ProbeHooks().Start(state, failure);
+    if (pg::test::Observer().SharedOptions().FailProviderStart)
+    {
+        const auto error = MakeModuleError(ModuleError::kInvalidState);
+        failure.SetPrimary(error, "shared provider start failed");
+        return std::unexpected(error);
+    }
+    return started;
 }
 pg::Status Register(RegistrationContext& context) noexcept
 {

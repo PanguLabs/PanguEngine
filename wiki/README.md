@@ -1,7 +1,7 @@
 # PanguEngine 设计文档索引
 
 > 状态：维护中（Index）
-> 更新：2026-11-08
+> 更新：2026-11-13
 > 约定：文档文件名使用英文 kebab-case，正文中文优先，专业术语可使用英文。
 
 ## 如何阅读
@@ -30,7 +30,7 @@
 | 文档 | 决策范围 | 状态 |
 | --- | --- | --- |
 | [C++ 规范与最佳实践](foundation/cpp-guidelines.md) | C++23、Compile/Build-Time First、Zero-Overhead、类型/所有权安全、ECS/Event/调度建议与代码风格 | Partially Frozen |
-| [错误处理与基础诊断](foundation/error-diagnostics.md) | 值错误、失败报告、Assert/Check/Fatal、有界日志与应急路径 | Frozen（设计语义）；具体 API 未冻结 |
+| [错误处理与基础诊断](foundation/error-diagnostics.md) | 值错误、拥有型失败现场、Assert/Check/Fatal、有界异步 Log 与应急路径；实现/验收见正文 | Frozen（设计语义）；具体 API 未冻结 |
 | [构建系统](foundation/build-system.md) | CMake 4.0+、一个 Module 一个 STATIC/SHARED 库 Target | Partially Frozen |
 | [测试分类与运行契约](foundation/testing.md) | 测试边界、归属、运行集合与平台验收 | Partially Frozen |
 | [ThirdParty 接入](foundation/third-party.md) | Git submodule、项目构建接入、功能 Module 封装与补丁管理 | Partially Frozen |

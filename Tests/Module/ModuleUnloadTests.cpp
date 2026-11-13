@@ -1,6 +1,7 @@
 #include "Error.h"
 #include "ModuleDeclaration.h"
 #include "ModuleDescriptor.h"
+#include "ModuleDiagnostics.h"
 #include "ModuleIdentity.h"
 #include "ModuleOperation.h"
 #include "ModuleTestAccess.h"
@@ -135,7 +136,7 @@ TEST(ModuleUnload, FailedBatchRetainsUnreleasedReservation)
     }
     EXPECT_EQ(observer.NativeUnloadCount(), 0U);
     EXPECT_EQ(observer.RegisterCount(), 0U);
-    EXPECT_EQ(manager->Modules().size(), 2U);
+    EXPECT_EQ(manager->Modules().size(), 3U);
     EXPECT_FALSE(manager->Find(kSharedProviderId));
     EXPECT_FALSE(manager->Find(kSharedConsumerId));
     for (const auto& candidate : candidates)
@@ -374,7 +375,7 @@ TEST(ModuleUnload, FailedBatchKeepsWholeReservationForBothNativeDependencyInputO
         EXPECT_EQ(report.CleanupOwner, ModuleCleanupOwner::kManagerCleanup);
         EXPECT_EQ(observer.NativeUnloadCount(), consumerFirst ? 0U : 1U);
         EXPECT_EQ(observer.RegisterCount(), 0U);
-        EXPECT_EQ(manager->Modules().size(), 2U);
+        EXPECT_EQ(manager->Modules().size(), 3U);
         for (const auto& candidate : candidates)
         {
             const auto duplicate = manager->Load(std::span(&candidate, 1), {}, report);
@@ -383,7 +384,7 @@ TEST(ModuleUnload, FailedBatchKeepsWholeReservationForBothNativeDependencyInputO
         }
         // 未交付记录即使猜出槽位/代际也不能成为操作入口。
         const auto root = manager->Modules().front();
-        for (std::uint32_t slot = 3; slot != 6; ++slot)
+        for (std::uint32_t slot = 4; slot != 7; ++slot)
         {
             const ModuleHandle guessed{.Domain = root.Domain, .Slot = slot, .Generation = 1};
             EXPECT_FALSE(manager->Inspect(guessed));
@@ -494,6 +495,14 @@ TEST(ModuleUnload, ExternalPinDoesNotBlockDestroyButNativeCloseFailureKeepsProvi
     const auto closeFailed = manager->TryFinishShutdown(report);
     EXPECT_FALSE(closeFailed);
     EXPECT_EQ(report.CleanupError, MakeModuleError(ModuleError::kLibraryCloseFailed));
+    EXPECT_TRUE(std::ranges::any_of(
+        std::span(report.WaitReasons).first(report.WaitReasonCount), [](const auto& reason)
+        { return reason.Kind == ModuleWaitKind::kNativeClose && reason.Module == kSharedConsumerId; }));
+    const auto nativeFailure = report.Failure.PrimarySite();
+    ASSERT_TRUE(nativeFailure);
+    EXPECT_EQ(nativeFailure->Cause, MakeModuleError(ModuleError::kLibraryCloseFailed));
+    EXPECT_TRUE(nativeFailure->OriginKnown());
+    EXPECT_EQ(report.FailureOrigin, ModuleFailureOrigin::kNativeLoader);
     EXPECT_TRUE(manager->Inspect(consumer));
     EXPECT_TRUE(manager->Inspect(provider));
     EXPECT_EQ(observer.Count(pg::test::Event::kDestroy), 0U);
@@ -543,9 +552,15 @@ TEST(ModuleUnload, PartialStartFailureRetainsOriginalAcrossReportsAndExternalBor
     auto borrow = observer.Access().TryBorrow();
     ASSERT_TRUE(borrow);
     ASSERT_TRUE(manager->Register(consumer, report));
+    std::optional<FailureSite> originalSite;
     {
         ModuleOperationReport failure;
         EXPECT_FALSE(manager->Activate(consumer, failure));
+        originalSite = failure.Failure.PrimarySite();
+        ASSERT_TRUE(originalSite);
+        EXPECT_TRUE(originalSite->OriginKnown());
+        EXPECT_TRUE(originalSite->File().ends_with("Consumer.cpp"));
+        EXPECT_EQ(failure.FailureOrigin, ModuleFailureOrigin::kStart);
         EXPECT_EQ(failure.OriginalError, MakeModuleError(ModuleError::kInvalidState));
     }
     ASSERT_TRUE(manager->BeginUnload(consumer, report));
@@ -560,6 +575,7 @@ TEST(ModuleUnload, PartialStartFailureRetainsOriginalAcrossReportsAndExternalBor
     EXPECT_EQ(observer.Count(pg::test::Event::kDependencyUsed), 2U);
     EXPECT_EQ(observer.NativeUnloadCount(), 1U);
     EXPECT_EQ((*borrow)->Values.front(), 42);
+    const auto savedReport = report;
     ASSERT_TRUE(manager->BeginUnload(provider, report));
     EXPECT_FALSE(manager->TryFinishUnload(provider, report));
     EXPECT_EQ(observer.Count(pg::test::Event::kDestroy), 0U);
@@ -567,6 +583,10 @@ TEST(ModuleUnload, PartialStartFailureRetainsOriginalAcrossReportsAndExternalBor
     EXPECT_EQ(observer.NativeUnloadCount(), 1U);
     ASSERT_TRUE(manager->TryFinishUnload(provider, report));
     EXPECT_EQ(observer.NativeUnloadCount(), 2U);
+    ASSERT_TRUE(savedReport.Failure.PrimarySite());
+    EXPECT_EQ(savedReport.Failure.PrimarySite()->File(), originalSite->File());
+    EXPECT_EQ(savedReport.Failure.PrimarySite()->Line(), originalSite->Line());
+    EXPECT_EQ(originalSite->Cause, MakeModuleError(ModuleError::kInvalidState));
 }
 
 TEST(ModuleUnload, ExtraNativeHoldDoesNotPreventSuccessfulManagerRelease)
@@ -591,5 +611,110 @@ TEST(ModuleUnload, ExtraNativeHoldDoesNotPreventSuccessfulManagerRelease)
     EXPECT_EQ(observer.NativeUnloadCount(), 0U);
     ASSERT_TRUE(external->Release());
     EXPECT_EQ(observer.NativeUnloadCount(), 1U);
+}
+TEST(ModuleDiagnostics, NullDefinitionKeepsRequestedOwnerAcrossRollback)
+{
+    RegistrationScope declarations;
+    ModuleOperationReport report;
+    auto manager = ModuleManager::Create(declarations, BuiltinResidentQueries(), {}, report);
+    ASSERT_TRUE(manager);
+    constexpr ModuleId kNullOwner{.Bytes = {std::byte{0xa7}}};
+    const std::array candidates{
+        ModuleLoadCandidate{SharedModuleCandidate{.ExpectedId = kSharedProviderId, .Path = kSharedProviderPath}},
+        ModuleLoadCandidate{SharedModuleCandidate{.ExpectedId = kNullOwner, .Path = kNullQueryPath}},
+    };
+    detail::ModuleManagerTestAccess::FailNextRollbackClose(*manager);
+    const auto failed = manager->Load(candidates, {}, report);
+    ASSERT_FALSE(failed);
+    EXPECT_EQ(failed.error(), MakeModuleError(ModuleError::kInvalidDefinition));
+    EXPECT_EQ(report.Module, kNullOwner);
+    EXPECT_EQ(report.CleanupOwner, ModuleCleanupOwner::kManagerCleanup);
+    EXPECT_TRUE(manager->PollCleanup(report));
+    EXPECT_EQ(report.Module, kNullOwner);
+    EXPECT_EQ(report.OriginalError, MakeModuleError(ModuleError::kInvalidDefinition));
+    ASSERT_TRUE(report.Failure.PrimarySite());
+    EXPECT_TRUE(report.Failure.PrimarySite()->File().ends_with("ModuleCatalog.cpp"));
+}
+TEST(ModuleDiagnostics, CleanupRoundKeepsNativeErrorAndSiteTogether)
+{
+    auto& observer = pg::test::Observer();
+    observer.Reset();
+    const Error pollError{ErrorDomainId::Constant<0x7461736b39720001ULL>(), 1};
+    observer.ConfigureSharedFixture({.DiagnosticPollError = pollError});
+    RegistrationScope declarations;
+    ModuleOperationReport report;
+    auto manager = ModuleManager::Create(declarations, BuiltinResidentQueries(), {}, report);
+    ASSERT_TRUE(manager);
+    // 逆槽位清理顺序：Poll失败、原生关闭失败、成功关闭触发下一轮。
+    const std::array candidates{
+        ModuleLoadCandidate{SharedModuleCandidate{.ExpectedId = kScopeProviderId, .Path = kScopeProviderPath}},
+        ModuleLoadCandidate{SharedModuleCandidate{.ExpectedId = kSharedProviderId, .Path = kSharedProviderPath}},
+        ModuleLoadCandidate{
+            SharedModuleCandidate{.ExpectedId = kDiagnosticsCleanupId, .Path = kDiagnosticsCleanupPath}},
+    };
+    auto loaded = manager->Load(candidates, {}, report);
+    ASSERT_TRUE(loaded);
+    const auto poller = manager->Find(kDiagnosticsCleanupId).value_or(ModuleHandle{});
+    const auto native = manager->Find(kSharedProviderId).value_or(ModuleHandle{});
+    ASSERT_TRUE(manager->Register(poller, report));
+    ASSERT_TRUE(manager->Activate(poller, report));
+    detail::ModuleManagerTestAccess::FailNextNativeClose(*manager, native);
+    ASSERT_TRUE(manager->BeginShutdown(report));
+    const auto pending = manager->TryFinishShutdown(report);
+    EXPECT_FALSE(pending);
+    if (!pending)
+    {
+        EXPECT_EQ(pending.error(), MakeModuleError(ModuleError::kLibraryCloseFailed));
+        EXPECT_EQ(report.PrimaryError, pending.error());
+    }
+    EXPECT_EQ(report.FailureOrigin, ModuleFailureOrigin::kNativeLoader);
+    const auto site = report.Failure.PrimarySite();
+    EXPECT_TRUE(site);
+    if (site)
+    {
+        EXPECT_TRUE(site->OriginKnown());
+        EXPECT_TRUE(site->File().ends_with("NativeModuleLibrary.cpp"));
+    }
+    bool path{};
+    for (std::size_t index = 0; index < report.Failure.EntryCount(); ++index)
+    {
+        path |= report.Failure.ContextKey(index) == "path" && !report.Failure.ContextValue(index).empty();
+    }
+    EXPECT_TRUE(path);
+    observer.ConfigureSharedFixture({});
+    EXPECT_TRUE(manager->TryFinishShutdown(report));
+}
+TEST(ModuleDiagnostics, FailedBatchRepeatedCloseKeepsOriginalIdentity)
+{
+    pg::test::Observer().Reset();
+    RegistrationScope declarations;
+    ModuleOperationReport report;
+    auto manager = ModuleManager::Create(declarations, BuiltinResidentQueries(), {}, report);
+    ASSERT_TRUE(manager);
+    constexpr ModuleId kNullOwner{.Bytes = {std::byte{0xa7}}};
+    const std::array candidates{
+        ModuleLoadCandidate{SharedModuleCandidate{.ExpectedId = kSharedProviderId, .Path = kSharedProviderPath}},
+        ModuleLoadCandidate{SharedModuleCandidate{.ExpectedId = kNullOwner, .Path = kNullQueryPath}},
+    };
+    detail::ModuleManagerTestAccess::FailNextRollbackClose(*manager);
+    ASSERT_FALSE(manager->Load(candidates, {}, report));
+    const auto original = report;
+    // 仅私有故障接缝访问未交付保留槽；公共业务入口仍不可使用该句柄。
+    const ModuleHandle providerReservation{.Domain = manager->HostScope().Domain, .Slot = 4, .Generation = 1};
+    detail::ModuleManagerTestAccess::FailNextNativeClose(*manager, providerReservation);
+    const auto retry = manager->PollCleanup(report);
+    EXPECT_FALSE(retry);
+    if (!retry)
+    {
+        EXPECT_EQ(retry.error(), MakeModuleError(ModuleError::kLibraryCloseFailed));
+    }
+    EXPECT_EQ(report.OriginalError, original.OriginalError);
+    EXPECT_EQ(report.Module, original.Module);
+    EXPECT_EQ(report.Scope, original.Scope);
+    EXPECT_EQ(report.Declaration, original.Declaration);
+    EXPECT_EQ(report.CleanupOwner, ModuleCleanupOwner::kManagerCleanup);
+    EXPECT_TRUE(manager->PollCleanup(report));
+    EXPECT_EQ(report.Module, original.Module);
+    EXPECT_EQ(report.OriginalError, original.OriginalError);
 }
 } // namespace pg::module

@@ -16,6 +16,10 @@ struct ModuleRecord
     const ModuleMetaProvider* Metadata{};
     std::optional<NativeModuleLibrary> Library;
     std::optional<pg::Error> OriginalError;
+    ModuleId OriginalModule{};
+    ScopeHandle OriginalScope{};
+    DeclarationId OriginalDeclaration{};
+    bool FailureHistoryTruncated{};
     bool ResourcesDrained{};
     bool Delivered{};
     std::shared_ptr<ModuleCodeControl> Code = MakeModuleCodeControl();

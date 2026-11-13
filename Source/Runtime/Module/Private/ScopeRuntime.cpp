@@ -1,6 +1,13 @@
 #include "ScopeRuntime.h"
 #include "Error.h"
+#include "FailureReport.h"
+#include "LogWriter.h"
+#include "ModuleDiagnostics.h"
+#include "ModuleDiagnosticsInternal.h"
+#include <Check.h>
 #include <ScopeResourceAccess.h>
+#include <array>
+#include <ranges>
 #include <typeinfo>
 
 #include "ModuleRecord.h"
@@ -21,7 +28,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
 #include <expected>
 #include <limits>
 #include <memory>
@@ -58,6 +64,8 @@ void Snapshot(ModuleOperationReport& report, ModuleOperationProgress progress, M
     const auto error = MakeModuleError(code);
     Snapshot(report, ModuleOperationProgress::kUnchanged, module, scope, error);
     report.RelatedModule = related;
+    FailureContext(report.Failure).SetPrimary(error, "scope operation rejected");
+    report.FailureOrigin = ModuleFailureOrigin::kRuntime;
     return std::unexpected(error);
 }
 } // namespace
@@ -85,6 +93,7 @@ struct ScopeRuntime::State
         std::shared_ptr<ScopeGate> Gate;
         std::vector<ModuleId> ServiceDependencies;
         std::optional<pg::Error> Original;
+        bool WaitingDependency{};
     };
     struct Resource
     {
@@ -103,6 +112,7 @@ struct ScopeRuntime::State
         bool Stopped{};
         bool Destroyed{};
         std::optional<pg::Error> Error;
+        std::optional<ModuleWaitKind> Waiting;
     };
     struct Scope
     {
@@ -115,6 +125,9 @@ struct ScopeRuntime::State
         bool Closing{};
         bool Delivered{};
         std::optional<pg::Error> Original;
+        ModuleId OriginalModule{};
+        DeclarationId OriginalDeclaration{};
+        bool FailureHistoryTruncated{};
     };
     struct Slot
     {
@@ -157,11 +170,79 @@ struct ScopeRuntime::State
     bool ShuttingDown{};
     bool CleanupBlocked{};
     std::optional<pg::Error> ShutdownOriginal;
+    using HistoryDiagnostic = ModuleHistoryDiagnostic;
+    std::array<HistoryDiagnostic, 8> History;
+    bool Remember(ModuleHandle owner, ModuleId module, ScopeHandle scope, DeclarationId declaration,
+                  const FailureReport& failure, ModuleFailureOrigin origin, bool scopeOwner = false) noexcept
+    {
+        auto slot = std::ranges::find_if(
+            History, [&](const auto& entry)
+            { return entry.Used && (scopeOwner ? entry.ScopeOwner == scope : entry.ModuleOwner == owner); });
+        if (slot == History.end())
+        {
+            slot = std::ranges::find(History, false, &HistoryDiagnostic::Used);
+        }
+        if (slot == History.end())
+        {
+            return false;
+        }
+        *slot = {.ModuleOwner = scopeOwner ? ModuleHandle{} : owner,
+                 .ScopeOwner = scopeOwner ? scope : ScopeHandle{},
+                 .Module = module,
+                 .Scope = scope,
+                 .Declaration = declaration,
+                 .Failure = failure,
+                 .Origin = origin,
+                 .Used = true};
+        return true;
+    }
+    [[nodiscard]] const HistoryDiagnostic* ModuleHistory(ModuleId id) const noexcept
+    {
+        const auto found =
+            std::ranges::find_if(History, [&](const auto& entry)
+                                 { return entry.Used && entry.ModuleOwner.IsValid() && entry.Module == id; });
+        return found == History.end() ? nullptr : &*found;
+    }
+    [[nodiscard]] const HistoryDiagnostic* ScopeHistory(ScopeHandle scope) const noexcept
+    {
+        const auto found =
+            std::ranges::find_if(History, [&](const auto& entry) { return entry.Used && entry.ScopeOwner == scope; });
+        return found == History.end() ? nullptr : &*found;
+    }
+    void Forget(ModuleHandle module, ScopeHandle scope = {}) noexcept
+    {
+        for (auto& entry : History)
+        {
+            if (entry.Used &&
+                ((module.IsValid() && entry.ModuleOwner == module) || (scope.IsValid() && entry.ScopeOwner == scope)))
+            {
+                entry.Used = false;
+            }
+        }
+    }
+    using PollDiagnostic = ModulePollDiagnostic;
+    std::array<PollDiagnostic, kMaxModuleWaitReasons> PollDiagnostics;
+    std::size_t PollDiagnosticCount{};
+    bool PollDiagnosticsTruncated{};
+    FailureReport PollPrimary;
+    ModuleFailureOrigin PollPrimaryOrigin{ModuleFailureOrigin::kUnknown};
+    ScopeHandle PollPrimaryScope{};
+    std::uint64_t PollPrimarySerial{};
+    ModuleId PollPrimaryModule{};
+    DeclarationId PollPrimaryDeclaration{};
     DeclarationId BuildDeclaration{};
+    log::LogWriter Writer;
+    FailureReport ShutdownFailure;
+    ModuleFailureOrigin ShutdownOrigin{ModuleFailureOrigin::kUnknown};
+    ModuleId ShutdownModule{};
+    ScopeHandle ShutdownScope{};
+    DeclarationId ShutdownDeclaration{};
 
-    State(std::uint64_t domain, RegistrationScope& declarations, std::span<ModuleRecord* const> records)
+    State(std::uint64_t domain, RegistrationScope& declarations, std::span<ModuleRecord* const> records,
+          log::LogWriter writer)
         : Domain(domain)
         , Declarations(&declarations)
+        , Writer(std::move(writer))
     {
         for (auto* record : records)
         {
@@ -194,7 +275,7 @@ struct ScopeRuntime::State
         auto const& slot = Slots.at(handle.Slot - 1);
         return slot.Owner && slot.Generation == handle.Generation ? slot.Owner.get() : nullptr;
     }
-    Recipe* Definition(DeclarationId id)
+    [[nodiscard]] Recipe* Definition(DeclarationId id) const
     {
         for (const auto& recipe : Declarations->Recipes)
         {
@@ -478,7 +559,7 @@ struct ScopeRuntime::State
         }
     };
 
-    [[nodiscard]] pg::Result<std::vector<Recipe*>> RecipeOrder(ModuleId owner, Kind kind)
+    [[nodiscard]] pg::Result<std::vector<Recipe*>> RecipeOrder(ModuleId owner, Kind kind) const
     {
         std::vector<Recipe*> pending;
         for (const auto& recipe : Declarations->Recipes)
@@ -520,7 +601,7 @@ struct ScopeRuntime::State
         return ordered;
     }
 
-    [[nodiscard]] pg::Status Build(ModuleId owner, Scope& scope)
+    [[nodiscard]] pg::Status Build(ModuleId owner, Scope& scope, FailureReport& failure, ModuleFailureOrigin& origin)
     {
         const auto ordered = RecipeOrder(owner, scope.Type);
         if (!ordered)
@@ -542,19 +623,30 @@ struct ScopeRuntime::State
                 providers.push_back(provider);
             }
             BuildFrame frame(*this, scope, *recipe, std::move(providers));
-            ScopeBuildContext context(frame);
+            failure.Clear();
+            FailureContext diagnostics(failure);
+            origin = ModuleFailureOrigin::kFactory;
+            ScopeBuildContext context(frame, diagnostics, TaggedWriter(Writer, owner, scope.Handle, recipe->Id));
             const auto result = recipe->Factory(context);
             if (frame.Failure || !result)
             {
-                return std::unexpected(frame.Failure ? *frame.Failure : result.error());
+                const auto error = frame.Failure ? *frame.Failure : result.error();
+                MatchFailure(failure, error, origin);
+                return std::unexpected(error);
             }
             if (frame.Owned == nullptr)
             {
-                return std::unexpected(MakeModuleError(ModuleError::kInvalidDeclaration));
+                const auto error = MakeModuleError(ModuleError::kInvalidDeclaration);
+                diagnostics.SetPrimary(error, "factory did not own an object");
+                origin = ModuleFailureOrigin::kRuntime;
+                return std::unexpected(error);
             }
             frame.Owned->StartAttempted = true;
-            if (const auto started = frame.Owned->Object->Start(); !started)
+            failure.Clear();
+            origin = ModuleFailureOrigin::kStart;
+            if (const auto started = frame.Owned->Object->Start(diagnostics); !started)
             {
+                MatchFailure(failure, started.error(), origin);
                 return started;
             }
             frame.Owned->Ready = true;
@@ -661,6 +753,7 @@ struct ScopeRuntime::State
             {
                 continue;
             }
+            Forget({}, slot.Owner->Handle);
             slot.Owner.reset();
             if (slot.Generation == std::numeric_limits<std::uint32_t>::max())
             {
@@ -701,11 +794,16 @@ struct ScopeRuntime::State
             return false;
         }
         bool changed = false;
-        for (auto id = order->rbegin(); id != order->rend(); ++id)
+        for (auto id : std::views::reverse(*order))
         {
-            auto* module = Find(*id);
-            if ((target.IsValid() && *id != target) || module->Record->ResourcesDrained ||
-                module->Record->State != ModuleState::kCleanupPending || InUse(*id))
+            auto* module = Find(id);
+            if ((target.IsValid() && id != target) || module->Record->ResourcesDrained ||
+                module->Record->State != ModuleState::kCleanupPending)
+            {
+                continue;
+            }
+            module->WaitingDependency = InUse(id);
+            if (module->WaitingDependency)
             {
                 continue;
             }
@@ -713,31 +811,38 @@ struct ScopeRuntime::State
                 Slots,
                 [&](const auto& slot)
                 {
-                    return slot.Owner &&
-                           std::ranges::any_of(slot.Owner->Resources, [&](const auto& resource)
-                                               { return resource->Owner == *id && !resource->Destroyed; });
+                    return slot.Owner && std::ranges::any_of(slot.Owner->Resources, [&](const auto& resource)
+                                                             { return resource->Owner == id && !resource->Destroyed; });
                 });
             if (alive)
             {
                 continue;
             }
             std::erase_if(Declarations->Recipes,
-                          [&](const auto& recipe) { return recipe->HostDomain == Domain && recipe->Owner == *id; });
+                          [&](const auto& recipe) { return recipe->HostDomain == Domain && recipe->Owner == id; });
             std::erase_if(Declarations->Published, [&](const auto& declaration)
-                          { return declaration.HostDomain == Domain && declaration.Owner == *id; });
+                          { return declaration.HostDomain == Domain && declaration.Owner == id; });
             // 原生释放完成前保留有效服务依赖，不能提前清理 Provider。
             module->Record->ResourcesDrained = true;
             changed = true;
         }
         return changed;
     }
-    void Cleanup(bool finalizeModules, ModuleId target = {})
+    void Cleanup(bool finalizeModules, ModuleId target = {}, ScopeHandle diagnosticScope = {})
     {
         // 包括 CreateScope/Activate 的内部失败回滚，以及无资源 Scope 的槽位回收。
         if (CleanupBlocked)
         {
             return;
         }
+        PollDiagnosticCount = 0;
+        PollDiagnosticsTruncated = false;
+        PollPrimary.Clear();
+        PollPrimaryOrigin = ModuleFailureOrigin::kUnknown;
+        PollPrimaryScope = {};
+        PollPrimarySerial = 0;
+        PollPrimaryModule = {};
+        PollPrimaryDeclaration = {};
         std::vector<std::uint64_t> polled;
         bool progress = true;
         while (progress)
@@ -769,14 +874,21 @@ struct ScopeRuntime::State
             for (const auto& entry : resources)
             {
                 auto& resource = *entry.Value;
+                resource.Waiting.reset();
                 if (target.IsValid() && InUse(resource.Owner))
                 {
+                    resource.Waiting = ModuleWaitKind::kDependency;
                     continue;
                 }
-                if ((entry.Owner->Closing && (ShuttingDown ? HasOwnedDescendants(entry.Owner->Handle, resource.Owner)
-                                                           : HasChildren(entry.Owner->Handle))) ||
-                    HasDependent(resource, entry.Owner->Handle))
+                if (entry.Owner->Closing && (ShuttingDown ? HasOwnedDescendants(entry.Owner->Handle, resource.Owner)
+                                                          : HasChildren(entry.Owner->Handle)))
                 {
+                    resource.Waiting = ModuleWaitKind::kChildScope;
+                    continue;
+                }
+                if (HasDependent(resource, entry.Owner->Handle))
+                {
+                    resource.Waiting = ModuleWaitKind::kDependency;
                     continue;
                 }
                 if (resource.StartAttempted && !resource.StopRequested)
@@ -791,7 +903,9 @@ struct ScopeRuntime::State
                 if (!resource.Stopped && std::ranges::find(polled, resource.Serial) == polled.end())
                 {
                     polled.push_back(resource.Serial);
-                    const auto stopped = resource.Object->PollStopped();
+                    FailureReport failure;
+                    FailureContext diagnostics(failure);
+                    const auto stopped = resource.Object->PollStopped(diagnostics);
                     if (stopped)
                     {
                         resource.Stopped = true;
@@ -800,15 +914,40 @@ struct ScopeRuntime::State
                     else
                     {
                         resource.Error = stopped.error();
+                        auto origin = ModuleFailureOrigin::kPollStopped;
+                        MatchFailure(failure, stopped.error(), origin);
+                        if (stopped.error() != MakeModuleError(ModuleError::kBusy) &&
+                            (!diagnosticScope.IsValid() || Descendant(*entry.Owner, diagnosticScope)) &&
+                            (!PollPrimary.PrimarySite() || entry.Owner->Handle.Slot < PollPrimaryScope.Slot ||
+                             (entry.Owner->Handle == PollPrimaryScope && resource.Serial < PollPrimarySerial)))
+                        {
+                            PollPrimary = failure;
+                            PollPrimaryOrigin = origin;
+                            PollPrimaryScope = entry.Owner->Handle;
+                            PollPrimarySerial = resource.Serial;
+                            PollPrimaryModule = resource.Owner;
+                            PollPrimaryDeclaration = resource.Id;
+                        }
+                        if (PollDiagnosticCount < PollDiagnostics.size())
+                        {
+                            PollDiagnostics.at(PollDiagnosticCount++) = {.Serial = resource.Serial,
+                                                                         .Site = failure.PrimarySite()};
+                        }
+                        else
+                        {
+                            PollDiagnosticsTruncated = true;
+                        }
                     }
                 }
                 if (!resource.Stopped)
                 {
+                    resource.Waiting = ModuleWaitKind::kStop;
                     continue;
                 }
                 if (resource.Control->Gate.Count() != 0)
                 {
                     resource.Error = MakeModuleError(ModuleError::kBusy);
+                    resource.Waiting = ModuleWaitKind::kBorrow;
                     continue;
                 }
                 resource.Control->Object = nullptr;
@@ -857,6 +996,236 @@ struct ScopeRuntime::State
         }
         return MakeModuleError(ModuleError::kBusy);
     }
+    [[nodiscard]] bool FindScopeDescendant(ScopeHandle child, ScopeHandle ancestor) const noexcept
+    {
+        while (child.IsValid() && child.Domain == Domain && child.Slot <= Slots.size())
+        {
+            if (child == ancestor)
+            {
+                return true;
+            }
+            const auto& slot = Slots.at(child.Slot - 1);
+            if (!slot.Owner || slot.Owner->Handle != child)
+            {
+                return false;
+            }
+            child = slot.Owner->Parent;
+        }
+        return false;
+    }
+    void Explain(ModuleOperationReport& report, ModuleId waitModule = {}, ScopeHandle waitScope = {}) const noexcept
+    {
+        const auto choose = [&](const FailureReport& failure, ModuleFailureOrigin origin)
+        {
+            const auto site = failure.PrimarySite();
+            if (site && report.PrimaryError && site->Cause == *report.PrimaryError && !report.Failure.PrimarySite())
+            {
+                report.Failure = failure;
+                report.FailureOrigin = origin;
+            }
+        };
+        ModuleId originModule = report.Module;
+        ScopeHandle originScope = report.Scope;
+        DeclarationId originDeclaration = report.Declaration;
+        const HistoryDiagnostic* selectedHistory{};
+        if (report.OriginalError)
+        {
+            if (report.Module.IsValid())
+            {
+                selectedHistory = ModuleHistory(report.Module);
+            }
+            if (selectedHistory == nullptr && report.Scope.IsValid())
+            {
+                selectedHistory = ScopeHistory(report.Scope);
+            }
+            if (!report.Module.IsValid() && !report.Scope.IsValid())
+            {
+                bool selected{};
+                for (const auto& module : Modules)
+                {
+                    if (module.Original == report.OriginalError && module.Record->State == ModuleState::kCleanupPending)
+                    {
+                        originModule = module.Record->OriginalModule;
+                        originScope = module.Record->OriginalScope;
+                        originDeclaration = module.Record->OriginalDeclaration;
+                        selectedHistory = ModuleHistory(originModule);
+                        selected = true;
+                        break;
+                    }
+                }
+                if (!selected)
+                {
+                    for (const auto& slot : Slots)
+                    {
+                        if (slot.Owner && slot.Owner->Closing && slot.Owner->Original == report.OriginalError)
+                        {
+                            originModule = slot.Owner->OriginalModule;
+                            originScope = slot.Owner->Handle;
+                            originDeclaration = slot.Owner->OriginalDeclaration;
+                            selectedHistory = ScopeHistory(originScope);
+                            break;
+                        }
+                    }
+                }
+            }
+            if (selectedHistory != nullptr)
+            {
+                choose(selectedHistory->Failure, selectedHistory->Origin);
+                originModule = selectedHistory->Module;
+                originScope = selectedHistory->Scope;
+                originDeclaration = selectedHistory->Declaration;
+            }
+            else if (ShuttingDown && report.OriginalError == ShutdownOriginal)
+            {
+                choose(ShutdownFailure, ShutdownOrigin);
+                originModule = ShutdownModule;
+                originScope = ShutdownScope;
+                originDeclaration = ShutdownDeclaration;
+            }
+        }
+        const bool pollMatches = (!waitModule.IsValid() || waitModule == PollPrimaryModule) &&
+                                 (!waitScope.IsValid() || waitScope == PollPrimaryScope ||
+                                  (PollPrimaryScope.IsValid() && FindScopeDescendant(PollPrimaryScope, waitScope)));
+        if (pollMatches)
+        {
+            // 清理现场只能补充原错，不能因 Error 同值而冒充缺失的原始现场。
+            if (!report.OriginalError)
+            {
+                choose(PollPrimary, PollPrimaryOrigin);
+            }
+            if (report.CleanupError)
+            {
+                const auto primary = PollPrimary.PrimarySite();
+                if (primary && primary->Cause == *report.CleanupError)
+                {
+                    AppendFailure(report.Failure, PollPrimary);
+                }
+            }
+        }
+        for (const auto& module : Modules)
+        {
+            if (module.WaitingDependency && (!waitModule.IsValid() || waitModule == module.Record->Descriptor.Id))
+            {
+                ModuleId related;
+                std::uint64_t count{};
+                for (const auto& consumer : Modules)
+                {
+                    if (consumer.Record->Descriptor.Id == module.Record->Descriptor.Id ||
+                        consumer.Record->State == ModuleState::kUnloaded ||
+                        (consumer.Record->Resident && consumer.Record->ResourcesDrained &&
+                         !consumer.Record->Code->HasExternalUsers()))
+                    {
+                        continue;
+                    }
+                    const bool bound = std::ranges::any_of(
+                        consumer.Record->Bindings, [&](const auto& binding)
+                        { return binding.IsBound() && binding.Dependency == module.Record->Descriptor.Id; });
+                    const bool service =
+                        std::ranges::find(consumer.ServiceDependencies, module.Record->Descriptor.Id) !=
+                        consumer.ServiceDependencies.end();
+                    if (bound || service)
+                    {
+                        if (count == 0)
+                        {
+                            related = consumer.Record->Descriptor.Id;
+                        }
+                        ++count;
+                    }
+                }
+                if (count != 0)
+                {
+                    AddWait(report, {.Kind = ModuleWaitKind::kDependency,
+                                     .Module = module.Record->Descriptor.Id,
+                                     .RelatedModule = related,
+                                     .Count = count});
+                }
+            }
+        }
+        for (const auto& slot : Slots)
+        {
+            if (!slot.Owner)
+            {
+                continue;
+            }
+            for (const auto& resource : slot.Owner->Resources)
+            {
+                if (!resource->Closing || resource->Destroyed ||
+                    (waitModule.IsValid() && waitModule != resource->Owner) ||
+                    (waitScope.IsValid() && !FindScopeDescendant(slot.Owner->Handle, waitScope)))
+                {
+                    continue;
+                }
+                for (std::size_t index = 0; index < PollDiagnosticCount; ++index)
+                {
+                    const auto& diagnostic = PollDiagnostics.at(index);
+                    if (diagnostic.Serial != resource->Serial)
+                    {
+                        continue;
+                    }
+                    if (report.CleanupError && resource->Error == report.CleanupError && diagnostic.Site)
+                    {
+                        FailureContext(report.Failure).AddSecondary(*diagnostic.Site);
+                    }
+                }
+                const auto count = resource->Control->Gate.Count();
+                if (count != 0)
+                {
+                    AddWait(report, {.Kind = ModuleWaitKind::kBorrow,
+                                     .Module = resource->Owner,
+                                     .Scope = slot.Owner->Handle,
+                                     .Declaration = resource->Id,
+                                     .Count = count,
+                                     .Error = resource->Error});
+                }
+                if (const auto waiting = resource->Waiting; waiting && *waiting != ModuleWaitKind::kBorrow)
+                {
+                    AddWait(report, {.Kind = *waiting,
+                                     .Module = resource->Owner,
+                                     .Scope = slot.Owner->Handle,
+                                     .Declaration = resource->Id,
+                                     .Count = 1,
+                                     .Error = resource->Error});
+                }
+            }
+            if (!waitModule.IsValid() && slot.Owner->Closing &&
+                (!waitScope.IsValid() || FindScopeDescendant(slot.Owner->Handle, waitScope)))
+            {
+                const auto count = std::ranges::count_if(
+                    Slots, [&](const auto& child) { return child.Owner && child.Owner->Parent == slot.Owner->Handle; });
+                if (count != 0)
+                {
+                    AddWait(report, {.Kind = ModuleWaitKind::kChildScope,
+                                     .Scope = slot.Owner->Handle,
+                                     .Count = static_cast<std::uint64_t>(count)});
+                }
+            }
+        }
+        if (PollDiagnosticsTruncated)
+        {
+            FailureContext(report.Failure).AddContext("poll.diagnostics.truncated", "true");
+        }
+        if (report.OriginalError && !report.Failure.PrimarySite())
+        {
+            report.FailureHistoryTruncated = true;
+            FailureContext(report.Failure).AddContext("history.truncated", "true");
+        }
+        if (report.OriginalError)
+        {
+            report.Module = originModule;
+            report.Scope = originScope;
+            report.Declaration = originDeclaration;
+        }
+        if (!report.OriginalError && report.PrimaryError)
+        {
+            const auto primary = PollPrimary.PrimarySite();
+            if (pollMatches && primary && primary->Cause == *report.PrimaryError)
+            {
+                report.Module = PollPrimaryModule;
+                report.Scope = PollPrimaryScope;
+                report.Declaration = PollPrimaryDeclaration;
+            }
+        }
+    }
     [[nodiscard]] bool OwnsLiveResources(ModuleId id) const
     {
         return std::ranges::any_of(
@@ -890,6 +1259,13 @@ struct ScopeRuntime::State
         if (!ShuttingDown)
         {
             ShutdownOriginal = OriginalFailure();
+            ModuleOperationReport history{.PrimaryError = ShutdownOriginal, .OriginalError = ShutdownOriginal};
+            Explain(history);
+            ShutdownFailure = history.Failure;
+            ShutdownOrigin = history.FailureOrigin;
+            ShutdownModule = history.Module;
+            ShutdownScope = history.Scope;
+            ShutdownDeclaration = history.Declaration;
         }
         ShuttingDown = true;
         for (auto const& slot : Slots)
@@ -923,19 +1299,19 @@ struct ScopeRuntime::State
 };
 
 ScopeRuntime::ScopeRuntime(std::uint64_t domain, RegistrationScope& declarations,
-                           std::span<ModuleRecord* const> modules)
-    : Data(std::make_unique<State>(domain, declarations, modules))
+                           std::span<ModuleRecord* const> modules, log::LogWriter writer)
+    : Data(std::make_unique<State>(domain, declarations, modules, std::move(writer)))
 {
 }
 ScopeRuntime::~ScopeRuntime()
 {
     if (Data->Operating)
     {
-        std::terminate();
+        pg::Fatal("scope lifetime invariant violated");
     }
     if (!Data->Finished())
     {
-        std::terminate();
+        pg::Fatal("scope lifetime invariant violated");
     }
 }
 
@@ -951,6 +1327,7 @@ void ScopeRuntime::AttachModules(std::span<ModuleRecord* const> records) noexcep
 }
 void ScopeRuntime::DetachModule(ModuleHandle handle) noexcept
 {
+    Data->Forget(handle);
     std::erase_if(Data->Modules, [&](const auto& module) { return module.Record->Handle == handle; });
 }
 void ScopeRuntime::RequestShutdown() noexcept { Data->Shutdown(); }
@@ -965,6 +1342,15 @@ bool ScopeRuntime::TryBeginOperation() noexcept
     return true;
 }
 void ScopeRuntime::EndOperation() noexcept { Data->Operating = false; }
+void ScopeRuntime::Explain(ModuleOperationReport& report, ModuleId waitModule, ScopeHandle waitScope) const noexcept
+{
+    Data->Explain(report, waitModule, waitScope);
+}
+bool ScopeRuntime::RememberFailure(ModuleHandle owner, ModuleId module, ScopeHandle scope, DeclarationId declaration,
+                                   const FailureReport& failure, ModuleFailureOrigin origin) noexcept
+{
+    return Data->Remember(owner, module, scope, declaration, failure, origin);
+}
 bool ScopeRuntime::IsShuttingDown() const noexcept { return Data->ShuttingDown; }
 std::optional<pg::Error> ScopeRuntime::PendingFailure() const noexcept
 {
@@ -1090,24 +1476,35 @@ pg::Result<ScopeHandle> ScopeRuntime::CreateScope(Kind kind, ScopeHandle parent,
     };
     const auto handle = target.Owner->Handle;
     auto* scope = target.Owner.get();
+    FailureReport buildFailure;
+    auto buildOrigin = ModuleFailureOrigin::kUnknown;
     for (const auto id : *order)
     {
         if (Data->Find(id)->Record->State != ModuleState::kActive)
         {
             continue;
         }
-        if (const auto built = Data->Build(id, *scope); !built)
+        if (const auto built = Data->Build(id, *scope, buildFailure, buildOrigin); !built)
         {
             const auto error = built.error();
             const auto declaration = Data->BuildDeclaration;
+            MatchFailure(buildFailure, error, buildOrigin);
             scope->Original = error;
+            scope->OriginalModule = id;
+            scope->OriginalDeclaration = declaration;
+            const bool historyTruncated = !Data->Remember({}, id, handle, declaration, buildFailure, buildOrigin, true);
+            scope->FailureHistoryTruncated = historyTruncated;
             Data->CloseScope(*scope);
-            Data->Cleanup(false);
+            Data->Cleanup(false, {}, handle);
             const bool pending = Data->Find(handle) != nullptr;
             const std::optional<pg::Error> cleanup =
                 pending ? std::optional(Data->PendingError(ModuleId(), handle)) : std::nullopt;
             Snapshot(report, pending ? ModuleOperationProgress::kCleanupPending : ModuleOperationProgress::kRolledBack,
                      id, handle, cleanup, error, declaration);
+            report.Failure = buildFailure;
+            report.FailureOrigin = buildOrigin;
+            report.FailureHistoryTruncated = historyTruncated;
+            Data->Explain(report, {}, handle);
             return std::unexpected(error);
         }
     }
@@ -1169,19 +1566,31 @@ pg::Status ScopeRuntime::Activate(ModuleId id, ModuleOperationReport& report)
         }
     }
     std::ranges::stable_sort(scopes, [](const auto* first, const auto* second) { return first->Type < second->Type; });
+    FailureReport buildFailure;
+    auto buildOrigin = ModuleFailureOrigin::kUnknown;
     for (auto* scope : scopes)
     {
-        if (const auto built = Data->Build(id, *scope); !built)
+        if (const auto built = Data->Build(id, *scope, buildFailure, buildOrigin); !built)
         {
             const auto error = built.error();
             const auto handle = scope->Handle;
             const auto declaration = Data->BuildDeclaration;
+            MatchFailure(buildFailure, error, buildOrigin);
             module->Original = error;
+            module->Record->OriginalModule = id;
+            module->Record->OriginalScope = handle;
+            module->Record->OriginalDeclaration = declaration;
+            module->Record->FailureHistoryTruncated =
+                !Data->Remember(module->Record->Handle, id, handle, declaration, buildFailure, buildOrigin);
             Data->CloseModule(*module);
             Data->Cleanup(false, id);
             const std::optional<pg::Error> cleanup =
                 Data->OwnsLiveResources(id) ? std::optional(Data->PendingError(id)) : std::nullopt;
             Snapshot(report, ModuleOperationProgress::kCleanupPending, id, handle, cleanup, error, declaration);
+            report.Failure = buildFailure;
+            report.FailureOrigin = buildOrigin;
+            report.FailureHistoryTruncated = module->Record->FailureHistoryTruncated;
+            Data->Explain(report, id);
             return std::unexpected(error);
         }
     }
@@ -1221,10 +1630,14 @@ pg::Status ScopeRuntime::BeginUnload(ModuleId id, ModuleOperationReport& report)
     }
     if (module->Record->State != ModuleState::kCleanupPending && Data->InUse(id))
     {
-        return Fail(report, ModuleError::kDependencyInUse, id);
+        module->WaitingDependency = true;
+        const auto result = Fail(report, ModuleError::kDependencyInUse, id);
+        Data->Explain(report, id);
+        return result;
     }
     Data->CloseModule(*module);
     Snapshot(report, ModuleOperationProgress::kCleanupPending, id, ScopeHandle(), std::nullopt, module->Original);
+    Data->Explain(report, id);
     return {};
 }
 pg::Status ScopeRuntime::TryFinishResources(ModuleHandle handle, ModuleOperationReport& report) noexcept
@@ -1256,9 +1669,11 @@ pg::Status ScopeRuntime::TryFinishResources(ModuleHandle handle, ModuleOperation
     {
         const auto error = Data->PendingError(id);
         Snapshot(report, ModuleOperationProgress::kCleanupPending, id, ScopeHandle(), error, original);
+        Data->Explain(report, id);
         return std::unexpected(error);
     }
     Snapshot(report, ModuleOperationProgress::kUnloaded, id, ScopeHandle(), std::nullopt, original);
+    Data->Explain(report, id);
     return {};
 }
 pg::Status ScopeRuntime::BeginCloseScope(ScopeHandle handle, ModuleOperationReport& report)
@@ -1279,6 +1694,7 @@ pg::Status ScopeRuntime::BeginCloseScope(ScopeHandle handle, ModuleOperationRepo
     }
     Data->CloseScope(*scope);
     Snapshot(report, ModuleOperationProgress::kCleanupPending, ModuleId(), handle, std::nullopt, scope->Original);
+    Data->Explain(report, {}, handle);
     return {};
 }
 pg::Status ScopeRuntime::TryFinishCloseScope(ScopeHandle handle, ModuleOperationReport& report)
@@ -1298,14 +1714,27 @@ pg::Status ScopeRuntime::TryFinishCloseScope(ScopeHandle handle, ModuleOperation
         return Fail(report, ModuleError::kInvalidState, ModuleId(), handle);
     }
     const auto original = scope->Original;
-    Data->Cleanup(false);
+    const auto* history = Data->ScopeHistory(handle);
+    const auto originalFailure = history != nullptr ? history->Failure : FailureReport{};
+    const auto originalOrigin = history != nullptr ? history->Origin : ModuleFailureOrigin::kUnknown;
+    const auto originalModule = scope->OriginalModule;
+    const auto originalDeclaration = scope->OriginalDeclaration;
+    const auto historyTruncated = scope->FailureHistoryTruncated;
+    Data->Cleanup(false, {}, handle);
     if (Data->Find(handle) != nullptr)
     {
         const auto error = Data->PendingError(ModuleId(), handle);
         Snapshot(report, ModuleOperationProgress::kCleanupPending, ModuleId(), handle, error, original);
+        Data->Explain(report, {}, handle);
         return std::unexpected(error);
     }
     Snapshot(report, ModuleOperationProgress::kScopeClosed, ModuleId(), handle, std::nullopt, original);
+    Data->Explain(report, {}, handle);
+    report.Failure = originalFailure;
+    report.FailureOrigin = originalOrigin;
+    report.Module = originalModule;
+    report.Declaration = originalDeclaration;
+    report.FailureHistoryTruncated = historyTruncated;
     return {};
 }
 pg::Status ScopeRuntime::PollCleanup(ModuleOperationReport& report)
@@ -1325,9 +1754,11 @@ pg::Status ScopeRuntime::PollCleanup(ModuleOperationReport& report)
     {
         const auto error = Data->PendingError();
         Snapshot(report, ModuleOperationProgress::kCleanupPending, ModuleId(), ScopeHandle(), error, original);
+        Data->Explain(report);
         return std::unexpected(error);
     }
     Snapshot(report, ModuleOperationProgress::kUnchanged, ModuleId(), ScopeHandle(), std::nullopt, original);
+    Data->Explain(report);
     return {};
 }
 pg::Status ScopeRuntime::BeginShutdown(ModuleOperationReport& report)
@@ -1340,6 +1771,7 @@ pg::Status ScopeRuntime::BeginShutdown(ModuleOperationReport& report)
     Data->Shutdown();
     Snapshot(report, ModuleOperationProgress::kCleanupPending, ModuleId(), ScopeHandle(), std::nullopt,
              Data->ShutdownOriginal);
+    Data->Explain(report);
     return {};
 }
 pg::Status ScopeRuntime::TryFinishShutdown(ModuleOperationReport& report)
@@ -1359,9 +1791,11 @@ pg::Status ScopeRuntime::TryFinishShutdown(ModuleOperationReport& report)
     {
         const auto error = Data->PendingError();
         Snapshot(report, ModuleOperationProgress::kCleanupPending, ModuleId(), ScopeHandle(), error, original);
+        Data->Explain(report);
         return std::unexpected(error);
     }
     Snapshot(report, ModuleOperationProgress::kUnloaded, ModuleId(), ScopeHandle(), std::nullopt, original);
+    Data->Explain(report);
     return {};
 }
 } // namespace pg::module::detail

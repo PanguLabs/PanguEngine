@@ -1,15 +1,22 @@
 #include "MinimalService.h"
+#include <Check.h>
 #include <EngineHost.h>
 #include <HostMetaAccess.h>
 #include <HostOperation.h>
 #include <HostStartupConfig.h>
+#include <Log.h>
+#include <LogTypes.h>
 #include <MinimalService.gen.h>
 #include <ModuleManager.h>
 #include <array>
+#include <chrono>
+#include <cstddef>
 #include <cstdio>
-#include <iostream>
-#ifdef PG_SAMPLE_MODULAR
 #include <filesystem>
+#include <iostream>
+#include <system_error>
+#include <thread>
+#ifdef PG_SAMPLE_MODULAR
 #include <span>
 #else
 #include <GeneratedModuleCatalog.h>
@@ -20,12 +27,20 @@ namespace
 [[nodiscard]] bool Shutdown(pg::engine::EngineHost& host)
 {
     pg::engine::HostOperationReport report;
-    if (!host.BeginShutdown(report) || !host.TryFinishShutdown(report))
+    if (host.GetState() == pg::engine::HostState::kCold || host.GetState() == pg::engine::HostState::kReady)
     {
-        std::fputs("同步示例的关闭未完成；Application 必须协调剩余工作，不能无限轮询。\n", stderr);
-        return false;
+        PG_CHECK(host.BeginShutdown(report), "样例无法开始关闭 Host");
     }
-    return host.GetState() == pg::engine::HostState::kClosed;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (!host.TryFinishShutdown(report) && std::chrono::steady_clock::now() < deadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    PG_CHECK(host.GetState() == pg::engine::HostState::kClosed, "样例有界关闭仍未完成，不能销毁持有资源的 Host");
+    const bool released = report.LogStop && report.LogStop->ResourcesReleased;
+    const bool complete = report.LogStop && report.LogStop->FinalFlush.OutputComplete;
+    std::cout << "Log resources released=" << released << "; output complete=" << complete << '\n';
+    return released && complete;
 }
 [[nodiscard]] bool UseCounters(pg::engine::EngineHost& host)
 {
@@ -94,10 +109,26 @@ int main(int argc, char** argv)
         pg::module::StaticModuleCandidate{catalog.Entries.front().Query},
     };
 #endif
+    std::error_code directoryError;
+    auto directory = std::filesystem::current_path(directoryError);
+    if (directoryError)
+    {
+        return 5;
+    }
+    directory /= "MinimalHostLogs";
+    std::filesystem::create_directories(directory, directoryError);
+    if (directoryError)
+    {
+        std::fputs("Application 无法创建日志专属目录。\n", stderr);
+        return 5;
+    }
     pg::engine::EngineHost host;
     pg::engine::HostOperationReport report;
     pg::engine::HostStartupConfig config;
     config.Modules = candidates;
+    config.Logging.Directory = directory.native();
+    config.Logging.PartitionId.front() = std::byte{0x73};
+    config.Logging.Required = pg::log::OutputMask::kFile;
     if (!host.Start(config, report))
     {
         std::cerr << "Start 失败：stage=" << static_cast<unsigned>(report.Stage)
@@ -106,6 +137,7 @@ int main(int argc, char** argv)
         const bool closed = Shutdown(host);
         return closed && report.StartupFailure && report.PrimaryError ? 2 : 3;
     }
+    PG_LOG_INFO(host.GetLogWriter(), "sample", "Host ready");
     bool valid = UseCounters(host);
     {
         auto description = pg::meta::BorrowTypeInfo<pg::sample::CounterService>(host);

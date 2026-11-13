@@ -1,11 +1,13 @@
 # Pangu ModuleDescriptor & Registration API v1
 
 > 状态：**Partially Frozen**。身份、依赖、注册、Scope、代码驻留和操作后置条件是现行行为契约；Public C++ 签名、布局、ABI 和长期封装 API 未冻结。
-> 更新：2026-11-11
+> 更新：2026-11-13
 > 决策：[ADR-0015：统一链接模式与 ModuleManager](../decisions/0015-unified-link-modes-module-manager.md)，保留 ADR-0010/0011 未被替代的行为；源码交付边界沿用 ADR-0014。
 > 代码状态：Task 1–7 已实现统一模式、ModuleManager、原生 Loader、Pin 和动态 Scope。实际平台/模式、首轮与重跑、限制见[正式验收记录](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)，不从设计状态推断平台已通过。
 
 ## 1. 设计目标与边界
+
+基础诊断已接入 Module 回调：RegistrationContext/ScopeBuildContext 显式借用 FailureContext 并携带 LogWriter，必要文本在回调返回前复制。ModuleOperationReport 保留拥有型主现场、次错及结构化等待原因，无法确定起源时显式 Unknown；跨物理卸载的报告/日志不借用 Plugin 文本或 formatter。BuiltinResidentQueries 为 Foundation/Log/Module，Runtime Required 依赖 Foundation 与 Log，不把第三方 fmt/spdlog 当 Module。API/布局仍未冻结，正式行为与平台范围见[基础诊断规范](../foundation/error-diagnostics.md)和[验收](../../docs/superpowers/plans/2026-11-12-foundation-diagnostics-validation.md)。
 
 同一 CMake 目标图用 `PANGU_LINK_MODE=Monolithic|Modular` 统一全部 Pangu Module 为 STATIC 或 SHARED；一个 Module 一个真实 Library Target、一个主要库产物。桌面默认 Modular，Android/iOS 默认 Monolithic。ThirdParty、Host、BuildTools 按自身用途建普通目标。不建立 BinaryImage、统一 IModule/IService、反射注册表或通用 Loader Manager。
 

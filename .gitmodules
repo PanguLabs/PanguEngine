@@ -10,3 +10,9 @@
 [submodule "Source/ThirdParty/GoogleBenchmark/Repo"]
 	path = Source/ThirdParty/GoogleBenchmark/Repo
 	url = https://github.com/google/benchmark.git
+[submodule "Source/ThirdParty/Fmt/Repo"]
+	path = Source/ThirdParty/Fmt/Repo
+	url = https://github.com/fmtlib/fmt.git
+[submodule "Source/ThirdParty/Spdlog/Repo"]
+	path = Source/ThirdParty/Spdlog/Repo
+	url = https://github.com/gabime/spdlog.git

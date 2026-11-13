@@ -2,6 +2,8 @@
 
 #include <PanguModuleExport.h>
 
+#include <FailureContext.h>
+#include <LogWriter.h>
 #include <ModuleDeclaration.h>
 #include <ModuleIdentity.h>
 #include <Result.h>
@@ -80,6 +82,9 @@ public:
     RegistrationContext(RegistrationContext&&) = delete;
     RegistrationContext& operator=(RegistrationContext&&) = delete;
 
+    [[nodiscard]] log::LogWriter Log() const noexcept { return Writer; }
+    [[nodiscard]] FailureContext& Failure() noexcept { return *Diagnostics; }
+
     [[nodiscard]] pg::Status Declare(DeclarationId id, std::string_view displayName) noexcept;
     [[nodiscard]] pg::Status DeclareFactory(DeclarationId id, pg::service::Scope kind, ScopeFactory factory,
                                             std::span<const ScopeDependency> dependencies = {},
@@ -87,13 +92,16 @@ public:
 
 private:
     friend class ModuleManager;
-    RegistrationContext(RegistrationScope& scope, ModuleId owner, std::uint64_t hostDomain = 0) noexcept;
+    RegistrationContext(RegistrationScope& scope, ModuleId owner, std::uint64_t hostDomain, FailureContext& failure,
+                        log::LogWriter writer) noexcept;
 
     RegistrationScope& Scope;
     ModuleId Owner;
     std::uint64_t HostDomain;
     std::vector<RegisteredDeclaration> Pending;
     std::vector<std::unique_ptr<RegistrationScope::Recipe>> PendingRecipes;
-    std::optional<pg::Error> Failure;
+    std::optional<pg::Error> RegistrationError;
+    FailureContext* Diagnostics;
+    log::LogWriter Writer;
 };
 } // namespace pg::module

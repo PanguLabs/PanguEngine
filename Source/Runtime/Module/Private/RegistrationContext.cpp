@@ -1,3 +1,5 @@
+#include "FailureContext.h"
+#include "LogWriter.h"
 #include "ModuleDeclaration.h"
 #include <RegistrationContext.h>
 
@@ -20,23 +22,27 @@
 
 namespace pg::module
 {
-RegistrationContext::RegistrationContext(RegistrationScope& scope, ModuleId owner, std::uint64_t hostDomain) noexcept
+RegistrationContext::RegistrationContext(RegistrationScope& scope, ModuleId owner, std::uint64_t hostDomain,
+                                         FailureContext& failure, log::LogWriter writer) noexcept
     : Scope(scope)
     , Owner(owner)
     , HostDomain(hostDomain)
+    , Diagnostics(&failure)
+    , Writer(std::move(writer))
 {
 }
 
 pg::Status RegistrationContext::Declare(DeclarationId id, std::string_view displayName) noexcept
 {
-    if (Failure)
+    if (RegistrationError)
     {
-        return std::unexpected(*Failure);
+        return std::unexpected(*RegistrationError);
     }
     const auto reject = [&](ModuleError code) -> pg::Status
     {
-        Failure = MakeModuleError(code);
-        return std::unexpected(*Failure);
+        RegistrationError = MakeModuleError(code);
+        Diagnostics->SetPrimary(*RegistrationError, "invalid registration declaration");
+        return std::unexpected(*RegistrationError);
     };
     if (!id.IsValid())
     {
@@ -60,14 +66,15 @@ pg::Status RegistrationContext::DeclareFactory(DeclarationId id, pg::service::Sc
                                                std::span<const ScopeDependency> dependencies,
                                                std::string_view displayName) noexcept
 {
-    if (Failure)
+    if (RegistrationError)
     {
-        return std::unexpected(*Failure);
+        return std::unexpected(*RegistrationError);
     }
     const auto reject = [&](ModuleError error) -> pg::Status
     {
-        Failure = MakeModuleError(error);
-        return std::unexpected(*Failure);
+        RegistrationError = MakeModuleError(error);
+        Diagnostics->SetPrimary(*RegistrationError, "invalid registration factory");
+        return std::unexpected(*RegistrationError);
     };
     const auto validKind = [](pg::service::Scope value)
     {

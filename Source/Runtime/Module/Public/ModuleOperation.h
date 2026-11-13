@@ -1,6 +1,8 @@
 #pragma once
 #include <Error.h>
+#include <FailureReport.h>
 #include <ModuleDeclaration.h>
+#include <ModuleDiagnostics.h>
 #include <ModuleHandle.h>
 #include <ModuleIdentity.h>
 #include <ScopeIdentity.h>
@@ -42,6 +44,15 @@ struct ModuleOperationReport
     ModuleHandle Handle{};
     // 仅表达继续清理的协调责任；Finish 入口由原操作与对应句柄决定。
     ModuleCleanupOwner CleanupOwner{ModuleCleanupOwner::kNone};
+    FailureReport Failure{};
+    ModuleFailureOrigin FailureOrigin{ModuleFailureOrigin::kUnknown};
+    std::array<ModuleWaitReason, kMaxModuleWaitReasons> WaitReasons{};
+    std::size_t WaitReasonCount{};
+    std::size_t RemainingWaitReasons{};
+    bool WaitReasonsTruncated{};
+    bool FailureHistoryTruncated{};
 };
+
+static_assert(sizeof(ModuleOperationReport) <= 4096);
 
 } // namespace pg::module

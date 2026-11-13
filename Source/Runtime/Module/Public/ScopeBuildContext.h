@@ -2,6 +2,8 @@
 
 #include <PanguModuleExport.h>
 
+#include <FailureContext.h>
+#include <LogWriter.h>
 #include <ModuleDeclaration.h>
 #include <ModuleError.h>
 #include <ModuleIdentity.h>
@@ -21,9 +23,9 @@ namespace pg::module
 template <class T>
 struct ScopeHooks
 {
-    pg::Status (*Start)(T&) noexcept {};
+    pg::Status (*Start)(T&, FailureContext&) noexcept {};
     void (*RequestStop)(T&) noexcept {};
-    pg::Status (*PollStopped)(T&) noexcept {};
+    pg::Status (*PollStopped)(T&, FailureContext&) noexcept {};
 };
 
 namespace detail
@@ -40,9 +42,9 @@ public:
     ErasedScopeObject& operator=(ErasedScopeObject&&) = delete;
     [[nodiscard]] virtual void* Get() const noexcept = 0;
     [[nodiscard]] virtual const std::type_info& Type() const noexcept = 0;
-    [[nodiscard]] virtual pg::Status Start() noexcept = 0;
+    [[nodiscard]] virtual pg::Status Start(FailureContext& failure) noexcept = 0;
     virtual void RequestStop() noexcept = 0;
-    [[nodiscard]] virtual pg::Status PollStopped() noexcept = 0;
+    [[nodiscard]] virtual pg::Status PollStopped(FailureContext& failure) noexcept = 0;
 };
 
 template <class T, class Deleter>
@@ -56,7 +58,10 @@ public:
     }
     [[nodiscard]] void* Get() const noexcept override { return Object.get(); }
     [[nodiscard]] const std::type_info& Type() const noexcept override { return typeid(T); }
-    [[nodiscard]] pg::Status Start() noexcept override { return Hooks.Start ? Hooks.Start(*Object) : pg::Status{}; }
+    [[nodiscard]] pg::Status Start(FailureContext& failure) noexcept override
+    {
+        return Hooks.Start ? Hooks.Start(*Object, failure) : pg::Status{};
+    }
     void RequestStop() noexcept override
     {
         if (Hooks.RequestStop)
@@ -64,9 +69,9 @@ public:
             Hooks.RequestStop(*Object);
         }
     }
-    [[nodiscard]] pg::Status PollStopped() noexcept override
+    [[nodiscard]] pg::Status PollStopped(FailureContext& failure) noexcept override
     {
-        return Hooks.PollStopped ? Hooks.PollStopped(*Object) : pg::Status{};
+        return Hooks.PollStopped ? Hooks.PollStopped(*Object, failure) : pg::Status{};
     }
 
 private:
@@ -104,7 +109,7 @@ public:
 class PG_MODULE_API ScopeBuildContext final
 {
 public:
-    explicit ScopeBuildContext(detail::ScopeBuildSink& sink) noexcept;
+    ScopeBuildContext(detail::ScopeBuildSink& sink, FailureContext& failure, log::LogWriter writer = {}) noexcept;
     ~ScopeBuildContext() = default;
     ScopeBuildContext(const ScopeBuildContext&) = delete;
     ScopeBuildContext& operator=(const ScopeBuildContext&) = delete;
@@ -113,6 +118,9 @@ public:
 
     [[nodiscard]] ModuleId Owner() const noexcept;
     [[nodiscard]] ScopeHandle Scope() const noexcept;
+
+    [[nodiscard]] log::LogWriter Log() const noexcept { return Writer; }
+    [[nodiscard]] FailureContext& Failure() noexcept { return *Diagnostics; }
 
     template <class T, class Deleter>
         requires(std::is_object_v<T> && !std::is_const_v<T> && !std::is_array_v<T> && std::is_nothrow_destructible_v<T>)
@@ -149,5 +157,7 @@ public:
 
 private:
     detail::ScopeBuildSink* Sink;
+    FailureContext* Diagnostics;
+    log::LogWriter Writer;
 };
 } // namespace pg::module

@@ -29,9 +29,25 @@ endif()
 set(projectTests "${PROJECT_SOURCE_DIR}/Tests/CMake/SourcePluginProject")
 foreach(pair IN ITEMS "EngineRevision|EngineRevisionTests" "Project|RunIntegration" "Enable|PluginEnableTests"
         "StaticCatalog|StaticCatalogIntegrationTests" "SharedDeploy|SharedDeployTests" "Incremental|IncrementalBuildTests"
-        "TestOwnership|PluginTestOwnershipTests")
+        "TestOwnership|PluginTestOwnershipTests" "Collaboration|PluginCollaborationTests")
     string(REPLACE "|" ";" pair "${pair}")
     list(GET pair 0 name)
     list(GET pair 1 script)
-    pangu_source_plugin_test("SourcePlugin${name}" "${projectTests}/${script}.cmake")
+    set(stageArgs)
+    if(name STREQUAL "Project")
+        list(APPEND stageArgs -DPANGU_PROJECT_TEST_STAGE=Base)
+    elseif(name STREQUAL "TestOwnership" AND CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+        list(APPEND stageArgs -DPANGU_OWNERSHIP_STAGE=Base)
+    endif()
+    pangu_source_plugin_test("SourcePlugin${name}" "${projectTests}/${script}.cmake" ${stageArgs})
 endforeach()
+pangu_source_plugin_test(SourcePluginEmbeddedEngine "${projectTests}/RunIntegration.cmake"
+    -DPANGU_PROJECT_TEST_STAGE=Engine)
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    foreach(stage IN ITEMS Project Engine Provider)
+        pangu_source_plugin_test("SourcePluginTestOwnership${stage}"
+            "${projectTests}/PluginTestOwnershipTests.cmake" "-DPANGU_OWNERSHIP_STAGE=${stage}")
+    endforeach()
+    # 完整冷场景实测1183.60秒；仅构建准备留约26%余量，不改变业务或发现期限。
+    set_tests_properties(SourcePluginTestOwnershipEngine PROPERTIES TIMEOUT 1500)
+endif()

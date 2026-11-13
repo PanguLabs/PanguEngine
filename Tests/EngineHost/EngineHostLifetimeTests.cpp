@@ -35,6 +35,7 @@ TEST(EngineHostLifetime, ConsumersDrainBeforeProviders)
     EngineHost host;
     HostOperationReport report;
     HostStartupConfig config;
+    config.Logging = pg::engine::test::DisabledLogging();
     config.Modules = candidates;
     ASSERT_TRUE(host.Start(config, report));
     const auto hostScope = host.HostScope();

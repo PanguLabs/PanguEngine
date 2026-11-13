@@ -48,6 +48,7 @@ struct SharedFixtureOptions
     unsigned FailContextFactoryAt{};
     unsigned FailContextStartAt{};
     bool WrongScopeDependencyType{};
+    std::optional<pg::Error> DiagnosticPollError = std::nullopt;
 };
 
 struct ProviderPrivateState;

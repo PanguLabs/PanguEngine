@@ -1,3 +1,4 @@
+#include "FailureContext.h"
 #include "ModuleError.h"
 #include "ScopeAccess.h"
 #include "ScopeBuildContext.h"
@@ -51,18 +52,20 @@ struct ConsumerState
     ConsumerState(ConsumerState&&) = delete;
     ConsumerState& operator=(ConsumerState&&) = delete;
 };
-pg::Status Start(ConsumerState& /*state*/) noexcept
+pg::Status Start(ConsumerState& /*state*/, pg::FailureContext& failure) noexcept
 {
     auto& observer = pg::test::Observer();
     observer.Record(pg::test::Event::kConsumerStart);
     if (observer.SharedOptions().FailSecondConsumerStart && observer.Count(pg::test::Event::kConsumerStart) == 2)
     {
-        return std::unexpected(MakeModuleError(ModuleError::kInvalidState));
+        const auto error = MakeModuleError(ModuleError::kInvalidState);
+        failure.SetPrimary(error, "shared fixture start failed");
+        return std::unexpected(error);
     }
     return {};
 }
 void Stop(ConsumerState& /*state*/) noexcept { pg::test::Observer().Record(pg::test::Event::kConsumerStop); }
-pg::Status Poll(ConsumerState& state) noexcept
+pg::Status Poll(ConsumerState& state, pg::FailureContext& /*failure*/) noexcept
 {
     pg::test::Observer().Record(pg::test::Event::kConsumerPoll);
     if (state.BusyPolls != 0)

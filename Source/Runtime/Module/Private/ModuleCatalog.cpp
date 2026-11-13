@@ -1,16 +1,19 @@
 #include "ModuleCatalog.h"
 #include "Error.h"
 #include "ModuleDescriptor.h"
+#include "ModuleDiagnostics.h"
 #include "ModuleIdentity.h"
 #include "ModuleManager.h"
 #include "ModuleOperation.h"
 #include "ModuleRecord.h"
 #include "Result.h"
+#include <FailureContext.h>
 #include <ModuleError.h>
 #include <ModuleMetaProvider.h>
 #include <algorithm>
 #include <cstddef>
 #include <expected>
+#include <source_location>
 #include <span>
 #include <string>
 #include <vector>
@@ -20,10 +23,13 @@ namespace pg::module::detail
 namespace
 {
 std::unexpected<Error> Reject(ModuleOperationReport& report, ModuleError code, ModuleId id = ModuleId(),
-                              ModuleId related = ModuleId())
+                              ModuleId related = ModuleId(),
+                              std::source_location location = std::source_location::current())
 {
     const auto error = MakeModuleError(code);
     report = {.PrimaryError = error, .Module = id, .RelatedModule = related};
+    FailureContext(report.Failure).SetPrimary(error, "module catalog rejected definition", location);
+    report.FailureOrigin = ModuleFailureOrigin::kRuntime;
     return std::unexpected(error);
 }
 } // namespace

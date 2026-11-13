@@ -1,8 +1,13 @@
 #include "Error.h"
+#include "FailureReport.h"
+#include "LogWriter.h"
 #include "ModuleCatalog.h"
 #include "ModuleCodeControl.h"
 #include "ModuleCodePin.h"
+#include "ModuleDeclaration.h"
 #include "ModuleDescriptor.h"
+#include "ModuleDiagnostics.h"
+#include "ModuleDiagnosticsInternal.h"
 #include "ModuleHandle.h"
 #include "ModuleIdentity.h"
 #include "ModuleOperation.h"
@@ -11,7 +16,9 @@
 #include "Result.h"
 #include "ScopeIdentity.h"
 #include "ScopeRuntime.h"
+#include <Check.h>
 #include <FoundationModule.h>
+#include <LogModule.h>
 #include <ModuleBuiltin.h>
 #include <ModuleError.h>
 #include <ModuleManager.h>
@@ -21,15 +28,17 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <bitset>
 #include <cstddef>
 #include <cstdint>
-#include <exception>
 #include <expected>
 #include <iterator>
 #include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <ranges>
+#include <source_location>
 #include <span>
 #include <typeinfo>
 #include <utility>
@@ -41,10 +50,12 @@ namespace pg::module
 namespace
 {
 std::unexpected<Error> Reject(ModuleOperationReport& report, ModuleError code, ModuleHandle handle = ModuleHandle(),
-                              ModuleId id = ModuleId())
+                              ModuleId id = ModuleId(), std::source_location location = std::source_location::current())
 {
     const auto error = MakeModuleError(code);
     report = {.PrimaryError = error, .Module = id, .Handle = handle};
+    FailureContext(report.Failure).SetPrimary(error, "module operation rejected", location);
+    report.FailureOrigin = ModuleFailureOrigin::kRuntime;
     return std::unexpected(error);
 }
 void CompleteScopeReport(ModuleOperationReport& report, ModuleCleanupOwner pendingOwner, bool shuttingDown)
@@ -95,6 +106,10 @@ struct ModuleManager::State
     std::array<Slot, kMaxCatalogModules> Slots;
     std::mutex AdmissionMutex;
     std::unique_ptr<detail::ScopeRuntime> Runtime;
+    log::LogWriter Writer;
+    ModuleId ShutdownModule{};
+    ScopeHandle ShutdownScope{};
+    DeclarationId ShutdownDeclaration{};
     bool Operating{};
     bool Closed{};
     std::optional<Error> ShutdownError;
@@ -105,11 +120,12 @@ struct ModuleManager::State
     };
     std::vector<FailedBatch> FailedBatches;
 
-    State(RegistrationScope& declarations, std::uint64_t domain)
+    State(RegistrationScope& declarations, std::uint64_t domain, log::LogWriter writer)
         : Declarations(&declarations)
         , Domain(domain)
-        , Runtime(
-              std::make_unique<detail::ScopeRuntime>(domain, declarations, std::span<detail::ModuleRecord* const>{}))
+        , Runtime(std::make_unique<detail::ScopeRuntime>(domain, declarations, std::span<detail::ModuleRecord* const>{},
+                                                         writer))
+        , Writer(std::move(writer))
     {
     }
     [[nodiscard]] detail::ModuleRecord* Resolve(ModuleHandle handle) const noexcept
@@ -192,7 +208,8 @@ struct ModuleManager::State
         }
         return batch;
     }
-    [[nodiscard]] Status ReleaseBatch(const FailedBatch& batch)
+    [[nodiscard]] Status ReleaseBatch(const FailedBatch& batch, FailureContext* failure = nullptr,
+                                      ModuleId* failedOwner = nullptr)
     {
         for (const auto handle : batch.ReleaseOrder)
         {
@@ -200,9 +217,13 @@ struct ModuleManager::State
             record->Metadata = nullptr;
             if (record->Library)
             {
-                const auto released = record->Library->Release();
+                const auto released = record->Library->Release(failure);
                 if (!released)
                 {
+                    if (failedOwner != nullptr)
+                    {
+                        *failedOwner = record->Descriptor.Id;
+                    }
                     return released;
                 }
                 record->Library.reset();
@@ -303,6 +324,7 @@ struct ModuleManager::State
         }
         const auto rollback = [&](Error error) -> Result<ModuleLoadResult>
         {
+            detail::MatchFailure(report.Failure, error, report.FailureOrigin);
             const auto originalReport = report;
             if (std::exchange(FailRollbackClose, false))
             {
@@ -314,14 +336,35 @@ struct ModuleManager::State
                 }
             }
             std::optional<Error> cleanup;
+            auto const* failureOwner = pending.front();
+            for (auto const* record : pending)
+            {
+                if (record->Descriptor.Id == originalReport.Module)
+                {
+                    failureOwner = record;
+                    break;
+                }
+            }
+            const auto failureModule = originalReport.Module;
+            const bool remembered = failureModule.IsValid() &&
+                                    Runtime->RememberFailure(failureOwner->Handle, failureModule, originalReport.Scope,
+                                                             originalReport.Declaration, originalReport.Failure,
+                                                             originalReport.FailureOrigin);
             for (auto* record : pending)
             {
                 record->State = ModuleState::kCleanupPending;
                 record->ResourcesDrained = true;
                 record->OriginalError = error;
+                record->OriginalModule = failureModule;
+                record->OriginalScope = originalReport.Scope;
+                record->OriginalDeclaration = originalReport.Declaration;
+                record->FailureHistoryTruncated = !remembered;
             }
             auto batch = RollbackOrder(pending);
-            if (const auto released = ReleaseBatch(batch); !released)
+            FailureReport cleanupFailure;
+            FailureContext cleanupContext(cleanupFailure);
+            ModuleId cleanupModule;
+            if (const auto released = ReleaseBatch(batch, &cleanupContext, &cleanupModule); !released)
             {
                 cleanup = released.error();
                 FailedBatches.push_back(std::move(batch));
@@ -334,6 +377,12 @@ struct ModuleManager::State
             report.CleanupError = cleanup;
             report.CleanupOwner = cleanup ? ModuleCleanupOwner::kManagerCleanup : ModuleCleanupOwner::kNone;
             report.Progress = cleanup ? ModuleOperationProgress::kCleanupPending : ModuleOperationProgress::kRolledBack;
+            if (cleanup)
+            {
+                detail::AppendFailure(report.Failure, cleanupFailure);
+                detail::AddWait(report,
+                                {.Kind = ModuleWaitKind::kNativeClose, .Module = cleanupModule, .Error = cleanup});
+            }
             return std::unexpected(error);
         };
         for (std::size_t index = 0; index < candidates.size(); ++index)
@@ -344,13 +393,16 @@ struct ModuleManager::State
             if (shared != nullptr)
             {
                 record.Descriptor.Id = shared->ExpectedId;
-                auto library = detail::NativeModuleLibrary::Open(shared->Path);
+                FailureContext nativeContext(report.Failure);
+                report.Module = shared->ExpectedId;
+                report.FailureOrigin = ModuleFailureOrigin::kNativeLoader;
+                auto library = detail::NativeModuleLibrary::Open(shared->Path, &nativeContext);
                 if (!library)
                 {
                     return rollback(library.error());
                 }
                 record.Library.emplace(std::move(*library));
-                const auto resolved = record.Library->ResolveQuery();
+                const auto resolved = record.Library->ResolveQuery(&nativeContext);
                 if (!resolved)
                 {
                     return rollback(resolved.error());
@@ -363,6 +415,11 @@ struct ModuleManager::State
             }
             if (const auto copied = detail::CopyDefinition(record, query, report); !copied)
             {
+                // Query 未交付定义时仍保留本次请求的身份，不能借用批次中其他 Module 的归属。
+                if (shared != nullptr && !report.Module.IsValid())
+                {
+                    report.Module = shared->ExpectedId;
+                }
                 return rollback(copied.error());
             }
             if (shared != nullptr && record.Descriptor.Id != shared->ExpectedId)
@@ -379,21 +436,29 @@ struct ModuleManager::State
         }
         if (resident)
         {
-            const auto foundation = std::ranges::find_if(pending, [](const auto* record)
-                                                         { return record->Descriptor.Id == kFoundationModuleId; });
-            const auto runtime = std::ranges::find_if(pending, [](const auto* record)
-                                                      { return record->Descriptor.Id == kModuleRuntimeModuleId; });
-            if (foundation == pending.end() || runtime == pending.end() ||
-                (*foundation)->Descriptor.Version != ModuleVersion{.Major = 1, .Minor = 0, .Patch = 0} ||
-                (*runtime)->Descriptor.Version != ModuleVersion{.Major = 1, .Minor = 0, .Patch = 0} ||
-                !std::ranges::any_of((*runtime)->Descriptor.Dependencies,
-                                     [](const auto& dependency)
-                                     {
-                                         return dependency.Id == kFoundationModuleId &&
-                                                dependency.Version ==
-                                                    ModuleVersion{.Major = 1, .Minor = 0, .Patch = 0} &&
-                                                dependency.Kind == DependencyKind::kRequired;
-                                     }))
+            const auto required = [&](ModuleId id) -> const detail::ModuleRecord*
+            {
+                const auto found =
+                    std::ranges::find_if(pending, [&](const auto* record) { return record->Descriptor.Id == id; });
+                return found == pending.end() ? nullptr : *found;
+            };
+            const auto* foundation = required(kFoundationModuleId);
+            const auto* logging = required(log::kLogModuleId);
+            const auto* runtime = required(kModuleRuntimeModuleId);
+            const ModuleVersion version{.Major = 1, .Minor = 0, .Patch = 0};
+            const auto hasEdge = [&](const detail::ModuleRecord& record, ModuleId id)
+            {
+                return std::ranges::any_of(record.Descriptor.Dependencies,
+                                           [&](const auto& dependency)
+                                           {
+                                               return dependency.Id == id && dependency.Version == version &&
+                                                      dependency.Kind == DependencyKind::kRequired;
+                                           });
+            };
+            if (foundation == nullptr || logging == nullptr || runtime == nullptr ||
+                foundation->Descriptor.Version != version || logging->Descriptor.Version != version ||
+                runtime->Descriptor.Version != version || !hasEdge(*logging, kFoundationModuleId) ||
+                !hasEdge(*runtime, kFoundationModuleId) || !hasEdge(*runtime, log::kLogModuleId))
             {
                 return rollback(MakeModuleError(ModuleError::kInvalidResidentSet));
             }
@@ -447,23 +512,25 @@ ModuleManager::~ModuleManager()
     }
     if (Data->Operating)
     {
-        std::terminate();
+        pg::Fatal("module lifetime invariant violated");
     }
     ModuleOperationReport report;
     if (!BeginShutdown(report) || !TryFinishShutdown(report))
     {
-        std::terminate();
+        pg::Fatal("module lifetime invariant violated");
     }
 }
 Result<ModuleManager> ModuleManager::Create(RegistrationScope& declarations, std::span<const QueryModuleFn> queries,
                                             std::span<const OptionalDependencyBinding> selections,
-                                            ModuleOperationReport& report) noexcept
+                                            ModuleOperationReport& destination, log::LogWriter writer) noexcept
 {
+    ModuleOperationReport report;
+    const detail::ReportPublication publication(destination, report);
     if (queries.size() > kMaxCatalogModules || selections.size() > kMaxCatalogModules * kMaxModuleDependencies)
     {
         return Reject(report, ModuleError::kLimitExceeded);
     }
-    if (queries.size() < 2)
+    if (queries.size() < 3)
     {
         return Reject(report, ModuleError::kInvalidResidentSet);
     }
@@ -472,7 +539,7 @@ Result<ModuleManager> ModuleManager::Create(RegistrationScope& declarations, std
     {
         return Reject(report, ModuleError::kLimitExceeded);
     }
-    ModuleManager manager(std::make_unique<State>(declarations, *domain));
+    ModuleManager manager(std::make_unique<State>(declarations, *domain, std::move(writer)));
     std::vector<ModuleLoadCandidate> candidates;
     for (const auto query : queries)
     {
@@ -487,8 +554,10 @@ Result<ModuleManager> ModuleManager::Create(RegistrationScope& declarations, std
 }
 Result<ModuleLoadResult> ModuleManager::Load(std::span<const ModuleLoadCandidate> candidates,
                                              std::span<const OptionalDependencyBinding> selections,
-                                             ModuleOperationReport& report) noexcept
+                                             ModuleOperationReport& destination) noexcept
 {
+    ModuleOperationReport report;
+    const detail::ReportPublication publication(destination, report);
     if (!Data)
     {
         return Reject(report, ModuleError::kInvalidState);
@@ -604,14 +673,16 @@ Result<ModuleCodePin> ModuleManager::TryPinForBusiness(ModuleHandle handle) cons
     // 闸门临时计数覆盖 ExternalPins 发布窗口；FinishRecord 先观察闸门排空再观察 Pin。
     if (control->ExternalPins.fetch_add(1, std::memory_order_relaxed) == std::numeric_limits<std::uint64_t>::max())
     {
-        std::terminate();
+        pg::Fatal("module lifetime invariant violated");
     }
     control->Gate->Leave();
     return ModuleCodePin(std::move(control));
 }
 
-Status ModuleManager::Register(ModuleHandle handle, ModuleOperationReport& report) noexcept
+Status ModuleManager::Register(ModuleHandle handle, ModuleOperationReport& destination) noexcept
 {
+    ModuleOperationReport report;
+    const detail::ReportPublication publication(destination, report);
     if (!Data)
     {
         return Reject(report, ModuleError::kInvalidState);
@@ -672,16 +743,24 @@ Status ModuleManager::Register(ModuleHandle handle, ModuleOperationReport& repor
     }
     Data->Declarations->Registering = true;
     const Guard guard{Data->Declarations, Data->Runtime.get()};
-    RegistrationContext transaction(*Data->Declarations, id, Data->Domain);
+    FailureReport failure;
+    FailureContext context(failure);
+    RegistrationContext transaction(*Data->Declarations, id, Data->Domain, context,
+                                    detail::TaggedWriter(Data->Writer, id));
     const auto result = record->RegisterModule(transaction);
-    if (transaction.Failure || !result)
+    if (transaction.RegistrationError || !result)
     {
-        const auto error = transaction.Failure ? *transaction.Failure : result.error();
+        const auto error = transaction.RegistrationError ? *transaction.RegistrationError : result.error();
+        auto origin = ModuleFailureOrigin::kRegister;
+        detail::MatchFailure(failure, error, origin);
+        record->OriginalModule = id;
+        record->FailureHistoryTruncated = !Data->Runtime->RememberFailure(handle, id, {}, {}, failure, origin);
         record->OriginalError = error;
         Data->Runtime->RegistrationFailed(id, error);
         if (record->Resident)
         {
             Data->ShutdownError = error;
+            Data->ShutdownModule = id;
             Data->Runtime->RequestShutdown();
         }
         transaction.PendingRecipes.clear();
@@ -693,6 +772,8 @@ Status ModuleManager::Register(ModuleHandle handle, ModuleOperationReport& repor
             .Handle = handle,
             .CleanupOwner = record->Resident ? ModuleCleanupOwner::kManagerShutdown : ModuleCleanupOwner::kCallerUnload,
         };
+        report.Failure = failure;
+        report.FailureOrigin = origin;
         return std::unexpected(error);
     }
     auto& scope = *Data->Declarations;
@@ -709,8 +790,10 @@ Status ModuleManager::Register(ModuleHandle handle, ModuleOperationReport& repor
     };
     return {};
 }
-Status ModuleManager::Activate(ModuleHandle handle, ModuleOperationReport& report) noexcept
+Status ModuleManager::Activate(ModuleHandle handle, ModuleOperationReport& destination) noexcept
 {
+    ModuleOperationReport report;
+    const detail::ReportPublication publication(destination, report);
     if (!Data)
     {
         return Reject(report, ModuleError::kInvalidState);
@@ -735,14 +818,19 @@ Status ModuleManager::Activate(ModuleHandle handle, ModuleOperationReport& repor
         if (record->Resident)
         {
             Data->ShutdownError = result.error();
+            Data->ShutdownModule = record->Descriptor.Id;
+            Data->ShutdownScope = report.Scope;
+            Data->ShutdownDeclaration = report.Declaration;
             Data->Runtime->RequestShutdown();
             report.CleanupOwner = ModuleCleanupOwner::kManagerShutdown;
         }
     }
     return result;
 }
-Status ModuleManager::BeginUnload(ModuleHandle handle, ModuleOperationReport& report) noexcept
+Status ModuleManager::BeginUnload(ModuleHandle handle, ModuleOperationReport& destination) noexcept
 {
+    ModuleOperationReport report;
+    const detail::ReportPublication publication(destination, report);
     if (!Data)
     {
         return Reject(report, ModuleError::kInvalidState);
@@ -752,7 +840,7 @@ Status ModuleManager::BeginUnload(ModuleHandle handle, ModuleOperationReport& re
     {
         return Reject(report, ModuleError::kBusy, handle);
     }
-    auto* record = Data->Resolve(handle);
+    auto const* record = Data->Resolve(handle);
     if (record == nullptr || !record->Delivered)
     {
         return Reject(report, ModuleError::kInvalidHandle, handle);
@@ -797,6 +885,10 @@ Status ModuleManager::FinishRecord(ModuleHandle handle, ModuleOperationReport& r
         .CleanupOwner =
             Data->Runtime->IsShuttingDown() ? ModuleCleanupOwner::kManagerShutdown : ModuleCleanupOwner::kCallerUnload,
     };
+    completed.Scope = record->OriginalScope;
+    completed.Declaration = record->OriginalDeclaration;
+    completed.FailureHistoryTruncated = record->FailureHistoryTruncated;
+    Data->Runtime->Explain(completed, record->Descriptor.Id);
     // 资源销毁不等待外部代码 Pin；原生释放必须等待接纳中的短暂借用与外部 Pin。
     if (record->Code->HasExternalUsers())
     {
@@ -805,6 +897,10 @@ Status ModuleManager::FinishRecord(ModuleHandle handle, ModuleOperationReport& r
         {
             completed.PrimaryError = completed.CleanupError;
         }
+        detail::AddWait(completed, {.Kind = ModuleWaitKind::kModulePin,
+                                    .Module = record->Descriptor.Id,
+                                    .Count = record->Code->ExternalPins.load(std::memory_order_relaxed),
+                                    .Error = completed.CleanupError});
         report = completed;
         return std::unexpected(*completed.CleanupError);
     }
@@ -816,7 +912,9 @@ Status ModuleManager::FinishRecord(ModuleHandle handle, ModuleOperationReport& r
     }
     if (record->Library)
     {
-        const auto released = record->Library->Release();
+        FailureReport nativeFailure;
+        FailureContext nativeContext(nativeFailure);
+        const auto released = record->Library->Release(&nativeContext);
         if (!released)
         {
             completed.CleanupError = released.error();
@@ -824,6 +922,18 @@ Status ModuleManager::FinishRecord(ModuleHandle handle, ModuleOperationReport& r
             {
                 completed.PrimaryError = released.error();
             }
+            if (completed.Failure.PrimarySite())
+            {
+                detail::AppendFailure(completed.Failure, nativeFailure);
+            }
+            else
+            {
+                completed.Failure = nativeFailure;
+                completed.FailureOrigin = ModuleFailureOrigin::kNativeLoader;
+            }
+            detail::AddWait(
+                completed,
+                {.Kind = ModuleWaitKind::kNativeClose, .Module = record->Descriptor.Id, .Error = released.error()});
             report = completed;
             return released;
         }
@@ -836,8 +946,10 @@ Status ModuleManager::FinishRecord(ModuleHandle handle, ModuleOperationReport& r
     report = completed;
     return {};
 }
-Status ModuleManager::TryFinishUnload(ModuleHandle handle, ModuleOperationReport& report) noexcept
+Status ModuleManager::TryFinishUnload(ModuleHandle handle, ModuleOperationReport& destination) noexcept
 {
+    ModuleOperationReport report;
+    const detail::ReportPublication publication(destination, report);
     if (!Data)
     {
         return Reject(report, ModuleError::kInvalidState);
@@ -920,8 +1032,10 @@ ModuleManager::AcquireScopeResource(const detail::ScopeResourceQuery& query, con
     return Data->Runtime->AcquireScopeResource(query, type);
 }
 Result<ScopeHandle> ModuleManager::CreateScope(pg::service::Scope kind, ScopeHandle parent,
-                                               ModuleOperationReport& report) noexcept
+                                               ModuleOperationReport& destination) noexcept
 {
+    ModuleOperationReport report;
+    const detail::ReportPublication publication(destination, report);
     if (!Data)
     {
         return Reject(report, ModuleError::kInvalidState);
@@ -935,8 +1049,10 @@ Result<ScopeHandle> ModuleManager::CreateScope(pg::service::Scope kind, ScopeHan
     CompleteScopeReport(report, ModuleCleanupOwner::kManagerCleanup, Data->Runtime->IsShuttingDown());
     return result;
 }
-Status ModuleManager::BeginCloseScope(ScopeHandle scope, ModuleOperationReport& report) noexcept
+Status ModuleManager::BeginCloseScope(ScopeHandle scope, ModuleOperationReport& destination) noexcept
 {
+    ModuleOperationReport report;
+    const detail::ReportPublication publication(destination, report);
     if (!Data)
     {
         return Reject(report, ModuleError::kInvalidState);
@@ -950,8 +1066,10 @@ Status ModuleManager::BeginCloseScope(ScopeHandle scope, ModuleOperationReport& 
     CompleteScopeReport(report, ModuleCleanupOwner::kCallerUnload, Data->Runtime->IsShuttingDown());
     return result;
 }
-Status ModuleManager::TryFinishCloseScope(ScopeHandle scope, ModuleOperationReport& report) noexcept
+Status ModuleManager::TryFinishCloseScope(ScopeHandle scope, ModuleOperationReport& destination) noexcept
 {
+    ModuleOperationReport report;
+    const detail::ReportPublication publication(destination, report);
     if (!Data)
     {
         return Reject(report, ModuleError::kInvalidState);
@@ -975,31 +1093,72 @@ Status ModuleManager::Cleanup(ModuleOperationReport& report, bool confirmShutdow
     // 逐记录清理也可能回收未交付的失败 Scope，必须先拥有其原始失败值。
     const auto runtimeFailure = Data->Runtime->PendingFailure();
     auto original = Data->ShutdownError;
+    FailureReport originalFailure;
+    auto originalOrigin = ModuleFailureOrigin::kUnknown;
+    auto originalModule = Data->ShutdownModule;
+    auto originalScope = Data->ShutdownScope;
+    auto originalDeclaration = Data->ShutdownDeclaration;
+    FailureReport pendingFailure;
+    auto pendingOrigin = ModuleFailureOrigin::kUnknown;
     for (const auto* record : Data->Records())
     {
         if (!original && record->OriginalError)
         {
             original = record->OriginalError;
+            originalModule = record->OriginalModule;
+            originalScope = record->OriginalScope;
+            originalDeclaration = record->OriginalDeclaration;
         }
     }
     if (!original)
     {
         original = runtimeFailure;
     }
+    {
+        ModuleOperationReport history{.PrimaryError = original,
+                                      .Module = originalModule,
+                                      .Scope = originalScope,
+                                      .Declaration = originalDeclaration,
+                                      .OriginalError = original};
+        Data->Runtime->Explain(history);
+        originalFailure = history.Failure;
+        originalOrigin = history.FailureOrigin;
+        originalModule = history.Module;
+        originalScope = history.Scope;
+        originalDeclaration = history.Declaration;
+    }
     // 不完整 Query 不能提供可信的 Provider 集合；保守保留已有资源，业务门保持原状。
     for (auto batch = Data->FailedBatches.begin(); batch != Data->FailedBatches.end();)
     {
-        const auto released = Data->ReleaseBatch(*batch);
+        FailureReport failure;
+        FailureContext context(failure);
+        ModuleId owner;
+        const auto released = Data->ReleaseBatch(*batch, &context, &owner);
         if (!released)
         {
             report = {
                 .Progress = ModuleOperationProgress::kCleanupPending,
                 .PrimaryError = original ? original : std::optional(released.error()),
+                .Module = originalModule,
+                .Scope = originalScope,
+                .Declaration = originalDeclaration,
                 .OriginalError = original,
                 .CleanupError = released.error(),
                 .CleanupOwner = Data->Runtime->IsShuttingDown() ? ModuleCleanupOwner::kManagerShutdown
                                                                 : ModuleCleanupOwner::kManagerCleanup,
             };
+            report.Failure = originalFailure;
+            report.FailureOrigin = originalOrigin;
+            if (report.Failure.PrimarySite())
+            {
+                detail::AppendFailure(report.Failure, failure);
+            }
+            else
+            {
+                report.Failure = failure;
+                report.FailureOrigin = ModuleFailureOrigin::kNativeLoader;
+            }
+            detail::AddWait(report, {.Kind = ModuleWaitKind::kNativeClose, .Module = owner, .Error = released.error()});
             return released;
         }
         batch = Data->FailedBatches.erase(batch);
@@ -1007,17 +1166,27 @@ Status ModuleManager::Cleanup(ModuleOperationReport& report, bool confirmShutdow
     Data->Runtime->SetCleanupBlocked(false);
     // Runtime 按有效依赖拒绝尚不可清理的 Provider；多轮只在有最终确认进展时继续。
     std::vector<ModuleHandle> nativeFailures;
+    struct NativeDiagnostic
+    {
+        ModuleHandle Handle{};
+        std::optional<Error> Failure;
+    };
+    std::array<NativeDiagnostic, kMaxModuleWaitReasons> nativeDiagnostics;
+    std::bitset<kMaxCatalogModules> nativeCloseFailures;
     std::optional<Error> nativeError;
+    FailureReport nativeFailure;
+    auto nativeOrigin = ModuleFailureOrigin::kUnknown;
     bool progress = true;
     while (progress)
     {
         progress = false;
         pending = nativeError;
+        pendingFailure = nativeFailure;
+        pendingOrigin = nativeOrigin;
         const auto current = Data->Records();
         const bool businessPending = std::ranges::any_of(current, [](const auto* record) { return !record->Resident; });
-        for (auto iter = current.rbegin(); iter != current.rend(); ++iter)
+        for (auto* record : std::views::reverse(current))
         {
-            auto* record = *iter;
             if (record->Resident && businessPending && Data->Runtime->IsShuttingDown() &&
                 !Data->Runtime->HasBusinessDependency(record->Handle))
             {
@@ -1040,10 +1209,29 @@ Status ModuleManager::Cleanup(ModuleOperationReport& report, bool confirmShutdow
                 {
                     nativeFailures.push_back(record->Handle);
                     nativeError = result.error();
+                    nativeFailure = report.Failure;
+                    nativeOrigin = report.FailureOrigin;
+                    if (result.error() != MakeModuleError(ModuleError::kBusy))
+                    {
+                        nativeCloseFailures.set(record->Handle.Slot - 1);
+                        auto slot = std::ranges::find_if(nativeDiagnostics,
+                                                         [](const auto& entry) { return !entry.Handle.IsValid(); });
+                        if (slot == nativeDiagnostics.end())
+                        {
+                            slot = std::ranges::max_element(nativeDiagnostics, {},
+                                                            [](const auto& entry) { return entry.Handle.Slot; });
+                        }
+                        if (!slot->Handle.IsValid() || record->Handle.Slot < slot->Handle.Slot)
+                        {
+                            *slot = {.Handle = record->Handle, .Failure = result.error()};
+                        }
+                    }
                 }
                 if (!pending || (*pending == MakeModuleError(ModuleError::kBusy) && result.error() != *pending))
                 {
                     pending = result.error();
+                    pendingFailure = report.Failure;
+                    pendingOrigin = report.FailureOrigin;
                 }
             }
             else
@@ -1061,10 +1249,14 @@ Status ModuleManager::Cleanup(ModuleOperationReport& report, bool confirmShutdow
     if (!original)
     {
         original = scopeReport.OriginalError;
+        originalFailure = scopeReport.Failure;
+        originalOrigin = scopeReport.FailureOrigin;
     }
     if (!scopes && !pending && !Data->Runtime->IsShuttingDown())
     {
         pending = scopes.error();
+        pendingFailure = scopeReport.Failure;
+        pendingOrigin = scopeReport.FailureOrigin;
     }
     if (!pending && confirmShutdown)
     {
@@ -1072,35 +1264,80 @@ Status ModuleManager::Cleanup(ModuleOperationReport& report, bool confirmShutdow
         if (!finished)
         {
             pending = finished.error();
+            pendingFailure = scopeReport.Failure;
+            pendingOrigin = scopeReport.FailureOrigin;
         }
         else
         {
-            for (auto* record : Data->Records())
+            for (auto const* record : Data->Records())
             {
                 Data->Retire(record->Handle);
             }
             Data->Closed = true;
         }
     }
+    auto operationProgress = confirmShutdown ? ModuleOperationProgress::kUnloaded : ModuleOperationProgress::kUnchanged;
+    if (pending)
+    {
+        operationProgress = ModuleOperationProgress::kCleanupPending;
+    }
+    auto owner = pending ? ModuleCleanupOwner::kManagerCleanup : ModuleCleanupOwner::kNone;
+    if (Data->Runtime->IsShuttingDown())
+    {
+        owner = ModuleCleanupOwner::kManagerShutdown;
+    }
     report = {
-        .Progress = pending
-                        ? ModuleOperationProgress::kCleanupPending
-                        : (confirmShutdown ? ModuleOperationProgress::kUnloaded : ModuleOperationProgress::kUnchanged),
+        .Progress = operationProgress,
         .PrimaryError = original ? original : pending,
         .OriginalError = original,
         .CleanupError = pending,
-        .CleanupOwner = Data->Runtime->IsShuttingDown()
-                            ? ModuleCleanupOwner::kManagerShutdown
-                            : (pending ? ModuleCleanupOwner::kManagerCleanup : ModuleCleanupOwner::kNone),
+        .CleanupOwner = owner,
     };
+    if (original)
+    {
+        report.Module = originalModule;
+        report.Scope = originalScope;
+        report.Declaration = originalDeclaration;
+    }
+    report.Failure = original ? originalFailure : pendingFailure;
+    report.FailureOrigin = original ? originalOrigin : pendingOrigin;
+    if (original && pending)
+    {
+        detail::AppendFailure(report.Failure, pendingFailure);
+    }
+    Data->Runtime->Explain(report);
+    for (const auto* record : Data->Records())
+    {
+        if (record->State != ModuleState::kCleanupPending)
+        {
+            continue;
+        }
+        const auto pins = record->Code->ExternalPins.load(std::memory_order_acquire);
+        if (pins != 0)
+        {
+            detail::AddWait(report, {.Kind = ModuleWaitKind::kModulePin,
+                                     .Module = record->Descriptor.Id,
+                                     .Count = pins,
+                                     .Error = MakeModuleError(ModuleError::kBusy)});
+        }
+        if (nativeCloseFailures.test(record->Handle.Slot - 1))
+        {
+            const auto diagnostic = std::ranges::find(nativeDiagnostics, record->Handle, &NativeDiagnostic::Handle);
+            const auto error = diagnostic != nativeDiagnostics.end() ? diagnostic->Failure : std::optional<Error>{};
+            detail::AddWait(report,
+                            {.Kind = ModuleWaitKind::kNativeClose, .Module = record->Descriptor.Id, .Error = error});
+        }
+    }
     if (pending)
     {
         return std::unexpected(*pending);
     }
     return {};
 }
-Status ModuleManager::PollCleanup(ModuleOperationReport& report) noexcept
+Status ModuleManager::PollCleanup(ModuleOperationReport& destination) noexcept
 {
+    ModuleOperationReport report;
+    const detail::ReportPublication publication(destination, report);
     if (!Data)
     {
         return Reject(report, ModuleError::kInvalidState);
@@ -1112,8 +1349,10 @@ Status ModuleManager::PollCleanup(ModuleOperationReport& report) noexcept
     }
     return Cleanup(report, false);
 }
-Status ModuleManager::BeginShutdown(ModuleOperationReport& report) noexcept
+Status ModuleManager::BeginShutdown(ModuleOperationReport& destination) noexcept
 {
+    ModuleOperationReport report;
+    const detail::ReportPublication publication(destination, report);
     if (!Data)
     {
         return Reject(report, ModuleError::kInvalidState);
@@ -1128,11 +1367,17 @@ Status ModuleManager::BeginShutdown(ModuleOperationReport& report) noexcept
     if (!Data->ShutdownError)
     {
         Data->ShutdownError = report.OriginalError;
+        Data->ShutdownModule = report.Module;
+        Data->ShutdownScope = report.Scope;
+        Data->ShutdownDeclaration = report.Declaration;
         for (const auto* record : Data->Records())
         {
             if (!Data->ShutdownError && record->OriginalError)
             {
                 Data->ShutdownError = record->OriginalError;
+                Data->ShutdownModule = record->OriginalModule;
+                Data->ShutdownScope = record->OriginalScope;
+                Data->ShutdownDeclaration = record->OriginalDeclaration;
             }
         }
     }
@@ -1140,11 +1385,17 @@ Status ModuleManager::BeginShutdown(ModuleOperationReport& report) noexcept
     if (Data->ShutdownError)
     {
         report.PrimaryError = Data->ShutdownError;
+        report.Module = Data->ShutdownModule;
+        report.Scope = Data->ShutdownScope;
+        report.Declaration = Data->ShutdownDeclaration;
+        Data->Runtime->Explain(report);
     }
     return result;
 }
-Status ModuleManager::TryFinishShutdown(ModuleOperationReport& report) noexcept
+Status ModuleManager::TryFinishShutdown(ModuleOperationReport& destination) noexcept
 {
+    ModuleOperationReport report;
+    const detail::ReportPublication publication(destination, report);
     if (!Data)
     {
         return Reject(report, ModuleError::kInvalidState);

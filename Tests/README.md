@@ -117,6 +117,29 @@ Module 基准的三桌面配置、采样与恢复命令见 [Benchmark 说明](Mo
 
 Android/iOS 两模式除正式根编译，还须显式运行 SourcePluginProject/CrossCompileTests.cmake，检查真实 Runtime/业务 Query、动态依赖、目标架构和最小宿主最终链接；不运行交叉目标 GTest，不宣称设备 RTTI/动态卸载、打包或签名。两模式六场景 benchmark 单独显式开启/dry run，完成恢复 OFF，新增常驻根成本保留在原计时区间，不混旧基线。
 
+## 基础诊断与 Log 验收
+
+Tests/Foundation 与 Tests/Log 保留后端零分配、报告/卸载、Fatal 精确退出与负对照、格式子集、队列/竞争、文件分区/轮转、Flush/Stop、Host 和真实物理卸载回归。受监督程序是正式测试依赖，不因计划完成而删除。LogAssertConfig 在隔离子图运行 Release/Debug × Assert ON/OFF；不修改第三方 NDEBUG。
+
+三桌面正式验收先构建对应 full 目标再运行非空 full CTest，保留 ModuleRegression 和独立 Project；在固定已提交源码、override OFF 上按 Monolithic → Modular 执行。Full/Project Git 锁期间不修改共享 tracked 源码、文档或 HEAD。Android/iOS 两模式除正式根构建，另显式运行 SourcePluginProject/CrossCompileTests.cmake；它检查真实 LogSystem/FailureReport/Check 消费、Android 有类型 caller、ARM64 与动态依赖，拒绝宿主 LLVM/STL。移动不运行交叉 GTest，也不代表设备文件/线程/Fatal 验收。精确版本、命令、失败/重跑、计数及静态检查范围见[正式验收](../docs/superpowers/plans/2026-11-12-foundation-diagnostics-validation.md)。
+
+`SourcePluginProject` 的 Base 场景验证 Enabled/Disabled、ServiceHosts 和锁失效；独立
+`SourcePluginEmbeddedEngine` 验证 EngineOptIn 的真实 Full 构建、发现、owner 分类及反例恢复。
+两者各用独立冷根与原 900 秒监督，Full 必须选择两者，原覆盖不重复执行或删除。手动
+RunIntegration.cmake 未指定阶段时仍运行 All。`PanguMetaProjectSwitch` 保留实际运行和 no-op
+断言，并读取真实 fmt/spdlog 对象的 CRT/Debug 信息验证 Debug→Release→旧 Debug 恢复。
+
+MyGamePluginCollaborationTests 仅在 macOS 显式设置 30 秒的启动发现窗口，测试自身仍为
+60 秒；外层准备场景按各自登记的 900 或 1500 秒执行。其余目标和平台保留 GoogleTest 默认 5 秒发现预算。
+这项容忍源自已记录的冷发现超时；系统扫描关联不是已完整证明的唯一原因，不能据此关闭安全检查。
+
+macOS 的 Owner 矩阵按独立冷工作量登记为四项：Base、Project、Provider 保留 900 秒，
+Engine 完整构建准备场景为 1500 秒（完整冷场景实测 1183.60 秒，不改变业务 deadline）。原
+SourcePluginTestOwnership 为 Base（origin 负例、NoPlugins、AllDisabled），另外登记
+SourcePluginTestOwnershipProject、SourcePluginTestOwnershipEngine、SourcePluginTestOwnershipProvider。
+每项从当前正式夹具准备完整输入/目标，单选不依赖历史日志或其他场景结果；原 All 块顺序和
+所有断言保持，Windows/Linux 默认继续执行 All，交叉测试 OFF 图不进入这些注册。
+
 ## EngineHost 生命周期验收
 
 正式用例位于 `Tests/EngineHost`，覆盖 Startup、Failure、Shutdown、Scope、ServiceAccess、Concurrency 和 Modular 真实物理卸载；`Tests/Module/ScopeResourceAccessTests.cpp` 覆盖底层精确查询。样例开启时另运行 MinimalHostSmoke，独立 Project 保留消费集合/部署/增量/双模式测试。Modular 的 ModuleRegression 运行旧 Module Mono 和新增 EngineHost Mono，不能仅以根 Modular 用例替代。

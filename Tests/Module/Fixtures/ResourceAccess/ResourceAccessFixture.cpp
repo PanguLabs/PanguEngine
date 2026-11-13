@@ -1,4 +1,5 @@
 #include "ResourceAccessFixture.h"
+#include "FailureContext.h"
 #include "ScopeTestSupport.h"
 
 #include <ModuleDescriptor.h>
@@ -39,7 +40,7 @@ const NativeLifetime kLifetime;
 // NOLINTNEXTLINE(misc-const-correctness)
 void Stop([[maybe_unused]] ScopeValue& value) noexcept {}
 // NOLINTNEXTLINE(misc-const-correctness)
-pg::Status Poll([[maybe_unused]] ScopeValue& value) noexcept
+pg::Status Poll([[maybe_unused]] ScopeValue& value, pg::FailureContext& /*failure*/) noexcept
 {
     return Observer().SharedOptions().ConsumerBusyPolls != 0
                ? pg::Status{std::unexpected(MakeModuleError(ModuleError::kBusy))}

@@ -1,7 +1,7 @@
 # Pangu 平台支持基线
 
 > 状态：Partially Frozen（目标平台与访问环境已确定；Runtime/HAL 与完整 CI 尚未冻结）
-> 更新：2026-11-04
+> 更新：2026-11-13
 
 ## 目标平台与验证状态
 
@@ -14,6 +14,11 @@
 | iOS | macOS 主机交叉编译 iPhoneOS Device | iOS ARM64 动态库编译与链接通过；签名、打包及真机/模拟器验证未完成 |
 
 **目标支持不等于完整引擎实现或设备运行验证。** 上表只列出验证层级，不作为平台工具链版本、路径和参数的权威来源。
+
+**基础诊断与Log（2026-11-13）**：Windows、WSL Linux、macOS的已实现领域均完成根Preset的
+Monolithic→Modular Full；Android/iOS ARM64两模式完成根构建、MobileHost真实消费的最终链接和
+架构/动态依赖宿主检查。此范围不等于完整引擎产品，也不扩展至其他移动ABI或设备文件/线程/Fatal运行。
+分版本被测SHA/tree、失败轮次、复用依据与限制见[正式验收](../../docs/superpowers/plans/2026-11-12-foundation-diagnostics-validation.md)。
 
 **源码 Plugin / 独立 Project 集成（2026-11-04）**：Windows 正式 Engine CTest 22/22、WSL Linux 与 macOS 各 21/21；三桌面独立 Build Tool 各 3/3。Android ARM64 与 iOS ARM64 使用正式 Preset 构建 Engine，独立 Project 的 Game/Editor 完成最终链接及显式 SHARED 文件部署。此记录不扩展到完整 App、签名、设备运行或生产 Loader。命令、源码状态、性能与 Linux 时钟修复见[验收记录](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md)。
 

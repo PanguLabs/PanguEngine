@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 4.0)
+file(MAKE_DIRECTORY "${WORK_ROOT}")
+execute_process(COMMAND "${FIXTURE}" RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 20)
+if(NOT result STREQUAL "0" OR NOT output MATCHES "2 tests from LogLifetime")
+    message(FATAL_ERROR "日志卸载/跨 Host 失败：exit=${result}\n${output}\n${error}")
+endif()
+message(STATUS "${output}")

@@ -1,3 +1,5 @@
+#include "FailureContext.h"
+#include "FailureReport.h"
 #include "ModuleTestAccess.h"
 #include "NativeModuleLibrary.h"
 #include "SharedFixtureContract.h"
@@ -27,6 +29,28 @@ TEST(NativeModuleLibrary, OpenMissing)
     ASSERT_FALSE(result);
     EXPECT_EQ(result.error().Code(), static_cast<unsigned>(ModuleError::kLibraryOpenFailed));
     EXPECT_EQ(result.error().Domain(), kModuleErrorDomain);
+}
+
+TEST(NativeModuleLibrary, FailureOwnsNativeOriginBeforeAnotherLoaderOperation)
+{
+    FailureReport report;
+    FailureContext context(report);
+    const auto missing = fs::path(fixture::kSharedProviderPath).parent_path() / "absent-diagnostics-library";
+    const auto result = NativeModuleLibrary::Open(missing, &context);
+    ASSERT_FALSE(result);
+    const auto original = report.PrimarySite();
+    ASSERT_TRUE(original);
+    EXPECT_EQ(original->Cause, result.error());
+    EXPECT_TRUE(original->OriginKnown());
+    EXPECT_TRUE(original->File().ends_with("NativeModuleLibrary.cpp"));
+    const auto copy = report;
+    auto another = NativeModuleLibrary::Open(fixture::kSharedProviderPath);
+    ASSERT_TRUE(another);
+    ASSERT_TRUE(another->Release());
+    ASSERT_TRUE(copy.PrimarySite());
+    EXPECT_EQ(copy.PrimarySite()->Cause, original->Cause);
+    EXPECT_EQ(copy.PrimarySite()->Line(), original->Line());
+    EXPECT_GT(copy.EntryCount(), 0U);
 }
 
 TEST(NativeModuleLibrary, RelativePath)

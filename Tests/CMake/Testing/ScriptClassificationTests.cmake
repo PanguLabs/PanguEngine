@@ -87,7 +87,7 @@ else()
 endif()
 foreach(required IN ITEMS BuildEnvironment ToolchainLibraryLink NlohmannSubmoduleRequired
         SourcePluginBuildTool SourcePluginBuildToolInvalidation SourcePluginBuildToolFileLinks
-        SourcePluginBuildToolDirectoryLinks SourcePluginEngineRevision SourcePluginProject
+        SourcePluginBuildToolDirectoryLinks SourcePluginEngineRevision SourcePluginProject SourcePluginEmbeddedEngine
         SourcePluginEnable SourcePluginStaticCatalog SourcePluginSharedDeploy SourcePluginIncremental
         TestingRegistration TestingDependencyIsolation TestingBuildToolsTests
         TestingBuildToolsFailurePropagation TestingScriptClassification ${moduleLifecycleRegression})
@@ -97,6 +97,13 @@ foreach(required IN ITEMS BuildEnvironment ToolchainLibraryLink NlohmannSubmodul
 endforeach()
 if(CMAKE_HOST_WIN32 AND NOT "SourcePluginBuildToolSourceChange" IN_LIST seen)
     message(FATAL_ERROR "Windows tool source invalidation/compile-failure recovery regression is missing")
+endif()
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+    foreach(stage IN ITEMS Project Engine Provider)
+        if(NOT "SourcePluginTestOwnership${stage}" IN_LIST seen)
+            message(FATAL_ERROR "Missing independent cold ownership scenario: ${stage}")
+        endif()
+    endforeach()
 endif()
 
 # 首轮生成错误输入并失败，同一工作根重跑必须重建输入，不能依赖上次残留。

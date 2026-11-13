@@ -1,9 +1,14 @@
+#include "EngineHostTestFixture.h"
 #include "HostOperation.h"
+#include "ModuleDeclaration.h"
+#include "ModuleIdentity.h"
 #include "ModuleManager.h"
+#include "Result.h"
 #include <EngineHost.h>
 #include <EngineHostModule.h>
 #include <FoundationModule.h>
 #include <HostStartupConfig.h>
+#include <LogModule.h>
 #include <ModuleBuiltin.h>
 #include <RegistrationContext.h>
 #include <array>
@@ -36,22 +41,25 @@ TEST(EngineHostStartup, ColdConstructionHasNoModuleSideEffects)
     EXPECT_TRUE(declarations->empty());
 }
 
-TEST(EngineHostStartup, EmptyBusinessStartsThreeResidents)
+TEST(EngineHostStartup, EmptyBusinessStartsFourResidents)
 {
     EngineHost host;
     HostOperationReport report;
-    ASSERT_TRUE(host.Start({}, report));
+    HostStartupConfig config;
+    config.Logging = pg::engine::test::DisabledLogging();
+    ASSERT_TRUE(host.Start(config, report));
     EXPECT_EQ(host.GetState(), HostState::kReady);
     EXPECT_EQ(report.State, HostState::kReady);
     EXPECT_FALSE(report.PrimaryError);
     EXPECT_TRUE(host.HostScope().IsValid());
-    EXPECT_EQ(module::BuiltinResidentQueries().size(), 2U);
+    EXPECT_EQ(module::BuiltinResidentQueries().size(), 3U);
     const auto modules = host.InspectModules();
     ASSERT_TRUE(modules);
-    ASSERT_EQ(modules->size(), 3U);
+    ASSERT_EQ(modules->size(), 4U);
     EXPECT_EQ(modules->at(0).Descriptor.Id, module::kFoundationModuleId);
-    EXPECT_EQ(modules->at(1).Descriptor.Id, module::kModuleRuntimeModuleId);
-    EXPECT_EQ(modules->at(2).Descriptor.Id, kEngineHostModuleId);
+    EXPECT_EQ(modules->at(1).Descriptor.Id, log::kLogModuleId);
+    EXPECT_EQ(modules->at(2).Descriptor.Id, module::kModuleRuntimeModuleId);
+    EXPECT_EQ(modules->at(3).Descriptor.Id, kEngineHostModuleId);
     for (const auto& snapshot : *modules)
     {
         EXPECT_TRUE(snapshot.Resident);
@@ -105,12 +113,13 @@ TEST(EngineHostStartup, ServiceLessBusinessParticipatesNormally)
     EngineHost host;
     HostOperationReport report;
     HostStartupConfig config;
+    config.Logging = pg::engine::test::DisabledLogging();
     config.Modules = candidates;
     ASSERT_TRUE(host.Start(config, report));
     EXPECT_EQ(host.GetState(), HostState::kReady);
     const auto modules = host.InspectModules();
     ASSERT_TRUE(modules);
-    ASSERT_EQ(modules->size(), 4U);
+    ASSERT_EQ(modules->size(), 5U);
     EXPECT_EQ(modules->back().Descriptor.Id, id);
     EXPECT_FALSE(modules->back().Resident);
     EXPECT_EQ(modules->back().State, module::ModuleState::kActive);

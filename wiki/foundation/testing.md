@@ -14,6 +14,22 @@ Android/iOS 交叉编译只保留 Toolchain 编译探针，不发现或执行目
 
 结果须区分首次与重跑、跳过及未验证范围。新测试替代旧场景时核对触发条件、关键断言和失败路径，不以测试数量替代等效性证明。正式测试和可变产物的维护规则见 [Tests README](../../Tests/README.md)。
 
+## 基础诊断与 Log 验收
+
+正式入口位于 Tests/Foundation、Tests/Log、Tests/Module 与 Tests/EngineHost，后端、报告、Fatal、格式子集、拒收/FIFO、文件分区、Flush/Stop、Host 和真实卸载均保留在 Full。Assert 使用独立 Release/Debug × ON/OFF 子图，含第三方宏隔离与精确原生 Fatal 退出监督。移动通过显式 CrossCompileTests 验证 LogSystem/FailureReport/Check 的真实最终消费、ARM64 和动态依赖；Android caller 与实现共用类型声明。不运行交叉目标，最终矩阵、旧结果复用和未验证范围见[基础诊断验收](../../docs/superpowers/plans/2026-11-12-foundation-diagnostics-validation.md)。
+
+独立 Project 的 Base 与 EngineOptIn Full 分别登记为 SourcePluginProject 和
+SourcePluginEmbeddedEngine，各有独立冷根、原 900 秒监督和完整原断言。配置恢复与无改动构建
+是不同契约：ProjectSwitch 同时验证实际原生产物配置、运行结果与 no-op，不能只看编译数据库。
+
+macOS 的 Owner 验收分为独立 Base、Project、Engine、Provider 四项；原
+SourcePluginTestOwnership 为 Base，另外登记 SourcePluginTestOwnershipProject、
+SourcePluginTestOwnershipEngine、SourcePluginTestOwnershipProvider。每项从当前正式输入完整准备，
+单选不依赖其他场景或历史日志，Full 必选且保留全部原断言。Base/Project/Provider 为900秒，
+Engine完整准备为1500秒；Windows/Linux默认All及原块顺序不变，移动测试OFF图不进入这些注册。
+仅Darwin的MyGamePluginCollaborationTests显式发现30秒，业务仍60秒，其他目标/平台默认发现5秒。
+准备预算、发现预算和业务deadline分别记录，冷成本、原超时与OS关联的证据边界见正式验收。
+
 ## 双模式 ModuleManager 验收
 
 正式矩阵以[当前验收记录](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)为准。桌面默认 Modular；Monolithic 的旧有效 Module 覆盖保留，Modular 的 ModuleRegression 在独立子图自动执行，子标记只防递归。ModuleLinkModeMatrix/Switch 验证父模式、目标类型、非法值/中途改值和往返；真实 DLL 的 RTTI/Pin/Scope/物理卸载不能由静态归档替代。同根模式切换须等上一会话结束，最终 format/tidy/build/CTest 也串行。

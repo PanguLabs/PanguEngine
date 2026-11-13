@@ -1,12 +1,15 @@
 #include "Fixtures/ScopeLifecycleFixture.h"
 
 #include "Fixtures/ManagerFixture.h"
+#include "ModuleHandle.h"
+#include "ModuleManager.h"
+#include "ModuleOperation.h"
+#include "RegistrationContext.h"
 #include <ModuleDescriptor.h>
 #include <Result.h>
 
 #include <array>
 #include <cstdlib>
-#include <exception>
 #include <fstream>
 #include <memory>
 #include <span>
@@ -42,7 +45,6 @@ int main(int argc, char* const* argv)
     {
         return 2;
     }
-    std::set_terminate([] noexcept { std::_Exit(91); });
     RegistrationScope declarations;
     ModuleOperationReport report;
     const auto state = std::make_shared<Counters>();
