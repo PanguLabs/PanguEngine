@@ -15,6 +15,12 @@ pangu_register_test(NAME BuildEnvironment
         -P "${CMAKE_CURRENT_SOURCE_DIR}/CMake/EnvironmentTests.cmake"
     BOUNDARY system AREA toolchain TIER precommit TYPES regression REQUIRES subprocess
 )
+pangu_register_test(NAME LocalBuildScripts
+    COMMAND "${CMAKE_COMMAND}" "-DPANGU_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+        "-DPANGU_TEST_ROOT=${CMAKE_BINARY_DIR}/Tests/LocalBuildScripts"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/Scripts/BuildScriptsTests.cmake"
+    BOUNDARY system AREA toolchain TIER precommit TYPES regression REQUIRES subprocess
+)
 add_subdirectory(ThirdParty/NlohmannJson)
 add_subdirectory(Foundation)
 add_subdirectory(Log)

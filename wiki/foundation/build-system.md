@@ -2,6 +2,8 @@
 
 测试构建目标与累计运行集合的契约见[测试分类与运行契约](testing.md)；实际命令和维护要求见 [Tests](../../Tests/README.md)。普通 ALL 与测试专用准备目标是不同入口。
 
+本机终端可使用 `Scripts/build.ps1`（Windows/Android）或 `bash Scripts/build.sh`（Linux/macOS/iOS）。无参数显示中文构建清单，支持普通/纯引擎构建、三档桌面测试、样例、基准和移动最终链接验证；前置条件、参数、五平台示例和产物目录见 [本机构建脚本](../../Scripts/README.md)。两个入口只调用现有 Preset/正式验证，不改变 CMake/Ninja 的构建职责。
+
 > 状态：Partially Frozen（CMake 4.0+、Ninja 原生增量、单 Module 单库、Target 命名空间及源码 Plugin/独立 Project 构建政策已冻结；源码插件与统一 ModuleManager/Loader 已实现，实际平台验收单独记录，完整发布未实现）
 > 更新：2026-11-11
 > 决策：[ADR-0001：采用 CMake](../decisions/0001-adopt-cmake.md)、[ADR-0005：一个 Module 一个库](../decisions/0005-one-module-one-library.md)、[ADR-0012：构建树按宿主本地化](../decisions/0012-host-local-build-trees.md)、[ADR-0013：原生构建](../decisions/0013-native-build-abi-boundary.md)、[ADR-0014：源码 Plugin 与独立 Project](../decisions/0014-source-plugins-project-build.md)

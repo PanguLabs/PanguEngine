@@ -1,2 +1,3 @@
 # Submodules manage their own source attributes.
 .gitmodules text eol=lf
+Scripts/*.sh text eol=lf
