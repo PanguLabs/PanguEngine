@@ -1,5 +1,6 @@
 # PanguMetaTool 首版生成与消费闭环
 
+> 宿主 SDK 政策部分已由 [ADR-0018](../../../wiki/decisions/0018-installed-pangumeta-sdk.md) 替代（2026-11-13）：复用已安装开发包；Linux 工具允许 libstdc++，Clang 适配代码匹配 SDK RTTI；本文相关旧条款仅保留历史背景。
 > 状态：Partially Frozen（首版范围与行为已通过 grilling 确认；精确 API/ABI、文件拆分与实现接线未冻结）。
 > 日期：2026-11-09。
 > 实现状态：生产接线尚未交付；已有隔离 PoC 仅提供列明的可行性依据，不能代替本规格的正式验收。

@@ -64,7 +64,7 @@ function(ConfigureFixture name enabled expected diagnostic)
         -S "${source}" -B "${PANGU_TEST_ROOT}/${name}" -G Ninja
         "${compilerArgs}" -DCMAKE_BUILD_TYPE=Release
         "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PANGU_ENGINE_SOURCE_DIR}"
-        "-DPANGU_META_SDK_CONFIG:FILEPATH=${PANGU_META_SDK_CONFIG}"
+
         "-DPANGU_META_HOST_BUILD_ROOT:PATH=${PANGU_META_HOST_BUILD_ROOT}"
         "-DPANGU_ENGINE_BUILD_ROOT:PATH=${PANGU_TEST_ROOT}/${name}/EngineBuild"
         "-DPANGU_FIXTURE_ENGINE_ROOT:PATH=${PANGU_TEST_ROOT}/FixtureEngine"

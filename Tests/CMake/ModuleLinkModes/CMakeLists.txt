@@ -6,7 +6,7 @@ foreach(scenario IN ITEMS Matrix Switch)
             "-DPANGU_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
             "-DPANGU_TEST_ROOT=${CMAKE_BINARY_DIR}/Tests/Work/ModuleLinkMode${scenario}"
             "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
-            "-DPANGU_META_SDK_CONFIG=${PANGU_META_SDK_CONFIG}"
+
             "-DPANGU_META_HOST_BUILD_ROOT=${CMAKE_BINARY_DIR}/Tests"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/Mode${scenario}Tests.cmake"
         BOUNDARY system AREA module TIER full TYPES regression
@@ -19,7 +19,7 @@ if(PANGU_LINK_MODE STREQUAL "Modular" AND NOT PANGU_TEST_MODULE_MATRIX_CHILD)
             "-DPANGU_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
             "-DPANGU_TEST_ROOT=${CMAKE_BINARY_DIR}/Tests/Work/ModuleRegression"
             "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
-            "-DPANGU_META_SDK_CONFIG=${PANGU_META_SDK_CONFIG}"
+
             "-DPANGU_META_HOST_BUILD_ROOT=${CMAKE_BINARY_DIR}/Tests"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/ModuleRegressionTests.cmake"
         BOUNDARY system AREA module TIER precommit TYPES regression

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 4.0)
 foreach(input IN ITEMS PANGU_ENGINE_SOURCE_DIR PANGU_TEST_ROOT PANGU_TARGET_PRESET PANGU_LINK_MODE
-        PANGU_META_HOST_TOOL PANGU_META_SDK_CONFIG PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE)
+        PANGU_META_HOST_TOOL PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE)
     if(NOT DEFINED ${input} OR "${${input}}" STREQUAL "")
         message(FATAL_ERROR "Mobile acceptance requires ${input}")
     endif()
@@ -24,11 +24,11 @@ function(MobileCommand)
     set(logIndex "${logIndex}" PARENT_SCOPE)
     set(commandOutput "${output}\n${error}" PARENT_SCOPE)
 endfunction()
-MobileCommand("${PANGU_META_HOST_TOOL}" --check-sdk)
+MobileCommand("${PANGU_META_HOST_TOOL}" --check-clang)
 # 根 preset 是目标工具链的权威来源；夹具转发其实际 cache，避免第二套 SDK 配置。
 MobileCommand("${CMAKE_COMMAND}" --preset "${PANGU_TARGET_PRESET}"
     "-DPANGU_LINK_MODE=${PANGU_LINK_MODE}" -DBUILD_TESTING=OFF
-    "-DPANGU_META_SDK_CONFIG=${PANGU_META_SDK_CONFIG}"
+
     "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}")
 MobileCommand("${CMAKE_COMMAND}" --build --preset "${PANGU_TARGET_PRESET}" --parallel 4)
 if(PANGU_TARGET_PRESET STREQUAL "android-arm64")
@@ -48,7 +48,7 @@ foreach(key IN ITEMS CMAKE_TOOLCHAIN_FILE CMAKE_BUILD_TYPE CMAKE_ANDROID_NDK AND
 endforeach()
 MobileCommand("${CMAKE_COMMAND}" -S "${CMAKE_CURRENT_LIST_DIR}/Fixtures/Mobile" -B "${binary}" -G Ninja
     ${arguments} "-DPANGU_ENGINE_SOURCE_DIR=${PANGU_ENGINE_SOURCE_DIR}"
-    "-DPANGU_META_SDK_CONFIG=${PANGU_META_SDK_CONFIG}" "-DPANGU_META_HOST_TOOL=${PANGU_META_HOST_TOOL}"
+     "-DPANGU_META_HOST_TOOL=${PANGU_META_HOST_TOOL}"
     "-DPANGU_LINK_MODE=${PANGU_LINK_MODE}")
 MobileCommand("${CMAKE_COMMAND}" --build "${binary}" --parallel 4)
 file(STRINGS "${binary}/Artifacts.txt" artifacts)

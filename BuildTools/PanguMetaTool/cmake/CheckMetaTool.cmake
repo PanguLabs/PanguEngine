@@ -1,0 +1,17 @@
+cmake_minimum_required(VERSION 4.0)
+if(NOT IS_ABSOLUTE "${PG_TOOL}" OR NOT EXISTS "${PG_TOOL}" OR NOT EXISTS "${PG_BUILD_ROOT}/CMakeCache.txt")
+    message(FATAL_ERROR "toolchain_error: missing built PanguMetaTool")
+endif()
+file(REAL_PATH "${PG_TOOL}" checkedTool)
+file(REAL_PATH "${PG_BUILD_ROOT}" checkedRoot)
+cmake_path(IS_PREFIX checkedRoot "${checkedTool}" NORMALIZE ownedTool)
+if(NOT ownedTool)
+    message(FATAL_ERROR "toolchain_error: validation output is outside its tool build directory")
+endif()
+execute_process(COMMAND "${PG_TOOL}" --check-clang
+    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+if(NOT result EQUAL 0)
+    # 链接后检查失败不能留下可被下一次 Ninja 构建误判为有效的产物。
+    file(REMOVE "${PG_TOOL}")
+    message(FATAL_ERROR "toolchain_error: built tool validation failed:\n${output}\n${error}")
+endif()

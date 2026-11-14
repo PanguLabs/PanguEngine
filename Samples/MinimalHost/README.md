@@ -4,7 +4,7 @@ Application 拥有 `EngineHost`，显式 Start、创建两个 Context 及各自 
 
 `pangu_meta_headers` 登记带 `pga::Type/Field` 的原始公共头，`pangu_meta_consume` 给宿主接入真实生成的 `MinimalService.gen.h`。具名 `ScopeAccess` 的 `TryBorrow` 保护服务实例，生成的 `FieldAccess` 在该借用内读写 `Value`；`BorrowTypeInfo` 独立持有 Module Pin，输出类型与字段描述，并在关闭前释放。业务 `ModuleDefinition` 引用生成 Provider；Modular 宿主不直接引用业务描述表或导入业务 DLL 方法。
 
-配置需要已显式准备的 `PANGU_META_SDK_CONFIG`；生成工具与 SDK 的准备方式见 [Meta 构建规范](../../wiki/foundation/build-system.md)。纯访问头不依赖 `EngineHost`，宿主按需包含 `HostMetaAccess.h`。
+设置 LLVM_ROOT 指向完整 Clang 23 开发包并初始化 submodule 后走正常构建，无需独立 SDK 准备；见 [Meta 构建规范](../../wiki/foundation/build-system.md)。纯访问头不依赖 `EngineHost`，宿主按需包含 `HostMetaAccess.h`。
 
 ```powershell
 cmake --preset windows -DPANGU_BUILD_SAMPLES=ON

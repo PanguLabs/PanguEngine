@@ -1,0 +1,10 @@
+# LLVM 的包导出使用 ZLIB::ZLIB；这里由同图普通源码目标提供。
+if(NOT TARGET ZLIB::ZLIB)
+    add_library(ZLIB::ZLIB ALIAS zlibstatic)
+endif()
+set(ZLIB_LIBRARIES ZLIB::ZLIB)
+set(ZLIB_INCLUDE_DIRS "${PANGU_ENGINE_SOURCE_DIR}/Source/ThirdParty/Zlib/Repo")
+set(ZLIB_VERSION 1.3.2)
+set(ZLIB_VERSION_STRING "${ZLIB_VERSION}")
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(ZLIB REQUIRED_VARS ZLIB_LIBRARIES VERSION_VAR ZLIB_VERSION)

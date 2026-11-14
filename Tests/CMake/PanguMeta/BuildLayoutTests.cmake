@@ -24,7 +24,6 @@ function(ConfigureLayout name value config)
         -B "${PANGU_TEST_ROOT}/${name}Build" -G Ninja "${compilerArgs}"
         "-DCMAKE_BUILD_TYPE=${config}" "-DPANGU_LINK_MODE=${mode}"
         "-DPANGU_ENGINE_SOURCE_DIR=${PANGU_ENGINE_SOURCE_DIR}"
-        "-DPANGU_META_SDK_CONFIG=${PANGU_META_SDK_CONFIG}"
         "-DPANGU_META_HOST_BUILD_ROOT=${PANGU_META_HOST_BUILD_ROOT}"
         "-DPANGU_ENGINE_BUILD_ROOT=${engineBuild}"
         "-DPANGU_FIXTURE_ENGINE_ROOT=${enginePlugins}"

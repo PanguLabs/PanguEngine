@@ -16,7 +16,7 @@ foreach(name IN ITEMS Registration DependencyIsolation BenchmarkIsolation BuildT
             "-DPANGU_TEST_ENGINE_BINARY_DIR=${PROJECT_BINARY_DIR}"
             "-DPANGU_TEST_LINK_MODE=${PANGU_LINK_MODE}"
             "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
-            "-DPANGU_META_SDK_CONFIG=${PANGU_META_SDK_CONFIG}"
+
             "-DPANGU_META_HOST_BUILD_ROOT=${CMAKE_BINARY_DIR}/Tests"
             -P "${CMAKE_CURRENT_SOURCE_DIR}/${name}Tests.cmake"
         BOUNDARY system AREA testing TIER full TYPES regression

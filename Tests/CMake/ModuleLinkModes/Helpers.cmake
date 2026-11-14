@@ -29,7 +29,6 @@ function(Configure name expected diagnostic)
     Run("${expected}" "${diagnostic}" "${CMAKE_COMMAND}"
         -S "${CMAKE_CURRENT_LIST_DIR}/Fixtures" -B "${PANGU_TEST_ROOT}/${name}" -G Ninja
         "${compilerArgs}" -DCMAKE_BUILD_TYPE=Release "-DPANGU_SOURCE_ROOT=${PANGU_SOURCE_ROOT}"
-        "-DPANGU_META_SDK_CONFIG=${PANGU_META_SDK_CONFIG}"
         "-DPANGU_META_HOST_BUILD_ROOT=${PANGU_META_HOST_BUILD_ROOT}" ${ARGN})
 endfunction()
 function(BuildAndRun name)

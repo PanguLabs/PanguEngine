@@ -52,7 +52,6 @@ function(ConfigureProject name testing engineTests)
             -DCMAKE_BUILD_TYPE=Release
             "-DPANGU_ENGINE_BUILD_ROOT:PATH=${binary}/EngineBuild"
             "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PANGU_ENGINE_SOURCE_DIR}"
-            "-DPANGU_META_SDK_CONFIG=${PANGU_META_SDK_CONFIG}"
             "-DPANGU_META_HOST_BUILD_ROOT=${PANGU_META_HOST_BUILD_ROOT}"
             "-DBUILD_TESTING:BOOL=${testing}"
             "-DPANGU_BUILD_ENGINE_TESTS:BOOL=${engineTests}"

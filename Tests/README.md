@@ -6,7 +6,7 @@
 
 测试分类、标签和运行集合的权威契约见[测试分类与运行契约](../wiki/foundation/testing.md)。本文件维护实际命令与测试生命周期。
 
-Meta 首版的强类型访问、描述 Pin、真实卸载及 ARM64 移动最终链接入口见 [Meta 测试](Meta/README.md)，三桌面双模式与移动双模式证据见[Meta 正式验收](../docs/superpowers/plans/2026-11-09-pangumeta-tool-validation.md)。根 Full 包含 `BuildTools.PanguMetaTool` 的九个互斥组（Sdk/IR/Request/Context/Ownership/Attr/CodeGen/Publish/Cli），其内层用例不与根调度数量累加。移动仅编译、最终链接和宿主产物检查。
+Meta 首版的强类型访问、描述 Pin、真实卸载及 ARM64 移动最终链接入口见 [Meta 测试](Meta/README.md)，三桌面双模式与移动双模式证据见[Meta 正式验收](../docs/superpowers/plans/2026-11-09-pangumeta-tool-validation.md)。根 Full 包含 `BuildTools.PanguMetaTool` 的九个互斥组（Clang/IR/Request/Context/Ownership/Attr/CodeGen/Publish/Cli），其内层用例不与根调度数量累加。移动仅编译、最终链接和宿主产物检查。
 
 ## 保留范围与测试准入
 

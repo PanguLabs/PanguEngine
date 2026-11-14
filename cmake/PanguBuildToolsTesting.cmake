@@ -14,7 +14,10 @@ function(_pangu_finalize_build_tools_tests tool)
         message(FATAL_ERROR "BuildTools testing requires the host Clang under LLVM_ROOT: ${compiler}")
     endif()
     set(toolchainArgs)
-    if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
+    if(tool STREQUAL "PanguMetaTool")
+        # 宿主 Meta 工具自行选择标准库，不能继承 Engine 的 libc++ Toolchain。
+        list(APPEND toolchainArgs "-DCMAKE_TOOLCHAIN_FILE:FILEPATH=")
+    elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
         list(APPEND toolchainArgs
             "-DCMAKE_TOOLCHAIN_FILE:FILEPATH=${CMAKE_CURRENT_FUNCTION_LIST_DIR}/Platform/Linux/Toolchain.cmake")
         if(DEFINED PANGU_LIBCXX_ROOT)

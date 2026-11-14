@@ -1,5 +1,6 @@
 # ADR-0017：独立 PanguMetaTool 与受控属性诊断豁免
 
+> 宿主 SDK 政策部分已由 [ADR-0018](0018-installed-pangumeta-sdk.md) 替代（2026-11-13）：复用已安装开发包；Linux 工具允许 libstdc++，Clang 适配代码匹配 SDK RTTI；本文相关旧条款仅保留历史背景。
 > Status：Accepted（架构路线、MetaIR/统一语义边界、按需输出、具体属性类型、CamelCase 命名及生成代码存放/编译归属；具体模型/API、通用框架与生产接线待完成，PoC 不代表生产交付）
 > 日期：2026-11-08；依据的验证记录：2026-11-07～08。
 > 更新：2026-11-09，明确 `PanguMetaTool` 命名、单当前 Game Project、MetaIR 与统一语义/跨目标边界；生成目录与历史 PoC 命名保持不变。

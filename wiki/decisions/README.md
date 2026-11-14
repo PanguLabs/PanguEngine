@@ -25,7 +25,9 @@
 | [0014](0014-source-plugins-project-build.md) | 源码 Plugin 与独立 Project 构建边界 | Accepted（设计；实施验收进行中） | [Plugin / Module](../core/plugin-module.md)、[Build System](../foundation/build-system.md) |
 | [0015](0015-unified-link-modes-module-manager.md) | 统一链接模式与 ModuleManager | Accepted（Public API/ABI 未冻结） | [Module API](../core/module-api.md)、[Build System](../foundation/build-system.md) |
 | [0016](0016-engine-host-lifecycle.md) | 单次 EngineHost 生命周期与只读具名服务访问 | Accepted（Public API/ABI 未冻结） | [EngineHost](../core/engine-host.md)、[Service](../core/service.md) |
-| [0017](0017-standalone-pangu-meta.md) | 独立 PanguMetaTool、具体 Attribute/CamelCase、生成代码归属与受控属性诊断豁免 | Accepted（路线、命名与生成布局；通用框架及生产接线待完成） | [Reflection / Meta](../core/reflection-meta.md)、[Toolchain](../foundation/toolchain.md)、[Build System](../foundation/build-system.md) |
+| [0017](0017-standalone-pangu-meta.md) | 独立 PanguMetaTool、具体 Attribute/CamelCase、生成代码归属与受控属性诊断豁免 | Accepted（宿主 SDK 政策由 ADR-0018 替代） | [Reflection / Meta](../core/reflection-meta.md)、[Toolchain](../foundation/toolchain.md)、[Build System](../foundation/build-system.md) |
+| [0018](0018-installed-pangumeta-sdk.md) | PanguMetaTool 复用已安装 LLVM SDK，局部标准库与 RTTI 例外 | Accepted（准备流程由 ADR-0019 替代） | [Reflection / Meta](../core/reflection-meta.md)、[Toolchain](../foundation/toolchain.md) |
+| [0019](0019-meta-tool-normal-build.md) | PanguMetaTool 普通工具构建与自动 LLVM 发现 | Accepted | [Toolchain](../foundation/toolchain.md)、[Reflection / Meta](../core/reflection-meta.md) |
 
 ## 推荐格式
 

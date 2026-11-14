@@ -6,7 +6,7 @@
 
 ## 统一约束
 
-1. 所有目标平台使用 **C++23 + Clang**，禁用 C++ Exception；不得使用 `libstdc++`。
+1. 所有目标平台使用 **C++23 + Clang**，禁用 C++ Exception；Engine 目标不得使用 `libstdc++`。独立 PanguMetaTool 宿主工具的局部例外见 [ADR-0018](../decisions/0018-installed-pangumeta-sdk.md)。
 2. **Windows 使用 MSVC STL**；Linux、macOS、Android、iOS 使用与目标工具链及 SDK/NDK（适用时）配套的 **`libc++`**。
 3. 构建底座为 **CMake 4.0+**；不 Fork `llvm-project`。有关 CMake Target、Preset、Toolchain 和构建依赖的契约见 [构建系统](build-system.md)。
 4. **编译器版本按平台选择**，不是全平台统一 LLVM23；配置阶段必须验证编译器类型、版本及目标 Toolchain 来源，不得在 Android 上使用通用 LLVM23 检查。
@@ -44,11 +44,11 @@ MetaIR 与 Clang AST 生命周期解耦，BuildRoot、编译参数和 Host 装�
 
 生成产物按 **Engine 与 Game Project 源码归属分别留在各自构建根**：Engine 自有代码位于 `<EngineBuildRoot>/Generated/PanguMeta/<Config>/<CMakeTarget>/`，Project 自有代码和 Host Catalog 位于 `<ProjectBuildRoot>/Generated/PanguMeta/<Config>/<CMakeTarget>/`；Project 引用 Engine 源码不改变 Engine 产物的存放归属。`CMakeTarget` 是实际编译生成实现的库或宿主目标名，不是逻辑 Module 名或 Alias。代码目录为 Public / Private，头/实现后缀为 `.gen.h` / `.gen.cpp`；全部生成实现编译进所属 Module/Host，不新增 Source 层或独立 Meta 库。原始类型头默认不包含自己的生成头，伴随生成头只由实际需要的消费者包含。一个 Engine 工作区对应一个当前 Game Project，切换 Project 时重新 Configure 并按新配置更新 Engine 构建产物。目录、依赖与 Project 切换要求见 [Reflection / Meta 第 6 节](../core/reflection-meta.md#6-生成代码存放编译与原生构建依赖)，生产接线已实现，实际覆盖见正式验收。
 
-目标侧保留 `-Werror`，只对确实解析 `pga` 的目标及必要消费者增加 `-Wno-unknown-attributes`；这是整个诊断组的豁免，不是仅匹配 `pga`。Meta 阶段不得继承豁免，必须严格检查并传播驱动/前端错误。正式接线已按目标和必要消费者设置该选项，Meta 编译上下文归一化会移除该豁免并严格检查；三桌面和 ARM64 移动目标的实际覆盖见正式 Meta 验收。首版仅支持配套 SDK 与单配置 Ninja 上下文，不承诺任意跨 Clang 版本语义等价。
+目标侧保留 `-Werror`，只对确实解析 `pga` 的目标及必要消费者增加 `-Wno-unknown-attributes`；这是整个诊断组的豁免，不是仅匹配 `pga`。Meta 阶段不得继承豁免，必须严格检查并传播驱动/前端错误。正式接线已按目标和必要消费者设置该选项，Meta 编译上下文归一化会移除该豁免并严格检查；三桌面和 ARM64 移动目标的实际覆盖见正式 Meta 验收。首版仅支持配套开发包与单配置 Ninja 上下文，不承诺任意跨 Clang 版本语义等价。
 
-PanguMetaTool 及所链接的 LLVM/Clang C++ 库必须匹配宿主标准库和 ABI；Linux/macOS 使用 libc++，Windows 使用 MSVC STL。必要时可显式重建兼容开发库，不等于 Fork LLVM 或重建目标 clang；禁止让日常引擎构建隐式重建 LLVM。Linux 已通过全 libc++ 依赖链验证；Windows 正式兼容 SDK 已保留 RTTI 并通过真实预检，不保留 PoC 的临时禁用例外。
+PanguMetaTool 及所链接的 LLVM/Clang C++ 库必须匹配宿主标准库和 ABI。当前使用已安装 LLVM/Clang 开发包：Windows/MSVC STL、Linux/libstdc++、macOS/libc++；Clang 适配代码匹配 Clang 库的 RTTI 开关，其余工具代码和 GoogleTest 保留 RTTI。不再由项目构建 LLVM。此例外不改变 Engine 或生成代码的标准库与 RTTI，见 [ADR-0018](../decisions/0018-installed-pangumeta-sdk.md)。
 
-启用任一 PanguMetaTool 任务均要求准备完整工具及匹配 SDK，包括仅生成 Query/Catalog 的目标；没有 Type/Field 输入不代表免除该依赖。首版提供正式显式 SDK 准备流程与版本/ABI/RTTI 检查，必要时提供依赖库构建步骤，新检出不依赖探针或旧缓存；首版不交付预编译 SDK 安装包。
+启用任一 PanguMetaTool 任务均要求可用的宿主工具与匹配开发包，包括仅生成 Query/Catalog 的目标。工具从 LLVM_ROOT 自动发现安装，zlib/zstd 在同一工具工程普通构建，不需要 SDK 配置文件或准备命令。路径/版本/标准库在配置期检查，真实链接与属性解析在构建后验证，失败阻断后续生成。见 [ADR-0019](../decisions/0019-meta-tool-normal-build.md)。
 
 Android/iOS 由桌面 PanguMetaTool 按实际目标编译上下文解析，再由 NDK Clang/MacPorts Clang 编译生成结果。宿主前端的资源头与目标 SDK/NDK 的系统、标准库头分别配套；工具不进入移动应用。已有目标构建侧验证不代表所有语言/SDK 语义兼容或设备运行通过。
 
@@ -58,4 +58,4 @@ Android/iOS 由桌面 PanguMetaTool 按实际目标编译上下文解析，再�
 
 现有 CMake Preset/Toolchain 已完成最小构建接线；编译器补丁版本与 SDK 升级政策、平台 ABI/Runtime 参数、PanguMetaTool 正式 API/Taxonomy、完整通用 Driver 参数、多配置、CI 和产品发布验证仍待完善。独立工具路线不再列为未决事项；已验证能力与剩余范围见其权威专题文档。
 
-正式 SDK 准备入口为 BuildTools/PanguMetaTool/Sdk/Prepare.cmake，消费准备好的 PanguMetaSdk.cmake。实际编译器/SDK 版本、三桌面与 ARM64 移动结果见[Meta 验收](../../docs/superpowers/plans/2026-11-09-pangumeta-tool-validation.md)。编译器版本以实际 binary 为准，不以旧 CMake cache 推定。
+PanguMetaTool 直接从环境 LLVM_ROOT 使用安装版开发包并走正常构建；SDK 目录和独立 Prepare/Check/Inspect 流程已取消。源码依赖、CRT 与运行检查由普通目标接线管理，不使用 vcpkg、不构建 LLVM。命令见[工具 README](../../BuildTools/PanguMetaTool/README.md)，本轮实际范围见[验收计划](../../docs/superpowers/plans/2026-11-14-pangumeta-normal-build.md)。历史三桌面和移动矩阵仍以各自原验收记录为准。

@@ -1,17 +1,10 @@
+#include "ContextParser.h"
 #include "Driver/CompilationContext.h"
 #include "Driver/GenerationRequest.h"
 #include <algorithm>
-#include <clang/Basic/Diagnostic.h>
-#include <clang/Basic/FileManager.h>
-#include <clang/Basic/FileSystemOptions.h>
-#include <clang/Frontend/FrontendActions.h>
-#include <clang/Tooling/Tooling.h>
 #include <filesystem>
 #include <fstream>
 #include <gtest/gtest.h>
-#include <llvm/ADT/IntrusiveRefCntPtr.h>
-#include <llvm/ADT/SmallString.h>
-#include <memory>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <string_view>
@@ -23,18 +16,6 @@ namespace
 using namespace pg::meta::tool;
 using Path = std::filesystem::path;
 using Json = nlohmann::json;
-class CapturedDiagnostics final : public clang::DiagnosticConsumer
-{
-public:
-    std::vector<std::string> Messages;
-    void HandleDiagnostic(clang::DiagnosticsEngine::Level level, const clang::Diagnostic& info) override
-    {
-        clang::DiagnosticConsumer::HandleDiagnostic(level, info);
-        llvm::SmallString<256> message;
-        info.FormatDiagnostic(message);
-        Messages.emplace_back(message.c_str());
-    }
-};
 std::string Utf8(const Path& path)
 {
     const auto value = path.generic_u8string();
@@ -101,13 +82,7 @@ protected:
         std::ofstream(Header.Path) << source;
         auto args = invocation;
         args.insert(args.begin(), PG_TEST_COMPILER);
-        CapturedDiagnostics diagnostics;
-        llvm::IntrusiveRefCntPtr<clang::FileManager> const files(new clang::FileManager(clang::FileSystemOptions{}));
-        clang::tooling::ToolInvocation tool(args, std::make_unique<clang::SyntaxOnlyAction>(), files.get());
-        tool.setDiagnosticConsumer(&diagnostics);
-        const bool ok = tool.run();
-        LastMessages = diagnostics.Messages;
-        return ok && diagnostics.getNumErrors() == 0;
+        return test::ParseContext(args, LastMessages);
     }
     // GTest 派生用例验证真实 Clang 诊断内容。
     // NOLINTNEXTLINE(cppcoreguidelines-non-private-member-variables-in-classes)

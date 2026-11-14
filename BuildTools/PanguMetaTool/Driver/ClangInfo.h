@@ -6,7 +6,7 @@
 
 namespace pg::meta::tool
 {
-struct SdkInfo
+struct ClangInfo
 {
     std::string FrontendVersion;
     std::filesystem::path ResourceDir;
@@ -14,5 +14,5 @@ struct SdkInfo
     std::string HostStdlib;
 };
 
-[[nodiscard]] ToolResult<SdkInfo> CheckSdk();
+[[nodiscard]] ToolResult<ClangInfo> CheckClang();
 } // namespace pg::meta::tool

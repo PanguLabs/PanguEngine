@@ -1,8 +1,8 @@
 # BuildTools — 独立宿主构建工具
 
-`PanguMetaTool/` 是正式独立元数据工具，包含 Model、Frontend、Output、CodeGen 普通静态实现目标；不是 Runtime Module，也不提供 `Pangu::` Alias。`--check-sdk` 验证显式准备的 LLVM/Clang SDK；`generate --request <absolute-json>` 消费 v1 scan/query/catalog 派生请求。成功/处理失败/CLI 用法错误分别返回 0/1/2，诊断写 stderr，不导出磁盘 IR。
+`PanguMetaTool/` 是正式独立元数据工具，包含 Model、Frontend、Output、CodeGen 普通静态实现目标；不是 Runtime Module，也不提供 `Pangu::` Alias。`--check-clang` 验证自动发现的安装版 LLVM/Clang；`generate --request <absolute-json>` 消费 v1 scan/query/catalog 派生请求。成功/处理失败/CLI 用法错误分别返回 0/1/2，诊断写 stderr，不导出磁盘 IR。
 
-SDK 使用 `PanguMetaTool/Sdk/Prepare.cmake` 显式准备并生成 `PanguMetaSdk.cmake`；Windows 使用 MSVC STL，Linux/macOS 使用 libc++，自有工具及依赖保留 RTTI。普通引擎构建不隐式编译 LLVM。生成器按目标数据库读取真实上下文，目标编译器编译生成 C++；移动图不导入 LLVM targets。每 Target/Config 唯一发布批次，内容相同保持 mtime、stamp 最后提交，失败可重试且只清理本批次拥有产物。
+PanguMetaTool 从 LLVM_ROOT 自动发现开发包，zlib/zstd 为同图普通私有目标，不需要独立环境准备目录或命令。Windows/MSVC STL、Linux/libstdc++、macOS/libc++；Clang 适配层 RTTI 匹配对应库，其他工具代码保留 RTTI。链接后自检失败阻断构建并移除失败工具，不编译 LLVM。生成器按目标数据库读取真实上下文，目标编译器编译生成 C++；移动图不导入 LLVM targets。每 Target/Config 唯一发布批次，内容相同保持 mtime、stamp 最后提交，失败可重试且只清理本批次拥有产物。
 
 Meta 生产缓存为 `<HostBuildRoot>/BuildTools/PanguMetaTool`，测试缓存为 `<HostBuildRoot>/Tests/BuildTools/PanguMetaTool`。根 Full 构建准备全部工具测试目标，再由九个互斥 `BuildTools.PanguMetaTool.Meta*` 组运行内层测试；内外层分别保留 JUnit/日志。原生工具输入失效才重建，共享宿主缓存有短期锁，普通 no-op 不启动工具。三桌面/ARM64 移动、性能、限制及决策归档见[正式验收](../docs/superpowers/plans/2026-11-09-pangumeta-tool-validation.md)。
 
@@ -47,7 +47,7 @@ Linux/macOS 使用真实 directory symlink；先核对 canonical 外部目标，
 关键链接夹具创建失败会使测试失败。中文/Emoji/空格覆盖的是源码副本、可变文件系统与 CLI
 路径，不代表 GoogleTest 支持任意 Unicode BuildRoot。
 
-Linux 宿主工具使用现有 `cmake/Platform/Linux/Toolchain.cmake` 选择匹配 LLVM 的 libc++，不依赖系统 libstdc++。嵌套构建会迁移本工具私有缓存中旧的 C++/EXE 链接初始化值；独立手工配置若复用过旧缓存，会明确要求重置对应变量或使用新 BuildRoot。Windows 使用原生宽字符 CLI 入口，文件系统路径保留原生表示，JSON 与诊断使用 UTF-8。
+Linux 的 PanguBuildTool 使用现有 `cmake/Platform/Linux/Toolchain.cmake` 选择匹配 LLVM 的 libc++，不依赖系统 libstdc++。嵌套构建会迁移本工具私有缓存中旧的 C++/EXE 链接初始化值；独立手工配置若复用过旧缓存，会明确要求重置对应变量或使用新 BuildRoot。Windows 使用原生宽字符 CLI 入口，文件系统路径保留原生表示，JSON 与诊断使用 UTF-8。
 
 资产打包、Shader 处理、代码生成由实际消费者或显式命令触发，不提前建立通用发布缓存、隐式 `ALL`、`POST_BUILD` 流水线或独立 Pangu Plugin/SDK 二进制 ABI Preflight。
 

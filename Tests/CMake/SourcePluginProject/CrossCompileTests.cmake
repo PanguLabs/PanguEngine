@@ -33,7 +33,6 @@ set(binary "${PANGU_TEST_ROOT}/CrossBuild")
 ProjectCommand(PASS "" "${CMAKE_COMMAND}" --preset "${PANGU_TARGET_PRESET}"
     -S "${source}" -B "${binary}"
     "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PANGU_ENGINE_SOURCE_DIR}"
-    "-DPANGU_META_SDK_CONFIG=${PANGU_META_SDK_CONFIG}"
     "-DPANGU_META_HOST_BUILD_ROOT=${PANGU_META_HOST_BUILD_ROOT}"
     "-DPANGU_FIXTURE_ENGINE_ROOT:PATH=${PANGU_TEST_ROOT}/FixtureEngine"
     "-DPANGU_ENABLED_PLUGINS:STRING=pangu.physics;mygame.gameplay;mygame.editor-extras;mygame.assets-only;mygame.shared-probe"

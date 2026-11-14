@@ -21,7 +21,7 @@ PanguEngine 的工程取向：
 
 1. **C++23 + Clang**；五平台具体编译器和 C++ 标准库见 [Toolchain](toolchain.md)。不得把各平台理解为同一 C++ 二进制 ABI。
 2. 引擎 C++ 命名空间以 `pg` 开头；自定义 Clang 属性使用 `pga` 属性命名空间。
-3. Pangu 自有 Runtime、BuildTools、测试和基准保留 RTTI，不主动禁用；引擎不使用 C++ Exception 进行错误传播；对外失败行为见 [错误与诊断](error-diagnostics.md)。
+3. Pangu 自有 Runtime、BuildTools、测试和基准保留 RTTI；独立 PanguMetaTool 中直接接触 Clang 类层次的代码按已安装 LLVM/Clang 库配置 RTTI，允许局部禁用，见 [ADR-0018](../decisions/0018-installed-pangumeta-sdk.md)；引擎不使用 C++ Exception 进行错误传播；对外失败行为见 [错误与诊断](error-diagnostics.md)。
 4. **Compile-Time First**：能在类型系统、Concept、`constexpr` 或静态分发中安全合理确定的，不无故留给运行时查找。
 5. **Zero-Overhead Abstraction**：抽象的额外成本必须可解释；声称消除成本需通过生成代码、Profile 或 Benchmark 验证。
 6. **受控 C++ Module ABI 可传递 STL 类型**，不一刀切禁止；同时必须满足 ABI、Allocator、销毁代码驻留及借用生命周期契约。

@@ -16,3 +16,9 @@
 [submodule "Source/ThirdParty/Spdlog/Repo"]
 	path = Source/ThirdParty/Spdlog/Repo
 	url = https://github.com/gabime/spdlog.git
+[submodule "Source/ThirdParty/Zlib/Repo"]
+	path = Source/ThirdParty/Zlib/Repo
+	url = https://github.com/madler/zlib.git
+[submodule "Source/ThirdParty/Zstd/Repo"]
+	path = Source/ThirdParty/Zstd/Repo
+	url = https://github.com/facebook/zstd.git

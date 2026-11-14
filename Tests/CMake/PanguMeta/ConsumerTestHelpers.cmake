@@ -8,7 +8,7 @@ function(ConfigureConsumer expected diagnostic)
     ProjectCommand("${expected}" "${diagnostic}" "${CMAKE_COMMAND}" -S "${source}" -B "${binary}"
         -G Ninja "${compilerArgs}" -DCMAKE_BUILD_TYPE=Release
         "-DPANGU_ENGINE_SOURCE_DIR=${PANGU_ENGINE_SOURCE_DIR}"
-        "-DPANGU_META_SDK_CONFIG=${PANGU_META_SDK_CONFIG}"
+        "-DPANGU_META_TOOL_SOURCE_DIR=${PANGU_ENGINE_SOURCE_DIR}/BuildTools/PanguMetaTool"
         "-DPANGU_META_HOST_BUILD_ROOT=${PANGU_META_HOST_BUILD_ROOT}"
         -DFIXTURE_VALUE=1 ${metaArguments} ${ARGN})
 endfunction()

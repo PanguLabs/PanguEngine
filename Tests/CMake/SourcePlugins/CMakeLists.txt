@@ -9,7 +9,7 @@ function(pangu_source_plugin_test name script)
             "-DPANGU_TEST_ROOT=${CMAKE_BINARY_DIR}/Tests/Work/${name}"
             "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
             "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
-            "-DPANGU_META_SDK_CONFIG=${PANGU_META_SDK_CONFIG}"
+
             "-DPANGU_META_HOST_BUILD_ROOT=${CMAKE_BINARY_DIR}/Tests"
             ${ARGN} -P "${script}"
         BOUNDARY system AREA plugins TIER full TYPES regression

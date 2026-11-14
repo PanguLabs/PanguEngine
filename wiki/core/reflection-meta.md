@@ -13,8 +13,8 @@
 2. PanguMetaTool 在构建宿主运行，借助 LLVM/Clang LibTooling 与 AST 分析原始源码，不用正则表达式解析 C++。
 3. 前端组件名称为 **Attr**，不再使用 ClangFrontend；不单独交付 PanguClang EXE 或需要目标编译器加载的 PanguClang Plugin。
 4. 不 Fork 或修改目标 Clang，不要求其原生认识 `pga`；不生成替换原始源码的编译视图、影子头文件或 VFS Overlay。
-5. 允许为宿主工具准备或重建兼容的 LLVM/Clang **开发库**。重建依赖 SDK 不等于重建目标编译器，也不允许隐式放宽标准库政策。
-6. Windows 宿主使用 MSVC STL；Linux/macOS 宿主工具与所链接的 C++ SDK 使用 libc++。Android/iOS 目标使用配套 NDK/SDK libc++；不保留 Linux libstdc++ 例外。
+5. 复用已安装的 LLVM/Clang **开发库**，不由项目构建 LLVM；开发包缺失或不兼容时明确失败。局部政策调整见 [ADR-0018](../decisions/0018-installed-pangumeta-sdk.md)。
+6. Windows 宿主使用 MSVC STL；Linux 的独立 PanguMetaTool 及测试使用所选 Clang 库配套的 libstdc++，macOS 使用 libc++。Clang 适配编译单元匹配 Clang 库 RTTI；Engine 和生成代码仍使用既定标准库并保留 RTTI，Android/iOS 目标继续使用配套 NDK/SDK libc++。
 7. CMake/Ninja 负责原生构建依赖与按需调用，PanguMetaTool 不成为第二套构建系统，不承担 Plugin 发现或运行时加载。
 
 **首版已实现 Module Query/Host Catalog 自动生成与 Type/Field 核心元数据。** 首版不承诺完整 Serialization、ECS、Event/Message/Command、Asset/Resource 或 Inspector。
@@ -225,37 +225,37 @@ struct Actor
 
 **属性声明不等于能力自动生效。** 每种属性应规定消费者、生成/保留阶段、适用声明、参数与组合规则，以及缺少必要实现时的诊断方式。例如何时使用已有 Getter/Setter、何时生成验证入口，须由对应协议明确；仅标注属性不能保证自动拦截赋值、通知变更或执行验证。无消费者或无合法实现路径的属性不能默认为有效。本节不新增 `pga` 属性名称，也不冻结 Getter/Validator 接口。
 
-## 5. 宿主 SDK 与目标工具链分离
+## 5. 宿主 Clang 开发包与目标工具链分离
+
+当前政策见 [ADR-0018](../decisions/0018-installed-pangumeta-sdk.md)：复用已安装开发包，不编译 LLVM；历史自建 SDK 的验收结果只代表当时版本。
 
 | 层次 | Windows | Linux | macOS |
 | --- | --- | --- | --- |
 | PanguMetaTool 运行宿主 | Windows 原生 EXE | WSL Ubuntu 原生 ELF | macOS 原生 Mach-O |
-| 宿主 C++ 标准库 | MSVC STL | libc++ | libc++ |
-| 当前 Clang 依赖接入 | 固定上游源码重建的 MSVC STL 静态依赖闭包 | 同版本上游源码重建的 libc++ 静态依赖闭包 | MacPorts Clang/LLVM 动态库 |
-| 当前 Attr RTTI 状态 | 已开启，SDK 以 LLVM_ENABLE_RTTI=ON 构建 | 已开启，依赖库以 `LLVM_ENABLE_RTTI=ON` 构建 | 已开启，无需关闭 Attr RTTI |
+| 宿主 C++ 标准库 | MSVC STL | libstdc++（独立工具例外） | libc++ |
+| Clang 依赖来源 | 已安装 LLVM 23 开发包 | 已安装 LLVM 23 开发包，优先 clang-cpp 共享库 | 已安装 MacPorts LLVM 23 开发包 |
+| Clang 适配代码 RTTI | 匹配对应 Clang 库 | 匹配对应 Clang 库 | 匹配对应 Clang 库 |
 
-### Linux：宿主工具和依赖库均使用 libc++
+宿主使用的标准库与待解析目标的标准库相互独立。Linux 工具链接 libstdc++ 不改变 Engine、生成消费代码或其他 BuildTools 的 libc++ 配置；编译目标仍保留 RTTI。
 
-现成 `/opt/llvm-23.1.0/lib/libclang-cpp.so.23.1` 依赖 libstdc++，已不用于当前有效验证。仅给调用方添加 libc++ 选项不能解决其 C++ 接口不匹配。
+### 普通宿主工具构建与能力检查
 
-有效版本从固定上游提交 `ea7d852a70e8bdfaf601d6626a760f9771b2c4b4`（23.1.0）构建所需 LLVM/Clang 静态库，设置 `LLVM_ENABLE_LIBCXX=ON`、`LLVM_ENABLE_RTTI=ON`、`LLVM_ENABLE_EH=OFF`。PanguMetaTool、Attr、CodeGen 与消费程序均保留 RTTI；动态依赖与符号审计未发现 libstdc++。未重建目标 clang 可执行程序，未覆盖既有安装。
+现行流程见 [ADR-0019](../decisions/0019-meta-tool-normal-build.md)：PanguMetaTool 从 LLVM_ROOT 定位已安装的 LLVM/Clang 包及资源头，zlib/zstd 使用同图私有静态目标，不单独安装成 SDK，不生成本机 SDK 配置文件。源码通过显式 submodule 初始化获取，配置不联网、不更新依赖，不使用 vcpkg 或构建 LLVM；Windows DIA SDK 仍由已安装 Visual Studio 提供。
 
-这是显式的依赖准备步骤，不能让普通引擎配置或无变化构建隐式重建 LLVM。正式 Windows/Linux SDK 的现场缓存为 Release/-O3 -DNDEBUG；历史 PoC 曾使用 O1，不据此声明 SDK 分发方案。
+路径/版本/标准库检查在工具配置阶段完成；真实 Clang C++ 接口链接由普通构建验证。链接后调用 --check-clang，验证原始 Type/Field 注册、AST 注解、constexpr Options 求值和资源头。失败移除该次工具 exe 并让构建失败，后续重新构建必须重试。Clang 适配目标匹配 LLVM_ENABLE_RTTI，ClangInfo.HasRtti 如实报告；其他工具代码和 GoogleTest 保留 RTTI。
 
-### RTTI：正式自有工具全链保留
-
-Windows/Linux 的兼容 SDK 由固定上游提交显式准备，macOS 复用通过预检的 MacPorts SDK。自有工具已移除 Windows PoC 的 -fno-rtti 例外；Sdk/Prepare.cmake 与真实链接/原始 TU 检查验证 RTTI、标准库及版本。普通构建只消费准备好的 PanguMetaSdk.cmake，不隐式构建 LLVM，也不替换目标编译器。
+父 Engine 仍通过独立宿主子进程配置和构建工具，只消费原生输入清单及资源路径，不导入 LLVM targets。输入清单覆盖所选开发包、资源、私有压缩库源码和验证脚本；正常无变化构建不增加目录扫描或独立准备阶段。生产/测试工具各自使用既有宿主缓存，具体命令与实际覆盖见[本轮计划](../../docs/superpowers/plans/2026-11-14-pangumeta-normal-build.md)。
 
 ### 移动端：宿主执行、目标解析
 
 | 目标 | 本次运行的 PanguMetaTool | 解析与最终编译上下文 |
 | --- | --- | --- |
-| Android | Windows EXE，内含固定上游 23.1.0 SDK 前端 | 实际 NDK ABI、API Level、Sysroot、宏与 libc++；最终由 NDK Clang 21.0.0 编译 |
+| Android | Windows EXE，使用安装版 Clang 23.1.5 前端（本轮） | 实际 NDK ABI、API Level、Sysroot、宏与 libc++；最终由 NDK Clang 21.0.0 编译 |
 | iOS | macOS 程序，内含 Clang 23.1.2 前端 | iOS ARM64、iPhoneOS SDK、部署版本与 SDK libc++；最终由 MacPorts Clang 编译 |
 
 PanguMetaTool 及其 Clang/LLVM 库不进入 APK/IPA；目标产物只依赖自身 Runtime 和目标标准库。无需在移动设备运行生成器。
 
-正式 Android 复用保留 RTTI 的 Windows 宿主工具；iOS 复用保留 RTTI 的 macOS 宿主工具。宿主 Attr 的 RTTI 设置与移动目标编译配置分开，移动端引擎仍遵守保留 RTTI 的要求。
+Android 复用 Windows 宿主工具；iOS 复用 macOS 宿主工具。宿主 Attr 的 RTTI 匹配所选 Clang 库，与移动目标编译配置分开，移动端引擎仍保留 RTTI。
 
 移动探针从真实 `compile_commands.json` 中取得输入 TU 的命令，去除对象/依赖输出参数，保留目标语义。Meta 的内建资源头匹配工具内部前端；Android 系统与 libc++ 头显式来自目标 NDK，iOS 两阶段使用同一目标 SDK。不能混入宿主 MSVC STL 或宿主默认目标。
 
@@ -368,7 +368,7 @@ D:/Git/MyGame/Build/Windows/Generated/PanguMeta/Debug/
 
 ### 6.5 原生依赖接线与增量验收（首版已实现，长期 API 未冻结）
 
-沿用 CMake 4.0+ / Ninja 原生图，按真实消费者显式调用 PanguMetaTool。工具独立按宿主构建，SDK 准备与日常引擎构建分开；不扫描全部仓库、不引入逐 TU 收据、自制增量调度器或第二份手工源码 Manifest。
+沿用 CMake 4.0+ / Ninja 原生图，按真实消费者显式调用 PanguMetaTool。工具独立按宿主构建，LLVM 开发包自动发现与私有依赖纳入普通工具构建；不扫描全部仓库、不引入逐 TU 收据、自制增量调度器或第二份手工源码 Manifest。
 
 生成输入与输出应由已有目标登记和明确的 Meta 输入归属推导；新增/删除输入需要正确更新原生图，不能依赖生成完成后对输出目录 GLOB 来发现未知 `.cpp`。传给工具的参数文件是构建图派生输入，不是另一份人工维护的权威清单。**在 Project 顶层构建图中，也应按源码所有者明确选择 Engine / Project 两种生成根；不能直接对所有输出使用顶层 `CMAKE_BINARY_DIR`。** 每个输出只有一个生产者，多个消费者依赖同一生成任务，不并行写同一文件；Engine 侧由当前 Project 的构建图消费，同一 EngineBuildRoot 遵守串行会话与 Project 切换规则。外部输出路径、依赖传播、增量恢复及 A→B→A 切换必须通过 CMake/Ninja 实际验收。
 

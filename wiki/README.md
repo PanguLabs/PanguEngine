@@ -75,6 +75,10 @@
 - [ADR-0013：原生增量构建与 ABI 交付边界](decisions/0013-native-build-abi-boundary.md)
 - [ADR-0017：独立 PanguMetaTool 与受控属性诊断豁免](decisions/0017-standalone-pangu-meta.md)
 
+- [ADR-0018：PanguMetaTool 复用已安装 LLVM SDK](decisions/0018-installed-pangumeta-sdk.md)
+
+- [ADR-0019：PanguMetaTool 普通工具构建](decisions/0019-meta-tool-normal-build.md)
+
 ## 文档维护规则
 
 1. 一个问题以一个**权威设计文档**为主；其他文档只总结并链接，避免重复维护规范条款。

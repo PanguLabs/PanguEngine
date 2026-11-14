@@ -44,18 +44,18 @@ endforeach()
 file(READ "${generated}/Public/目录/描述.gen.h" description)
 RequireText("${description}" "HasTypedAccess = false")
 RequireText("${description}" "HasDescription = true")
-# Query-only 也是实际任务，必须显式配置完整 SDK。
+# Query-only 也是实际任务，必须有可用的宿主工具。
 set(binary "${PANGU_TEST_ROOT}/QueryOnlyBuild")
-ConfigureConsumer(FAIL "incompatible_sdk" -DNO_INPUT=ON -DPANGU_META_SDK_CONFIG=unprepared)
+ConfigureConsumer(FAIL "toolchain_error" -DNO_INPUT=ON "-DPANGU_META_TOOL_SOURCE_DIR=${PANGU_TEST_ROOT}/MissingTool")
 ConfigureConsumer(PASS "" -DNO_INPUT=ON)
 BuildConsumer(PASS "PanguMetaTool generate")
 # 无 scan、静态 Module 登记、未启用 Catalog 时不启动工具。
 set(binary "${PANGU_TEST_ROOT}/CatalogOnlyBuild")
-ConfigureConsumer(FAIL "incompatible_sdk" -DNO_INPUT=ON -DCATALOG_ONLY=ON -DPANGU_META_SDK_CONFIG=unprepared)
+ConfigureConsumer(FAIL "toolchain_error" -DNO_INPUT=ON -DCATALOG_ONLY=ON "-DPANGU_META_TOOL_SOURCE_DIR=${PANGU_TEST_ROOT}/MissingTool")
 ConfigureConsumer(PASS "" -DNO_INPUT=ON -DCATALOG_ONLY=ON)
 BuildConsumer(PASS "PanguMetaTool generate Consumer")
 set(binary "${PANGU_TEST_ROOT}/NoTaskBuild")
-ConfigureConsumer(PASS "" -DNO_INPUT=ON -DNO_TASK=ON -DPANGU_META_SDK_CONFIG=unprepared
+ConfigureConsumer(PASS "" -DNO_INPUT=ON -DNO_TASK=ON "-DPANGU_META_TOOL_SOURCE_DIR=${PANGU_TEST_ROOT}/MissingTool"
     "-DPANGU_META_HOST_BUILD_ROOT=${PANGU_TEST_ROOT}/Unprepared")
 BuildConsumer(PASS "")
 RejectText("${commandOutput}" "PanguMetaTool")

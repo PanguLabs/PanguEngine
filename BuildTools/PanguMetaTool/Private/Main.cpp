@@ -1,6 +1,6 @@
+#include "Driver/ClangInfo.h"
 #include "Driver/GenerationRequest.h"
 #include "Driver/RunGeneration.h"
-#include "Driver/SdkInfo.h"
 #include <cstddef>
 #include <filesystem>
 #include <iostream>
@@ -12,7 +12,7 @@ namespace
 {
 int Check()
 {
-    const auto result = pg::meta::tool::CheckSdk();
+    const auto result = pg::meta::tool::CheckClang();
     if (!result)
     {
         for (const auto& diagnostic : result.error())
@@ -65,7 +65,7 @@ int wmain(int argc, wchar_t** argv)
     {
         return Generate(std::filesystem::path(args.back()));
     }
-    if (args.size() == 2 && std::wstring_view(args.back()) == L"--check-sdk")
+    if (args.size() == 2 && std::wstring_view(args.back()) == L"--check-clang")
 #else
 int main(int argc, char* argv[])
 {
@@ -75,11 +75,11 @@ int main(int argc, char* argv[])
     {
         return Generate(std::filesystem::path(args.back()));
     }
-    if (args.size() == 2 && std::string_view(args.back()) == "--check-sdk")
+    if (args.size() == 2 && std::string_view(args.back()) == "--check-clang")
 #endif
     {
         return Check();
     }
-    std::cerr << "Usage: PanguMetaTool --check-sdk | generate --request <absolute-json>\n";
+    std::cerr << "Usage: PanguMetaTool --check-clang | generate --request <absolute-json>\n";
     return 2;
 }

@@ -1,35 +1,49 @@
 cmake_minimum_required(VERSION 4.0)
-foreach(required IN ITEMS PANGU_META_TOOL_SOURCE_DIR PANGU_META_TOOL_BINARY_DIR PANGU_META_SDK_CONFIG PANGU_ENGINE_SOURCE_DIR)
+foreach(required IN ITEMS PANGU_META_TOOL_SOURCE_DIR PANGU_META_TOOL_BINARY_DIR PANGU_ENGINE_SOURCE_DIR)
     if(NOT IS_ABSOLUTE "${${required}}")
         message(FATAL_ERROR "Meta host build requires absolute ${required}")
     endif()
 endforeach()
+if(NOT EXISTS "${PANGU_META_TOOL_SOURCE_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR "toolchain_error: Meta tool source is missing")
+endif()
+if("$ENV{LLVM_ROOT}" STREQUAL "" OR NOT IS_DIRECTORY "$ENV{LLVM_ROOT}")
+    message(FATAL_ERROR "toolchain_error: set LLVM_ROOT to the installed host development package")
+endif()
+file(REAL_PATH "$ENV{LLVM_ROOT}" llvmRoot)
+set(suffix "")
+if(CMAKE_HOST_WIN32)
+    set(suffix .exe)
+endif()
+set(compiler "${llvmRoot}/bin/clang++${suffix}")
 file(MAKE_DIRECTORY "${PANGU_META_TOOL_BINARY_DIR}")
-# 不持锁等待目标图；只保护此独立宿主缓存的配置和原生构建。
+# 不持锁等待父图；只串行保护当前独立工具缓存。
 file(LOCK "${PANGU_META_TOOL_BINARY_DIR}/PanguMetaTool.lock" GUARD PROCESS TIMEOUT 300)
-include("${PANGU_META_SDK_CONFIG}")
-set(identity "${PANGU_META_TOOL_SOURCE_DIR}\n${PANGU_META_HOST_COMPILER}\n${PANGU_META_SDK_CONFIG}\n")
+set(identity "${PANGU_META_TOOL_SOURCE_DIR}\n${compiler}\n${llvmRoot}\n")
 set(identityFile "${PANGU_META_TOOL_BINARY_DIR}/PanguMetaTool.identity")
 if(EXISTS "${identityFile}")
     file(READ "${identityFile}" previous)
     if(NOT previous STREQUAL identity)
-        message(FATAL_ERROR "incompatible_sdk: shared host cache source/compiler/SDK identity changed; use a separate cache")
+        message(FATAL_ERROR "toolchain_error: shared host cache source/compiler/LLVM_ROOT changed; use a separate cache")
     endif()
 endif()
-set(testingArgument)
-if(NOT EXISTS "${PANGU_META_TOOL_BINARY_DIR}/CMakeCache.txt")
-    set(testingArgument -DBUILD_TESTING=OFF)
+
+set(testing OFF)
+if(EXISTS "${PANGU_META_TOOL_BINARY_DIR}/CMakeCache.txt")
+    file(STRINGS "${PANGU_META_TOOL_BINARY_DIR}/CMakeCache.txt" testingCache REGEX "^BUILD_TESTING:BOOL=")
+    if(testingCache)
+        string(REPLACE "BUILD_TESTING:BOOL=" "" testing "${testingCache}")
+    endif()
 endif()
-execute_process(COMMAND "${CMAKE_COMMAND}" -S "${PANGU_META_TOOL_SOURCE_DIR}" -B "${PANGU_META_TOOL_BINARY_DIR}"
-    -G Ninja -DCMAKE_BUILD_TYPE=Release ${testingArgument}
+execute_process(COMMAND "${CMAKE_COMMAND}"
+    -S "${PANGU_META_TOOL_SOURCE_DIR}" -B "${PANGU_META_TOOL_BINARY_DIR}"
+    -G Ninja -DCMAKE_BUILD_TYPE=Release "-DBUILD_TESTING:BOOL=${testing}" -DCMAKE_TOOLCHAIN_FILE:FILEPATH=
     "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PANGU_ENGINE_SOURCE_DIR}"
-    "-DPANGU_META_SDK_CONFIG:FILEPATH=${PANGU_META_SDK_CONFIG}"
     RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE error)
 if(NOT status EQUAL 0)
     message(FATAL_ERROR "PanguMetaTool host configure failed:\n${output}\n${error}")
 endif()
 file(CONFIGURE OUTPUT "${identityFile}" CONTENT "${identity}" @ONLY)
-# 清单内容未变时保持其 mtime；单独记录成功配置时间，避免相同清单反复触发刷新。
 file(TOUCH "${PANGU_META_TOOL_BINARY_DIR}/PanguMetaToolConfigure.stamp")
 if(NOT PANGU_META_CONFIGURE_ONLY)
     execute_process(COMMAND "${CMAKE_COMMAND}" --build "${PANGU_META_TOOL_BINARY_DIR}" --target PanguMetaTool
@@ -38,9 +52,5 @@ if(NOT PANGU_META_CONFIGURE_ONLY)
         message(FATAL_ERROR "PanguMetaTool host build failed:\n${output}\n${error}")
     endif()
     message(STATUS "${output}")
-    if(CMAKE_HOST_WIN32)
-        set(suffix .exe)
-    endif()
-    # 仅配置/依赖输入变化但链接内容相同也完成本次原生 OUTPUT。
     file(TOUCH "${PANGU_META_TOOL_BINARY_DIR}/PanguMetaTool${suffix}")
 endif()
