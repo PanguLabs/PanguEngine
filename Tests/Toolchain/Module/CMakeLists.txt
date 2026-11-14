@@ -7,5 +7,7 @@ add_library(PanguToolchainProbe ${moduleType}
 add_library(Pangu::ToolchainProbe ALIAS PanguToolchainProbe)
 pangu_configure_module(PanguToolchainProbe EXPORT_MACRO PG_TOOLCHAIN_PROBE_API)
 set_target_properties(PanguToolchainProbe PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Probe"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Tests/Toolchain"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Tests/Toolchain"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Tests/Toolchain"
 )

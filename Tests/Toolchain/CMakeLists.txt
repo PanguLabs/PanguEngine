@@ -21,7 +21,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_compile_features(PanguToolchainLinkTests PRIVATE cxx_std_23)
     target_link_libraries(PanguToolchainLinkTests PRIVATE ThirdParty::CompiledProbe Pangu::ToolchainProbe)
     set_target_properties(PanguToolchainLinkTests PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Tests/Toolchain"
     )
     pangu_register_test(NAME ToolchainLibraryLink COMMAND PanguToolchainLinkTests
         BOUNDARY integration AREA toolchain TIER precommit

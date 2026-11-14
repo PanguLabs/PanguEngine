@@ -10,6 +10,9 @@
 - `Module/PolicyProbe.cpp`：真实 `Pangu::ToolchainProbe` Module，服从 `PANGU_LINK_MODE`，编译期检查 C++23、无异常和平台 STL。
 - `LinkProbe.cpp`：桌面构建 `PanguToolchainLinkTests`，实际链接两座库，CTest 名 `ToolchainLibraryLink`，运行时验证跨库 `std::expected<int, int>`；Modular 下显式导入 Probe 函数。
 
+上述 Toolchain 测试的静态库、导入库、动态库及链接验证程序统一输出到所属宿主
+`<BuildRoot>/Tests/Toolchain/`，不在 BuildRoot 顶层另建 `Probe` 目录。
+
 桌面正式构建：
 
 ```sh
