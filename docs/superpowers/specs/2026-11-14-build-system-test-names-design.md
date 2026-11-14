@@ -57,3 +57,18 @@
 比较迁移前后完整 CTest JSON：仅允许表中的名称、四个文件路径和名称派生工作目录变化。
 Windows 正式 preset 重新配置并运行受影响的分类、注册、工具测试接线与失败传播等既有回归。
 检查 Darwin 专属分支的登记与 1500 秒覆盖，不宣称未运行的平台已验收。
+
+## 后续补充：按实际覆盖范围澄清两处名称
+
+用户确认继续实施下表；原映射中的对应名称在本次补充后被替代（Superseded，仅此两项）。
+
+| 原文件 / CTest | 现文件 / CTest |
+| --- | --- |
+| ProjectIntegration/StaticCatalogIntegrationTests.cmake | ProjectIntegration/HostModuleConsumptionTests.cmake |
+| ProjectIntegration.StaticCatalog | ProjectIntegration.HostModuleConsumption |
+| TestInfrastructure/ScriptClassificationTests.cmake | TestInfrastructure/TestClassificationTests.cmake |
+| TestInfrastructure.ScriptClassification | TestInfrastructure.TestClassification |
+
+第一项同时验证两种链接模式下宿主的 Module 消费及真实运行；第二项检查全部 Engine CTest 的
+分类、归属和隔离。只改名称与直接引用，不修改覆盖和运行属性。原验收保留当时名称与结论。
+再次比较完整注册 JSON，并执行改名后的分类回归；Host 脚本按字节比较证明行为未变。

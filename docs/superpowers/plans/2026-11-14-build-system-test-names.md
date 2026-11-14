@@ -69,3 +69,30 @@ preset 成功；不改变源码路径或平台 BuildRoot。条件登记比较首
 
 注册清单、映射、配置/构建/测试日志及评审摘要归档到 `Build/Windows/Tests/BuildSystemTestNamesMigration/`。
 确认相关工具和评审已完成后，清理本计划 `.superpowers/sdd/2026-11-14-build-system-test-names/`。
+
+## Task 3：后续两项范围命名
+
+基于 `a9a786c`，按用户确认的名称继续整理；用户在验证后明确要求提交，不推送或合并。
+规格见原设计文档的“后续补充”，前述验收保留第一次实施时的结果。
+
+- [x] 保存当前完整注册基线，将 StaticCatalogIntegrationTests 改为 HostModuleConsumptionTests、ScriptClassificationTests 改为 TestClassificationTests。
+- [x] 更新两个注册入口、分类必选列表、Project 嵌套筛选和当前 README 的映射；历史验收不改写。
+- [x] 正式 Windows 配置/构建、完整注册映射比较和 TestInfrastructure.TestClassification 回归通过；核对 Host 脚本内容未变。
+- [x] 只读评审、记录验证边界并归档，确认无运行依赖后清理本次 followup 临时目录。
+
+### Task 3 验证结果
+
+基于 `a9a786c` 加本次未提交改动，`cmake --preset windows`、`cmake --build --preset windows-full`
+通过。完整 CTest 注册315→315，只有两个约定名称、两个脚本路径及名称派生工作根变化；全部属性保持一致。
+Host 脚本 Git blob 仍为 `5a09199bee0c931badfaa5827f05979dc98a0709`，内容未变；分类脚本仅替换两个必选 CTest 名称。
+
+```powershell
+ctest --preset windows-full -R '^TestInfrastructure[.]TestClassification$' --no-tests=error --output-on-failure
+```
+
+上述回归首轮1/1通过，用例11.72秒，CTest总计12.21秒；精确筛选只匹配预期的一项。
+没有重新运行 Host Module 两模式真实运行矩阵、完整 Project/Full 或跨平台矩阵；本轮不改变这些测试的行为。
+没有修改 C++，不重复执行 clang-format/clang-tidy。
+独立只读评审无 Critical、Important 或 Minor；差异检查通过。日志及注册对比归档到
+`Build/Windows/Tests/BuildSystemTestNamesMigration/Followup/`，本次 followup 临时目录已清理。
+用户随后要求提交，最终提交以 Git 历史为准；未推送或合并。

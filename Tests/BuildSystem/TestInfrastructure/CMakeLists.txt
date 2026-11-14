@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 4.0)
 
-foreach(name IN ITEMS Registration DependencyIsolation BenchmarkIsolation BuildToolsTestIntegration BuildToolsFailurePropagation ScriptClassification WorkflowCompleteness)
+foreach(name IN ITEMS Registration DependencyIsolation BenchmarkIsolation BuildToolsTestIntegration BuildToolsFailurePropagation TestClassification WorkflowCompleteness)
     set(testName "TestInfrastructure.${name}")
     pangu_register_test(NAME "${testName}"
         COMMAND "${CMAKE_COMMAND}" -E env "CMAKE_BUILD_PARALLEL_LEVEL=${PANGU_TEST_BUILD_JOBS}"

@@ -28,7 +28,7 @@ if(WIN32)
 endif()
 set(projectTests "${PROJECT_SOURCE_DIR}/Tests/BuildSystem/ProjectIntegration")
 foreach(pair IN ITEMS "EngineRevision|EngineRevisionTests" "Base|ProjectIntegrationTests" "PluginEnable|PluginEnableTests"
-        "StaticCatalog|StaticCatalogIntegrationTests" "SharedDeploy|SharedDeployTests" "IncrementalBuild|IncrementalBuildTests"
+        "HostModuleConsumption|HostModuleConsumptionTests" "SharedDeploy|SharedDeployTests" "IncrementalBuild|IncrementalBuildTests"
         "PluginTestOwnership|PluginTestOwnershipTests" "PluginCollaboration|PluginCollaborationTests")
     string(REPLACE "|" ";" pair "${pair}")
     list(GET pair 0 name)

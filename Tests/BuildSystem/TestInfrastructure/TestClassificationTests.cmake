@@ -88,9 +88,9 @@ endif()
 foreach(required IN ITEMS BuildEnvironment ToolchainLibraryLink NlohmannSubmoduleRequired
         PluginIntegration.BuildToolConfigure PluginIntegration.DiscoveryInvalidation PluginIntegration.DiscoveryFileLinks
         PluginIntegration.DiscoveryDirectoryLinks ProjectIntegration.EngineRevision ProjectIntegration.Base ProjectIntegration.EmbeddedEngine
-        ProjectIntegration.PluginEnable ProjectIntegration.StaticCatalog ProjectIntegration.SharedDeploy ProjectIntegration.IncrementalBuild
+        ProjectIntegration.PluginEnable ProjectIntegration.HostModuleConsumption ProjectIntegration.SharedDeploy ProjectIntegration.IncrementalBuild
         TestInfrastructure.Registration TestInfrastructure.DependencyIsolation TestInfrastructure.BuildToolsTestIntegration
-        TestInfrastructure.BuildToolsFailurePropagation TestInfrastructure.ScriptClassification ${moduleLifecycleRegression})
+        TestInfrastructure.BuildToolsFailurePropagation TestInfrastructure.TestClassification ${moduleLifecycleRegression})
     if(NOT required IN_LIST seen)
         message(FATAL_ERROR "Missing original regression or explicit capability scenario: ${required}")
     endif()

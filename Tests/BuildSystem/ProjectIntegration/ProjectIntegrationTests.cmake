@@ -99,11 +99,11 @@ endfunction()
 
 function(CheckEmbeddedClassification name expected)
     execute_process(COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${PANGU_TEST_ROOT}/EngineOptIn"
-        -R "^TestInfrastructure[.]ScriptClassification$" --no-tests=error --output-on-failure
+        -R "^TestInfrastructure[.]TestClassification$" --no-tests=error --output-on-failure
         --parallel "${PANGU_TEST_BUILD_JOBS}"
         RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE error)
     file(WRITE "${PANGU_TEST_ROOT}/EngineOptIn-classification-${name}.log"
-        "command=${CMAKE_CTEST_COMMAND} --test-dir ${PANGU_TEST_ROOT}/EngineOptIn -R ^TestInfrastructure[.]ScriptClassification$ --no-tests=error --output-on-failure --parallel ${PANGU_TEST_BUILD_JOBS}\nexit=${status}\n${output}\n${error}")
+        "command=${CMAKE_CTEST_COMMAND} --test-dir ${PANGU_TEST_ROOT}/EngineOptIn -R ^TestInfrastructure[.]TestClassification$ --no-tests=error --output-on-failure --parallel ${PANGU_TEST_BUILD_JOBS}\nexit=${status}\n${output}\n${error}")
     if(expected STREQUAL "PASS")
         if(NOT status EQUAL 0)
             message(FATAL_ERROR "Embedded Engine classification failed: ${status}\n${output}\n${error}")

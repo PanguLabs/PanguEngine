@@ -25,7 +25,7 @@
 
 历史设计与验收中的命令保留当时路径，今天执行时使用上表的新路径。当前构建入口、脚本与
 规范中的路径已同步。该提交只迁移目录，保留了当时的 CTest 名称；后续按用户要求进一步调整
-四个文件名及相关 CTest 名称，现行映射如下。历史设计和验收保留当时名称。
+文件名及相关 CTest 名称，现行映射如下。历史设计和验收保留当时名称。
 
 ## 文件与 CTest 名称迁移
 
@@ -35,6 +35,8 @@
 | ProjectIntegration | `RunIntegration.cmake` | `ProjectIntegrationTests.cmake` |
 | TestInfrastructure | `BuildToolsTests.cmake` | `BuildToolsTestIntegrationTests.cmake` |
 | TestInfrastructure | `TestingTestHelpers.cmake` | `TestInfrastructureHelpers.cmake` |
+| ProjectIntegration | `StaticCatalogIntegrationTests.cmake` | `HostModuleConsumptionTests.cmake` |
+| TestInfrastructure | `ScriptClassificationTests.cmake` | `TestClassificationTests.cmake` |
 
 | 原 CTest 名称 | 现 CTest 名称 |
 | --- | --- |
@@ -47,7 +49,7 @@
 | `SourcePluginProject` | `ProjectIntegration.Base` |
 | `SourcePluginEmbeddedEngine` | `ProjectIntegration.EmbeddedEngine` |
 | `SourcePluginEnable` | `ProjectIntegration.PluginEnable` |
-| `SourcePluginStaticCatalog` | `ProjectIntegration.StaticCatalog` |
+| `SourcePluginStaticCatalog` | `ProjectIntegration.HostModuleConsumption` |
 | `SourcePluginSharedDeploy` | `ProjectIntegration.SharedDeploy` |
 | `SourcePluginIncremental` | `ProjectIntegration.IncrementalBuild` |
 | `SourcePluginTestOwnership` | `ProjectIntegration.PluginTestOwnership` |
@@ -60,11 +62,13 @@
 | `TestingBenchmarkIsolation` | `TestInfrastructure.BenchmarkIsolation` |
 | `TestingBuildToolsTests` | `TestInfrastructure.BuildToolsTestIntegration` |
 | `TestingBuildToolsFailurePropagation` | `TestInfrastructure.BuildToolsFailurePropagation` |
-| `TestingScriptClassification` | `TestInfrastructure.ScriptClassification` |
+| `TestingScriptClassification` | `TestInfrastructure.TestClassification` |
 | `TestingWorkflowCompleteness` | `TestInfrastructure.WorkflowCompleteness` |
+| `ProjectIntegration.StaticCatalog`（第一轮命名） | `ProjectIntegration.HostModuleConsumption` |
+| `TestInfrastructure.ScriptClassification`（第一轮命名） | `TestInfrastructure.TestClassification` |
 
 按前缀筛选可使用 `ctest --preset windows-full -R '^(PluginIntegration|ProjectIntegration|TestInfrastructure)[.]'`；
-精确筛选时用 `[.]` 表达名称中的点，例如 `-R '^TestInfrastructure[.]ScriptClassification$'`。
+精确筛选时用 `[.]` 表达名称中的点，例如 `-R '^TestInfrastructure[.]TestClassification$'`。
 先按下文准备对应测试构建。名称派生的测试工作目录随新名变化，仍位于同一宿主 BuildRoot 的 Tests/Work 内。
 
 ## 执行与产物
