@@ -179,5 +179,5 @@ if [ "$action" = mobile-link ]; then
         "-DPANGU_TEST_ROOT=$build_root/Tests/ModuleLinkModes/$link_mode" "-DPANGU_TARGET_PRESET=$preset"
         "-DPANGU_LINK_MODE=$link_mode")
     [ -z "$jobs" ] || link_args+=("-DPANGU_TEST_BUILD_JOBS=$jobs")
-    run cmake "${link_args[@]}" -P Tests/CMake/SourcePluginProject/CrossCompileTests.cmake
+    run cmake "${link_args[@]}" -P Tests/BuildSystem/ProjectIntegration/CrossCompileTests.cmake
 fi

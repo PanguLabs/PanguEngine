@@ -51,7 +51,7 @@ Android 需确认 ELF/AArch64；iOS 需确认 Mach-O/ARM64 可执行文件，且
 上方 LinkSmoke 不消费 Runtime，不能代替本轮验收。正式根分别 `cmake --preset android-arm64|ios-arm64 -DPANGU_LINK_MODE=<Monolithic|Modular> -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON` 并用对应 build preset 编译，再显式执行：
 
 ```sh
-cmake -DPANGU_ENGINE_SOURCE_DIR=<共享源码根> -DPANGU_TEST_ROOT=<本平台BuildRoot>/Tests/ModuleLinkModes/<模式> -DPANGU_TARGET_PRESET=<android-arm64|ios-arm64> -DPANGU_LINK_MODE=<模式> -P Tests/CMake/SourcePluginProject/CrossCompileTests.cmake
+cmake -DPANGU_ENGINE_SOURCE_DIR=<共享源码根> -DPANGU_TEST_ROOT=<本平台BuildRoot>/Tests/ModuleLinkModes/<模式> -DPANGU_TARGET_PRESET=<android-arm64|ios-arm64> -DPANGU_LINK_MODE=<模式> -P Tests/BuildSystem/ProjectIntegration/CrossCompileTests.cmake
 ```
 
 Android Windows 宿主根为 `D:/Git/PanguEngine`，iOS 在 `ssh -o BatchMode=yes moozen-macos` 的 `/Users/moozen/WindowsGit/PanguEngine` 执行，源码不能复制到临时目录。夹具只在平台 BuildRoot 生成可变 Project；Engine 仍指共享源码。Monolithic 真归档进入 Android 原生宿主 .so/iOS Mach-O executable；Modular 真实 Foundation/Module/业务库、固定 Query、Runtime 依赖及最小宿主最终链接均需宿主工具断言。Android 确认 ELF/AArch64，iOS 确认 ARM64/platform 2。精确命令、结果、原始路径见[验收记录](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。完成恢复移动 Monolithic、benchmark OFF。只做编译/链接/宿主检查，不是设备运行、打包、签名或设备级卸载证据。

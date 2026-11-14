@@ -12,12 +12,12 @@ endif()
 
 pangu_register_test(NAME BuildEnvironment
     COMMAND "${CMAKE_COMMAND}" "-DPANGU_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/CMake/EnvironmentTests.cmake"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/BuildSystem/EnvironmentTests.cmake"
     BOUNDARY system AREA toolchain TIER precommit TYPES regression REQUIRES subprocess
 )
 pangu_register_test(NAME LocalBuildScripts
     COMMAND "${CMAKE_COMMAND}" "-DPANGU_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
-        "-DPANGU_TEST_ROOT=${CMAKE_BINARY_DIR}/Tests/LocalBuildScripts"
+        "-DPANGU_TEST_ROOT=${CMAKE_BINARY_DIR}/Tests/Work/LocalBuildScripts"
         -P "${CMAKE_CURRENT_SOURCE_DIR}/Scripts/BuildScriptsTests.cmake"
     BOUNDARY system AREA toolchain TIER precommit TYPES regression REQUIRES subprocess
 )
@@ -28,10 +28,10 @@ add_subdirectory(Meta/Fixtures)
 add_subdirectory(Module)
 add_subdirectory(EngineHost)
 add_subdirectory(Meta)
-add_subdirectory(CMake/SourcePlugins)
-add_subdirectory(CMake/Testing)
-add_subdirectory(CMake/ModuleLinkModes)
-add_subdirectory(CMake/PanguMeta)
+add_subdirectory(BuildSystem/PluginIntegration)
+add_subdirectory(BuildSystem/TestInfrastructure)
+add_subdirectory(BuildSystem/ModuleLinkModes)
+add_subdirectory(BuildSystem/PanguMeta)
 
 include("${PROJECT_SOURCE_DIR}/cmake/PanguBuildToolsTesting.cmake")
 pangu_add_build_tools_tests(TOOL_NAME PanguBuildTool
@@ -73,4 +73,4 @@ foreach(group IN ITEMS Model Request Context Ownership Attr CodeGen Publish Cli)
         GROUP "${rootGroup}" BOUNDARY "${boundary}" TIER precommit
         BUILD_TARGETS "${target}" TEST_REGEX "${expression}")
 endforeach()
-add_subdirectory(CMake/LogConfig)
+add_subdirectory(BuildSystem/LogConfig)

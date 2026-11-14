@@ -84,7 +84,7 @@ macOS 使用 `ssh -o BatchMode=yes moozen-macos`，通过 `/Users/moozen/Windows
 
 根 `CMakeLists.txt` 已在 `project()` **之前**引入 `cmake/ValidateBuildEnvironment.cmake`：桌面平台及 iOS 检查 `LLVM_ROOT` 和必要的 Clang / `clang-scan-deps` 可执行文件；Android 在官方 NDK Toolchain 的 `CMAKE_TOOLCHAIN_FILE` 已选择时检查 `ANDROID_HOME`、`ANDROID_NDK_HOME` 和 Toolchain 文件是否存在。这样新建缓存时缺失环境变量会直接得到带 `Pangu ... preflight` 的诊断；现有平台 Settings 仍继续做后续工具链身份与版本校验。
 
-正式 `Tests/CMake/EnvironmentTests.cmake` 在 Windows、WSL Ubuntu 和 macOS 通过 CTest 验证缺失环境变量时必须明确拒绝。历史三平台曾通过 `BuildEnvironment`、`FoundationError`、`ModuleIdentity` 等回归；Android/iOS 的 `PanguFoundation` 和 `PanguModule` 有 STATIC 目标编译/归档历史结果，不提供交叉设备运行结果；旧 Host ABI 采集已退役。新增 `Source/Runtime/Foundation/` 对应独立 `PanguFoundation` STATIC Target，符合一 Module 一库。
+正式 `Tests/BuildSystem/EnvironmentTests.cmake` 在 Windows、WSL Ubuntu 和 macOS 通过 CTest 验证缺失环境变量时必须明确拒绝。历史三平台曾通过 `BuildEnvironment`、`FoundationError`、`ModuleIdentity` 等回归；Android/iOS 的 `PanguFoundation` 和 `PanguModule` 有 STATIC 目标编译/归档历史结果，不提供交叉设备运行结果；旧 Host ABI 采集已退役。新增 `Source/Runtime/Foundation/` 对应独立 `PanguFoundation` STATIC Target，符合一 Module 一库。
 
 ## ABI Profile v1 构建期工具（2026-10-27 历史实现，现已删除）
 

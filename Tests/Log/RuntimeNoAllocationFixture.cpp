@@ -1,4 +1,4 @@
-#include "../CMake/SourcePluginProject/MyGame/Source/LogOutcome.h"
+#include "../BuildSystem/ProjectIntegration/MyGame/Source/LogOutcome.h"
 #include "ConsumerPause.h"
 #include <FailureContext.h>
 #include <FailureReport.h>

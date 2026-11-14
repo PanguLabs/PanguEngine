@@ -26,7 +26,7 @@ endforeach()
 if(WIN32)
     pangu_source_plugin_test(SourcePluginBuildToolSourceChange "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolSourceChangeTests.cmake")
 endif()
-set(projectTests "${PROJECT_SOURCE_DIR}/Tests/CMake/SourcePluginProject")
+set(projectTests "${PROJECT_SOURCE_DIR}/Tests/BuildSystem/ProjectIntegration")
 foreach(pair IN ITEMS "EngineRevision|EngineRevisionTests" "Project|RunIntegration" "Enable|PluginEnableTests"
         "StaticCatalog|StaticCatalogIntegrationTests" "SharedDeploy|SharedDeployTests" "Incremental|IncrementalBuildTests"
         "TestOwnership|PluginTestOwnershipTests" "Collaboration|PluginCollaborationTests")

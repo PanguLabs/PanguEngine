@@ -286,7 +286,7 @@ Android 复用 Windows 宿主工具；iOS 复用 macOS 宿主工具。宿主 Att
 | Game Host（独立 Project 测试夹具） | `MyGame` | 无 |
 | Editor Host（同一测试夹具） | `MyEditor` | 无 |
 
-上述名称对应现有 `Source/Runtime/{Foundation,Module,EngineHost}/CMakeLists.txt` 与 `Tests/CMake/SourcePluginProject/MyGame/CMakeLists.txt` 的目标定义，这些目标已接入 PanguMetaTool Query/Catalog 登记。下面的 `MyGameGameplay` 则是 **Game Project 自有 Module 的假设库目标名**，不是已核实的项目目标。
+上述名称对应现有 `Source/Runtime/{Foundation,Module,EngineHost}/CMakeLists.txt` 与 `Tests/BuildSystem/ProjectIntegration/MyGame/CMakeLists.txt` 的目标定义，这些目标已接入 PanguMetaTool Query/Catalog 登记。下面的 `MyGameGameplay` 则是 **Game Project 自有 Module 的假设库目标名**，不是已核实的项目目标。
 
 ```text
 # Engine 侧（Windows 示例，不在 MyGame 的构建树中）

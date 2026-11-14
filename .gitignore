@@ -67,7 +67,7 @@ vcpkg_installed/
 
 # test output & cache
 Testing/
-!/Tests/CMake/Testing/
+!/Tests/BuildSystem/TestInfrastructure/
 !/cmake/Testing/
 .cache/
 

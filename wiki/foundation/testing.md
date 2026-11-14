@@ -34,4 +34,4 @@ Engine完整准备为1500秒；Windows/Linux默认All及原块顺序不变，移
 
 正式矩阵以[当前验收记录](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)为准。桌面默认 Modular；Monolithic 的旧有效 Module 覆盖保留，Modular 的 ModuleRegression 在独立子图自动执行，子标记只防递归。ModuleLinkModeMatrix/Switch 验证父模式、目标类型、非法值/中途改值和往返；真实 DLL 的 RTTI/Pin/Scope/物理卸载不能由静态归档替代。同根模式切换须等上一会话结束，最终 format/tidy/build/CTest 也串行。
 
-Android/iOS 两模式除正式根编译，还须显式运行 SourcePluginProject/CrossCompileTests.cmake，检查真实 Runtime/业务 Query、动态依赖、目标架构和最小宿主最终链接；不运行交叉目标 GTest，不宣称设备 RTTI/动态卸载、打包或签名。两模式六场景 benchmark 单独显式开启/dry run，完成恢复 OFF，新增常驻根成本保留在原计时区间，不混旧基线。
+Android/iOS 两模式除正式根编译，还须显式运行 ProjectIntegration/CrossCompileTests.cmake，检查真实 Runtime/业务 Query、动态依赖、目标架构和最小宿主最终链接；不运行交叉目标 GTest，不宣称设备 RTTI/动态卸载、打包或签名。两模式六场景 benchmark 单独显式开启/dry run，完成恢复 OFF，新增常驻根成本保留在原计时区间，不混旧基线。

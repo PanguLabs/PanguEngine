@@ -55,6 +55,6 @@ Linux 的 PanguBuildTool 使用现有 `cmake/Platform/Linux/Toolchain.cmake` 选
 
 每个插件的 JSON `configure_inputs` 数组由 C++ 工具收集，包含必需文件的实际目标及完整链接链路的父目录，覆盖工程根参数、插件目录、多级文件链接和 Windows Junction 的删除/改指。CMake 只把这些输入登记为原生 Configure 依赖。目录链接的目标目录不作为扫描依赖，新增 Plugin 仍需显式 Configure；父目录项增删可能使使用链接的插件额外重配。路径元数据缓存只在一次发现调用内有效，不建立永久索引。
 
-独立 Project 使用 `cmake/PanguEngineRevision.cmake` 校验自己的 `Engine.commit`。受检目录必须是实际 Git 工作树根，支持独立 checkout、Submodule 和 linked worktree；正式配置默认核对完整 SHA、tracked 干净状态和递归 Submodule 状态。Project 同时把锁文件登记为 `CMAKE_CONFIGURE_DEPENDS`，修改锁文件后普通 Ninja 会重新校验。本地联调需显式设置 `PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE=ON` 并保留差异诊断，不自动 checkout 或联网。`Tests/CMake/SourcePluginProject/` 是测试夹具，实例化时填充锁定 SHA；源码中的占位 `Engine.commit` 不代表可直接运行的正式游戏项目。
+独立 Project 使用 `cmake/PanguEngineRevision.cmake` 校验自己的 `Engine.commit`。受检目录必须是实际 Git 工作树根，支持独立 checkout、Submodule 和 linked worktree；正式配置默认核对完整 SHA、tracked 干净状态和递归 Submodule 状态。Project 同时把锁文件登记为 `CMAKE_CONFIGURE_DEPENDS`，修改锁文件后普通 Ninja 会重新校验。本地联调需显式设置 `PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE=ON` 并保留差异诊断，不自动 checkout 或联网。`Tests/BuildSystem/ProjectIntegration/` 是测试夹具，实例化时填充锁定 SHA；源码中的占位 `Engine.commit` 不代表可直接运行的正式游戏项目。
 
 源码 Plugin 首轮三桌面与 Android/iOS 编译、链接、显式部署的历史范围见[验收记录](../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md)。Game/Editor 的 STATIC Catalog 与有效 Module Query 现由 PanguMetaTool 生成，原手写生产者已撤销；故意返回空 Query 的恶意 ABI 夹具保留手写包装。SHARED 文件部署本身不代表设备运行验收。

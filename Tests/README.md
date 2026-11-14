@@ -6,6 +6,8 @@
 
 测试分类、标签和运行集合的权威契约见[测试分类与运行契约](../wiki/foundation/testing.md)。本文件维护实际命令与测试生命周期。
 
+构建系统集成测试集中在 [BuildSystem](BuildSystem/README.md)，按 PluginIntegration、ProjectIntegration、TestInfrastructure 等职责组织。它承接原 `Tests/CMake/` 的正式覆盖，目录迁移不改变既有 CTest 名称和运行分层。
+
 Meta 首版的强类型访问、描述 Pin、真实卸载及 ARM64 移动最终链接入口见 [Meta 测试](Meta/README.md)，三桌面双模式与移动双模式证据见[Meta 正式验收](../docs/superpowers/plans/2026-11-09-pangumeta-tool-validation.md)。根 Full 包含 `BuildTools.PanguMetaTool` 的九个互斥组（Clang/IR/Request/Context/Ownership/Attr/CodeGen/Publish/Cli），其内层用例不与根调度数量累加。移动仅编译、最终链接和宿主产物检查。
 
 ## 保留范围与测试准入
@@ -115,13 +117,13 @@ Module 基准的三桌面配置、采样与恢复命令见 [Benchmark 说明](Mo
 
 正式矩阵以[当前验收记录](../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)为准。桌面默认 Modular；Monolithic 的旧有效 Module 覆盖保留，Modular 的 ModuleRegression 在独立子图自动执行，子标记只防递归。ModuleLinkModeMatrix/Switch 验证父模式、目标类型、非法值/中途改值和往返；真实 DLL 的 RTTI/Pin/Scope/物理卸载不能由静态归档替代。同根模式切换须等上一会话结束，最终 format/tidy/build/CTest 也串行。
 
-Android/iOS 两模式除正式根编译，还须显式运行 SourcePluginProject/CrossCompileTests.cmake，检查真实 Runtime/业务 Query、动态依赖、目标架构和最小宿主最终链接；不运行交叉目标 GTest，不宣称设备 RTTI/动态卸载、打包或签名。两模式六场景 benchmark 单独显式开启/dry run，完成恢复 OFF，新增常驻根成本保留在原计时区间，不混旧基线。
+Android/iOS 两模式除正式根编译，还须显式运行 ProjectIntegration/CrossCompileTests.cmake，检查真实 Runtime/业务 Query、动态依赖、目标架构和最小宿主最终链接；不运行交叉目标 GTest，不宣称设备 RTTI/动态卸载、打包或签名。两模式六场景 benchmark 单独显式开启/dry run，完成恢复 OFF，新增常驻根成本保留在原计时区间，不混旧基线。
 
 ## 基础诊断与 Log 验收
 
 Tests/Foundation 与 Tests/Log 保留后端零分配、报告/卸载、Fatal 精确退出与负对照、格式子集、队列/竞争、文件分区/轮转、Flush/Stop、Host 和真实物理卸载回归。受监督程序是正式测试依赖，不因计划完成而删除。LogAssertConfig 在隔离子图运行 Release/Debug × Assert ON/OFF；不修改第三方 NDEBUG。
 
-三桌面正式验收先构建对应 full 目标再运行非空 full CTest，保留 ModuleRegression 和独立 Project；在固定已提交源码、override OFF 上按 Monolithic → Modular 执行。Full/Project Git 锁期间不修改共享 tracked 源码、文档或 HEAD。Android/iOS 两模式除正式根构建，另显式运行 SourcePluginProject/CrossCompileTests.cmake；它检查真实 LogSystem/FailureReport/Check 消费、Android 有类型 caller、ARM64 与动态依赖，拒绝宿主 LLVM/STL。移动不运行交叉 GTest，也不代表设备文件/线程/Fatal 验收。精确版本、命令、失败/重跑、计数及静态检查范围见[正式验收](../docs/superpowers/plans/2026-11-12-foundation-diagnostics-validation.md)。
+三桌面正式验收先构建对应 full 目标再运行非空 full CTest，保留 ModuleRegression 和独立 Project；在固定已提交源码、override OFF 上按 Monolithic → Modular 执行。Full/Project Git 锁期间不修改共享 tracked 源码、文档或 HEAD。Android/iOS 两模式除正式根构建，另显式运行 ProjectIntegration/CrossCompileTests.cmake；它检查真实 LogSystem/FailureReport/Check 消费、Android 有类型 caller、ARM64 与动态依赖，拒绝宿主 LLVM/STL。移动不运行交叉 GTest，也不代表设备文件/线程/Fatal 验收。精确版本、命令、失败/重跑、计数及静态检查范围见[正式验收](../docs/superpowers/plans/2026-11-12-foundation-diagnostics-validation.md)。
 
 `SourcePluginProject` 的 Base 场景验证 Enabled/Disabled、ServiceHosts 和锁失效；独立
 `SourcePluginEmbeddedEngine` 验证 EngineOptIn 的真实 Full 构建、发现、owner 分类及反例恢复。

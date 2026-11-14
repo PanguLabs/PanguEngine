@@ -181,7 +181,7 @@ try {
                 "-DPANGU_TEST_ROOT=$buildRoot/Tests/ModuleLinkModes/$linkMode", "-DPANGU_TARGET_PRESET=$preset",
                 "-DPANGU_LINK_MODE=$linkMode")
             if ($jobs) { $linkArguments += "-DPANGU_TEST_BUILD_JOBS=$jobs" }
-            $linkArguments += @('-P', 'Tests/CMake/SourcePluginProject/CrossCompileTests.cmake')
+            $linkArguments += @('-P', 'Tests/BuildSystem/ProjectIntegration/CrossCompileTests.cmake')
             Invoke-BuildCommand cmake $linkArguments
         }
     }

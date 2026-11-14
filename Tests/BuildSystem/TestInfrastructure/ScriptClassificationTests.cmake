@@ -108,7 +108,7 @@ endif()
 
 # 首轮生成错误输入并失败，同一工作根重跑必须重建输入，不能依赖上次残留。
 set(retryRoot "${PANGU_TEST_ROOT}/retry")
-set(script "${PANGU_ENGINE_ROOT}/Tests/CMake/SourcePlugins/BuildToolConfigureTests.cmake")
+set(script "${PANGU_ENGINE_ROOT}/Tests/BuildSystem/PluginIntegration/BuildToolConfigureTests.cmake")
 TestingRun(EXPECT fail DIAGNOSTIC "Empty-root configure failed" COMMAND "${CMAKE_COMMAND}"
     "-DPANGU_ENGINE_SOURCE_DIR=${retryRoot}/missing-engine" "-DPANGU_TEST_ROOT=${retryRoot}"
     "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"

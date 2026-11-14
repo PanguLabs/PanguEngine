@@ -1,4 +1,4 @@
-include("${PANGU_ENGINE_SOURCE_DIR}/Tests/CMake/SourcePluginProject/ProjectTestHelpers.cmake")
+include("${PANGU_ENGINE_SOURCE_DIR}/Tests/BuildSystem/ProjectIntegration/ProjectTestHelpers.cmake")
 set(source "${PANGU_TEST_ROOT}/Consumer")
 set(binary "${PANGU_TEST_ROOT}/Build")
 file(COPY "${CMAKE_CURRENT_LIST_DIR}/Fixtures/Consumer/" DESTINATION "${source}")

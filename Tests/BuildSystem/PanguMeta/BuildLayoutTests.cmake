@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 4.0)
-include("${PANGU_ENGINE_SOURCE_DIR}/Tests/CMake/SourcePluginProject/ProjectTestHelpers.cmake")
-set(fixture "${PANGU_ENGINE_SOURCE_DIR}/Tests/CMake/PanguMeta/Fixtures")
+include("${PANGU_ENGINE_SOURCE_DIR}/Tests/BuildSystem/ProjectIntegration/ProjectTestHelpers.cmake")
+set(fixture "${PANGU_ENGINE_SOURCE_DIR}/Tests/BuildSystem/PanguMeta/Fixtures")
 set(engineBuild "${PANGU_TEST_ROOT}/EngineBuild")
 set(enginePlugins "${PANGU_TEST_ROOT}/EnginePlugins")
 file(MAKE_DIRECTORY "${enginePlugins}/Plugins/Value")
