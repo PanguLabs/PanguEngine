@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
-include("${CMAKE_CURRENT_LIST_DIR}/TestingTestHelpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/TestInfrastructureHelpers.cmake")
 set(fixture "${CMAKE_CURRENT_LIST_DIR}/Fixtures/Registration")
 TestingConfigure(NAME valid SOURCE "${fixture}" EXPECT pass)
 set(binary "${Testing_BINARY}")

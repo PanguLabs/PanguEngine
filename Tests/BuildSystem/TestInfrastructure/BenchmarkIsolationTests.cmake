@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
-include("${CMAKE_CURRENT_LIST_DIR}/TestingTestHelpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/TestInfrastructureHelpers.cmake")
 TestingConfigure(NAME benchmark-only SOURCE "${PANGU_ENGINE_ROOT}" EXPECT pass ARGS
     -DBUILD_TESTING=OFF -DPANGU_BUILD_ENGINE_TESTS=OFF -DPANGU_BUILD_BENCHMARKS=ON
    )

@@ -1,5 +1,8 @@
 # 分层测试迁移记录
 
+本文保留历史测试名称与验收结果。2026-11-14 的后续命名整理将相关 `SourcePlugin*`、
+`Testing*` 用例改为职责前缀，现行名称及四个文件的迁移映射见 [BuildSystem README](BuildSystem/README.md#文件与-ctest-名称迁移)。
+
 记录基于 `5e897dbee8f58a1f1d6fafecd1ae3b3e378c3a99` 的实际源码清单；不能把后续拆分后的用例数量与旧数量直接比较。
 Task 1 迁移 Foundation，并建立 GoogleTest/GoogleMock 依赖和测试登记接口；Task 2 迁移 Module 单元与 JSON，
 Task 3 迁移真实 Module 集成、Catalog 与析构夹具；Task 4 集中 BuildTools 测试及根调度。

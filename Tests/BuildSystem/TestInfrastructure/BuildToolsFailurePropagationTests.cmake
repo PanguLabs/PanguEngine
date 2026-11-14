@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
-include("${CMAKE_CURRENT_LIST_DIR}/TestingTestHelpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/TestInfrastructureHelpers.cmake")
 set(runner "${PANGU_ENGINE_ROOT}/cmake/Testing/RunBuildToolsTests.cmake")
 if(NOT EXISTS "${runner}")
     message(FATAL_ERROR "BuildTools runner is missing")

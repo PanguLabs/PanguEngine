@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 4.0)
 
 if(NOT DEFINED PANGU_ENGINE_SOURCE_DIR OR NOT DEFINED PANGU_TEST_ROOT)
-    message(FATAL_ERROR "SourcePluginProject requires PANGU_ENGINE_SOURCE_DIR and an isolated PANGU_TEST_ROOT")
+    message(FATAL_ERROR "ProjectIntegration requires PANGU_ENGINE_SOURCE_DIR and an isolated PANGU_TEST_ROOT")
 endif()
 if(NOT DEFINED PANGU_PROJECT_TEST_STAGE)
     set(PANGU_PROJECT_TEST_STAGE All)
 endif()
 if(NOT PANGU_PROJECT_TEST_STAGE MATCHES "^(All|Base|Engine)$")
-    message(FATAL_ERROR "SourcePluginProject requires stage All, Base or Engine")
+    message(FATAL_ERROR "ProjectIntegration requires stage All, Base or Engine")
 endif()
 # 正式场景各用独立冷根；手动 All 保持原有完整入口。
 if(NOT PANGU_PROJECT_TEST_STAGE STREQUAL "All")
@@ -99,11 +99,11 @@ endfunction()
 
 function(CheckEmbeddedClassification name expected)
     execute_process(COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${PANGU_TEST_ROOT}/EngineOptIn"
-        -R "^TestingScriptClassification$" --no-tests=error --output-on-failure
+        -R "^TestInfrastructure[.]ScriptClassification$" --no-tests=error --output-on-failure
         --parallel "${PANGU_TEST_BUILD_JOBS}"
         RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE error)
     file(WRITE "${PANGU_TEST_ROOT}/EngineOptIn-classification-${name}.log"
-        "command=${CMAKE_CTEST_COMMAND} --test-dir ${PANGU_TEST_ROOT}/EngineOptIn -R ^TestingScriptClassification$ --no-tests=error --output-on-failure --parallel ${PANGU_TEST_BUILD_JOBS}\nexit=${status}\n${output}\n${error}")
+        "command=${CMAKE_CTEST_COMMAND} --test-dir ${PANGU_TEST_ROOT}/EngineOptIn -R ^TestInfrastructure[.]ScriptClassification$ --no-tests=error --output-on-failure --parallel ${PANGU_TEST_BUILD_JOBS}\nexit=${status}\n${output}\n${error}")
     if(expected STREQUAL "PASS")
         if(NOT status EQUAL 0)
             message(FATAL_ERROR "Embedded Engine classification failed: ${status}\n${output}\n${error}")
@@ -247,4 +247,4 @@ if(NOT PANGU_PROJECT_TEST_STAGE STREQUAL "Engine")
     endif()
     file(WRITE "${source}/Engine.commit" "${engineHead}\n")
 endif()
-message(STATUS "SourcePluginProject ${PANGU_PROJECT_TEST_STAGE}: selected ownership, lifecycle and lock checks passed")
+message(STATUS "ProjectIntegration ${PANGU_PROJECT_TEST_STAGE}: selected ownership, lifecycle and lock checks passed")

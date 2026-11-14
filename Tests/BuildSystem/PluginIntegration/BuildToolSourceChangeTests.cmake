@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.0)
 
 if(NOT DEFINED PANGU_ENGINE_SOURCE_DIR OR NOT DEFINED PANGU_TEST_ROOT)
-    message(FATAL_ERROR "SourcePluginToolSourceChange requires Engine source and isolated test root")
+    message(FATAL_ERROR "PluginIntegration.BuildToolSourceChange requires Engine source and isolated test root")
 endif()
 set(mirror "${PANGU_TEST_ROOT}/MirroredTool")
 set(binary "${PANGU_TEST_ROOT}/MirroredToolBuild")
@@ -60,4 +60,4 @@ execute_process(COMMAND "${CMAKE_COMMAND}" --build "${binary}" --parallel "${PAN
 if(NOT rc EQUAL 0)
     message(FATAL_ERROR "Host tool recovery failed: ${rc}\n${output}\n${error}")
 endif()
-message(STATUS "SourcePluginBuildTool: tool source invalidation and compile-failure propagation passed")
+message(STATUS "PluginIntegration.BuildToolSourceChange: tool source invalidation and compile-failure propagation passed")

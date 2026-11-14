@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
-include("${CMAKE_CURRENT_LIST_DIR}/TestingTestHelpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/TestInfrastructureHelpers.cmake")
 set(fixture "${CMAKE_CURRENT_LIST_DIR}/Fixtures/Registration")
 foreach(mode IN ITEMS include-only repeat disabled)
     TestingConfigure(NAME "${mode}" SOURCE "${fixture}" EXPECT pass ARGS "-DMODE=${mode}")

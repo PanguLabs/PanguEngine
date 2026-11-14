@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
-include("${CMAKE_CURRENT_LIST_DIR}/TestingTestHelpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/TestInfrastructureHelpers.cmake")
 
 if(NOT EXISTS "${PANGU_ENGINE_ROOT}/cmake/PanguBuildToolsTesting.cmake")
     message(FATAL_ERROR "BuildTools shared testing wiring is missing")

@@ -2,6 +2,9 @@
 
 状态：用户已确认并已实施；验收范围见[实施计划](../plans/2026-11-14-build-system-tests-layout.md)。
 
+后续更新：本规格中继续保留旧 CTest 名称的约定已被[测试命名整理](2026-11-14-build-system-test-names-design.md)
+替代（Superseded，仅名称约定）；目录迁移范围和本次历史验收保持原义。
+
 ## 目的与范围
 
 构建系统测试按被测职责命名，替代按实现工具命名的 `Tests/CMake`。用户确认的迁移为：

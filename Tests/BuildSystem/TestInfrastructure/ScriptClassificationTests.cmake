@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
-include("${CMAKE_CURRENT_LIST_DIR}/TestingTestHelpers.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/TestInfrastructureHelpers.cmake")
 
 # Engine 验证树决定归属范围；顶层 BuildRoot 仍决定工作目录与产物位置。
 # 不按已有 owner 标签过滤，否则漏标的 Engine 回归会被静默忽略。
@@ -47,7 +47,7 @@ foreach(index RANGE 0 ${last})
        (NOT "run.precommit" IN_LIST labels OR "run.fast" IN_LIST labels))
         message(FATAL_ERROR "${name} must enter precommit")
     endif()
-    if(name MATCHES "^SourcePlugin" AND ("run.fast" IN_LIST labels OR "run.precommit" IN_LIST labels))
+    if(name MATCHES "^(PluginIntegration|ProjectIntegration)[.]" AND ("run.fast" IN_LIST labels OR "run.precommit" IN_LIST labels))
         message(FATAL_ERROR "${name} must remain full")
     endif()
     string(FIND "${work}/" "${PANGU_TEST_BUILD_ROOT}/Tests/Work/" inWorkRoot)
@@ -70,10 +70,10 @@ foreach(index RANGE 0 ${last})
             list(APPEND mutableRoots "${root}")
         endif()
     endforeach()
-    if(name MATCHES "^(SourcePlugin|BuildTools[.]|Testing)" AND NOT processors EQUAL PANGU_TEST_BUILD_JOBS)
+    if(name MATCHES "^(PluginIntegration[.]|ProjectIntegration[.]|BuildTools[.]|TestInfrastructure[.])" AND NOT processors EQUAL PANGU_TEST_BUILD_JOBS)
         message(FATAL_ERROR "${name} PROCESSORS=${processors} differs from nested-build budget ${PANGU_TEST_BUILD_JOBS}")
     endif()
-    if(name MATCHES "^(SourcePlugin|BuildTools[.]|Testing)" AND
+    if(name MATCHES "^(PluginIntegration[.]|ProjectIntegration[.]|BuildTools[.]|TestInfrastructure[.])" AND
        NOT "CMAKE_BUILD_PARALLEL_LEVEL=${PANGU_TEST_BUILD_JOBS}" IN_LIST arguments)
         message(FATAL_ERROR "${name} does not propagate the nested-build environment budget")
     endif()
@@ -86,21 +86,21 @@ else()
     set(moduleLifecycleRegression ScopeDestructor)
 endif()
 foreach(required IN ITEMS BuildEnvironment ToolchainLibraryLink NlohmannSubmoduleRequired
-        SourcePluginBuildTool SourcePluginBuildToolInvalidation SourcePluginBuildToolFileLinks
-        SourcePluginBuildToolDirectoryLinks SourcePluginEngineRevision SourcePluginProject SourcePluginEmbeddedEngine
-        SourcePluginEnable SourcePluginStaticCatalog SourcePluginSharedDeploy SourcePluginIncremental
-        TestingRegistration TestingDependencyIsolation TestingBuildToolsTests
-        TestingBuildToolsFailurePropagation TestingScriptClassification ${moduleLifecycleRegression})
+        PluginIntegration.BuildToolConfigure PluginIntegration.DiscoveryInvalidation PluginIntegration.DiscoveryFileLinks
+        PluginIntegration.DiscoveryDirectoryLinks ProjectIntegration.EngineRevision ProjectIntegration.Base ProjectIntegration.EmbeddedEngine
+        ProjectIntegration.PluginEnable ProjectIntegration.StaticCatalog ProjectIntegration.SharedDeploy ProjectIntegration.IncrementalBuild
+        TestInfrastructure.Registration TestInfrastructure.DependencyIsolation TestInfrastructure.BuildToolsTestIntegration
+        TestInfrastructure.BuildToolsFailurePropagation TestInfrastructure.ScriptClassification ${moduleLifecycleRegression})
     if(NOT required IN_LIST seen)
         message(FATAL_ERROR "Missing original regression or explicit capability scenario: ${required}")
     endif()
 endforeach()
-if(CMAKE_HOST_WIN32 AND NOT "SourcePluginBuildToolSourceChange" IN_LIST seen)
+if(CMAKE_HOST_WIN32 AND NOT "PluginIntegration.BuildToolSourceChange" IN_LIST seen)
     message(FATAL_ERROR "Windows tool source invalidation/compile-failure recovery regression is missing")
 endif()
 if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
     foreach(stage IN ITEMS Project Engine Provider)
-        if(NOT "SourcePluginTestOwnership${stage}" IN_LIST seen)
+        if(NOT "ProjectIntegration.PluginTestOwnership.${stage}" IN_LIST seen)
             message(FATAL_ERROR "Missing independent cold ownership scenario: ${stage}")
         endif()
     endforeach()

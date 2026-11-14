@@ -1,7 +1,7 @@
 # 构建系统集成测试
 
 本目录验证 Engine 的构建接线、源码插件与独立 Project 集成、生成代码接线和测试基础设施。
-既有测试名称、标签、fast/precommit/full 分层、超时和资源锁保持稳定；目录名按被测职责命名。
+目录名与 CTest 名称按被测职责命名；标签、fast/precommit/full 分层、超时和资源锁保持稳定。
 
 | 目录 / 文件 | 职责 |
 | --- | --- |
@@ -24,7 +24,48 @@
 | `Testing/` | `TestInfrastructure/` |
 
 历史设计与验收中的命令保留当时路径，今天执行时使用上表的新路径。当前构建入口、脚本与
-规范中的路径已同步。CTest 的 `SourcePlugin*`、`Testing*` 等既有用例名继续沿用，不能由目录名推导改名。
+规范中的路径已同步。该提交只迁移目录，保留了当时的 CTest 名称；后续按用户要求进一步调整
+四个文件名及相关 CTest 名称，现行映射如下。历史设计和验收保留当时名称。
+
+## 文件与 CTest 名称迁移
+
+| 目录 | 原文件名 | 现文件名 |
+| --- | --- | --- |
+| PluginIntegration | `BuildToolInvalidationTests.cmake` | `PluginDiscoveryInvalidationTests.cmake` |
+| ProjectIntegration | `RunIntegration.cmake` | `ProjectIntegrationTests.cmake` |
+| TestInfrastructure | `BuildToolsTests.cmake` | `BuildToolsTestIntegrationTests.cmake` |
+| TestInfrastructure | `TestingTestHelpers.cmake` | `TestInfrastructureHelpers.cmake` |
+
+| 原 CTest 名称 | 现 CTest 名称 |
+| --- | --- |
+| `SourcePluginBuildTool` | `PluginIntegration.BuildToolConfigure` |
+| `SourcePluginBuildToolInvalidation` | `PluginIntegration.DiscoveryInvalidation` |
+| `SourcePluginBuildToolFileLinks` | `PluginIntegration.DiscoveryFileLinks` |
+| `SourcePluginBuildToolDirectoryLinks` | `PluginIntegration.DiscoveryDirectoryLinks` |
+| `SourcePluginBuildToolSourceChange` | `PluginIntegration.BuildToolSourceChange` |
+| `SourcePluginEngineRevision` | `ProjectIntegration.EngineRevision` |
+| `SourcePluginProject` | `ProjectIntegration.Base` |
+| `SourcePluginEmbeddedEngine` | `ProjectIntegration.EmbeddedEngine` |
+| `SourcePluginEnable` | `ProjectIntegration.PluginEnable` |
+| `SourcePluginStaticCatalog` | `ProjectIntegration.StaticCatalog` |
+| `SourcePluginSharedDeploy` | `ProjectIntegration.SharedDeploy` |
+| `SourcePluginIncremental` | `ProjectIntegration.IncrementalBuild` |
+| `SourcePluginTestOwnership` | `ProjectIntegration.PluginTestOwnership` |
+| `SourcePluginTestOwnershipProject` | `ProjectIntegration.PluginTestOwnership.Project` |
+| `SourcePluginTestOwnershipEngine` | `ProjectIntegration.PluginTestOwnership.Engine` |
+| `SourcePluginTestOwnershipProvider` | `ProjectIntegration.PluginTestOwnership.Provider` |
+| `SourcePluginCollaboration` | `ProjectIntegration.PluginCollaboration` |
+| `TestingRegistration` | `TestInfrastructure.Registration` |
+| `TestingDependencyIsolation` | `TestInfrastructure.DependencyIsolation` |
+| `TestingBenchmarkIsolation` | `TestInfrastructure.BenchmarkIsolation` |
+| `TestingBuildToolsTests` | `TestInfrastructure.BuildToolsTestIntegration` |
+| `TestingBuildToolsFailurePropagation` | `TestInfrastructure.BuildToolsFailurePropagation` |
+| `TestingScriptClassification` | `TestInfrastructure.ScriptClassification` |
+| `TestingWorkflowCompleteness` | `TestInfrastructure.WorkflowCompleteness` |
+
+按前缀筛选可使用 `ctest --preset windows-full -R '^(PluginIntegration|ProjectIntegration|TestInfrastructure)[.]'`；
+精确筛选时用 `[.]` 表达名称中的点，例如 `-R '^TestInfrastructure[.]ScriptClassification$'`。
+先按下文准备对应测试构建。名称派生的测试工作目录随新名变化，仍位于同一宿主 BuildRoot 的 Tests/Work 内。
 
 ## 执行与产物
 

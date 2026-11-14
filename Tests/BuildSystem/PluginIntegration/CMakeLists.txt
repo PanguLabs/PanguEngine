@@ -17,37 +17,37 @@ function(pangu_source_plugin_test name script)
     set_tests_properties("${name}" PROPERTIES RESOURCE_LOCK PanguMetaHostBuild)
 endfunction()
 
-pangu_source_plugin_test(SourcePluginBuildTool "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolConfigureTests.cmake")
+pangu_source_plugin_test(PluginIntegration.BuildToolConfigure "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolConfigureTests.cmake")
 foreach(scenario IN ITEMS Invalidation FileLinks DirectoryLinks)
-    pangu_source_plugin_test("SourcePluginBuildTool${scenario}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolInvalidationTests.cmake"
+    pangu_source_plugin_test("PluginIntegration.Discovery${scenario}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/PluginDiscoveryInvalidationTests.cmake"
         "-DPANGU_INVALIDATION_SCENARIO=${scenario}")
 endforeach()
 if(WIN32)
-    pangu_source_plugin_test(SourcePluginBuildToolSourceChange "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolSourceChangeTests.cmake")
+    pangu_source_plugin_test(PluginIntegration.BuildToolSourceChange "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolSourceChangeTests.cmake")
 endif()
 set(projectTests "${PROJECT_SOURCE_DIR}/Tests/BuildSystem/ProjectIntegration")
-foreach(pair IN ITEMS "EngineRevision|EngineRevisionTests" "Project|RunIntegration" "Enable|PluginEnableTests"
-        "StaticCatalog|StaticCatalogIntegrationTests" "SharedDeploy|SharedDeployTests" "Incremental|IncrementalBuildTests"
-        "TestOwnership|PluginTestOwnershipTests" "Collaboration|PluginCollaborationTests")
+foreach(pair IN ITEMS "EngineRevision|EngineRevisionTests" "Base|ProjectIntegrationTests" "PluginEnable|PluginEnableTests"
+        "StaticCatalog|StaticCatalogIntegrationTests" "SharedDeploy|SharedDeployTests" "IncrementalBuild|IncrementalBuildTests"
+        "PluginTestOwnership|PluginTestOwnershipTests" "PluginCollaboration|PluginCollaborationTests")
     string(REPLACE "|" ";" pair "${pair}")
     list(GET pair 0 name)
     list(GET pair 1 script)
     set(stageArgs)
-    if(name STREQUAL "Project")
+    if(name STREQUAL "Base")
         list(APPEND stageArgs -DPANGU_PROJECT_TEST_STAGE=Base)
-    elseif(name STREQUAL "TestOwnership" AND CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    elseif(name STREQUAL "PluginTestOwnership" AND CMAKE_SYSTEM_NAME STREQUAL "Darwin")
         list(APPEND stageArgs -DPANGU_OWNERSHIP_STAGE=Base)
     endif()
-    pangu_source_plugin_test("SourcePlugin${name}" "${projectTests}/${script}.cmake" ${stageArgs})
+    pangu_source_plugin_test("ProjectIntegration.${name}" "${projectTests}/${script}.cmake" ${stageArgs})
 endforeach()
-pangu_source_plugin_test(SourcePluginEmbeddedEngine "${projectTests}/RunIntegration.cmake"
+pangu_source_plugin_test(ProjectIntegration.EmbeddedEngine "${projectTests}/ProjectIntegrationTests.cmake"
     -DPANGU_PROJECT_TEST_STAGE=Engine)
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     foreach(stage IN ITEMS Project Engine Provider)
-        pangu_source_plugin_test("SourcePluginTestOwnership${stage}"
+        pangu_source_plugin_test("ProjectIntegration.PluginTestOwnership.${stage}"
             "${projectTests}/PluginTestOwnershipTests.cmake" "-DPANGU_OWNERSHIP_STAGE=${stage}")
     endforeach()
     # 完整冷场景实测1183.60秒；仅构建准备留约26%余量，不改变业务或发现期限。
-    set_tests_properties(SourcePluginTestOwnershipEngine PROPERTIES TIMEOUT 1500)
+    set_tests_properties(ProjectIntegration.PluginTestOwnership.Engine PROPERTIES TIMEOUT 1500)
 endif()

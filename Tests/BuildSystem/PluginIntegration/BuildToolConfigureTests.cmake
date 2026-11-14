@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 4.0)
 
 if(NOT DEFINED PANGU_ENGINE_SOURCE_DIR OR NOT DEFINED PANGU_TEST_ROOT)
-    message(FATAL_ERROR "SourcePluginBuildTool test requires Engine source and isolated test root")
+    message(FATAL_ERROR "PluginIntegration.BuildToolConfigure test requires Engine source and isolated test root")
 endif()
 
 file(TO_CMAKE_PATH "${PANGU_ENGINE_SOURCE_DIR}" engineSource)
@@ -65,4 +65,4 @@ execute_process(COMMAND "${CMAKE_COMMAND}" -S "${source}" -B "${binary}" -G Ninj
 if(NOT status EQUAL 0)
     message(FATAL_ERROR "Warm configure failed: ${status}\n${output}\n${error}")
 endif()
-message(STATUS "SourcePluginBuildTool: empty-root configure, build, discovery, and warm configure passed")
+message(STATUS "PluginIntegration.BuildToolConfigure: empty-root configure, build, discovery, and warm configure passed")
