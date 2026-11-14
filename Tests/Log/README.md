@@ -1,5 +1,24 @@
 # Log 正式验收
 
+`NormalHistoryReclamationDoesNotInvalidateDeliveredPrefix` 在 80 条记录完成历史文件回收后，
+同时检查 Flush 的已交付前缀与显式 Stop 的最终前缀、`ResourcesReleased` 和完整性。
+Flush 完成不代表文件句柄及原生线程已经回收；测试拥有者必须在离开作用域前完成显式 Stop，
+不能把析构默认的短等待当作文件清理的成功保证。该用例沿用测试已有的两秒截止时间，
+不修改产品的 `DefaultWait` 或析构 Fatal 契约。
+
+2026-11-14 Windows 原始失败的测试进程退出码为 `0xc0000409`。同进程重复运行在第 29 轮复现；
+调试运行在第 192 轮捕获 `FAST_FAIL_FATAL_APP_EXIT`，栈上 EmergencySnapshot 指向
+`LogSystem::~LogSystem` 的安全停止检查，消费者线程当时停在文件 `CloseHandle`。
+因此修正测试的显式生命周期管理，保留原有历史回收及交付断言。
+
+修正后，同进程 `--gtest_repeat=1000 --gtest_break_on_failure` 的原用例连续 1000 轮通过；
+`ctest --preset windows-precommit -L '^area\.log$' --output-on-failure` 在 Windows 宿主环境
+108/108 通过。首次沙箱执行为 83/108，另 25 个 FileStore 用例均在测试准备的
+`weakly_canonical` 路径规范化处失败；宿主权限下按原选择重跑全部通过，两轮结果分别记录。
+定向构建、仓库配置的 clang-format、使用实际编译数据库的 clang-tidy 及独立评审通过。
+本次未重跑其他平台或整个引擎 Full；诊断原始日志与栈现场保存在 Windows BuildRoot 的
+`Tests/LogDrainReclamationDiagnosis/`，正式测试不依赖这些历史产物。
+
 最终评审修复将 LogInit / Lifecycle / Drain、初始化/排空监督夹具、私有零分配场景和
 EngineHost Factory/Destroy 的精确接纳准备统一接入短段 `ConsumerPause`。
 `SubmitPaused` 先取得传入 Writer，再暂停消费者，仅执行一次真实提交，解锁后才进行

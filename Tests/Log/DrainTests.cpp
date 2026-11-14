@@ -309,6 +309,13 @@ TEST(LogDrain, NormalHistoryReclamationDoesNotInvalidateDeliveredPrefix)
     EXPECT_EQ(report.Outputs.at(1).Delivered, 80);
     EXPECT_TRUE(report.OutputComplete);
     EXPECT_GT(owner.System.Inspect().File.ReclaimedFiles, 0);
+    // Flush 不回收文件句柄；退出前显式 Stop，不能依赖析构默认的短等待。
+    StopReport stopped;
+    ASSERT_TRUE(owner.System.Stop(test::Deadline(), stopped));
+    EXPECT_TRUE(stopped.ResourcesReleased);
+    EXPECT_EQ(stopped.FinalFlush.H, report.H);
+    EXPECT_EQ(stopped.FinalFlush.Outputs.at(1).Delivered, 80);
+    EXPECT_TRUE(stopped.FinalFlush.OutputComplete);
 }
 TEST(LogDrain, PendingStopReportsCleanupFailureWithoutLosingOwner)
 {
