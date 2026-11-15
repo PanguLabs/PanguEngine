@@ -1,4 +1,12 @@
-set(PANGU_TEST_BUILD_JOBS 2 CACHE STRING "Nested test build processor budget")
+set(panguDefaultTestBuildJobs 2)
+if(NOT "$ENV{PANGU_TEST_BUILD_JOBS}" STREQUAL "")
+    set(panguDefaultTestBuildJobs "$ENV{PANGU_TEST_BUILD_JOBS}")
+endif()
+set(PANGU_TEST_BUILD_JOBS "${panguDefaultTestBuildJobs}" CACHE STRING "Nested test build processor budget")
+unset(panguDefaultTestBuildJobs)
 if(NOT PANGU_TEST_BUILD_JOBS MATCHES "^[1-9][0-9]*$")
     message(FATAL_ERROR "PANGU_TEST_BUILD_JOBS must be a positive integer")
 endif()
+# 子配置和没有显式 --parallel 的宿主准备也消费同一预算；已有 cache 仍优先。
+set(ENV{PANGU_TEST_BUILD_JOBS} "${PANGU_TEST_BUILD_JOBS}")
+set(ENV{CMAKE_BUILD_PARALLEL_LEVEL} "${PANGU_TEST_BUILD_JOBS}")

@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
+include("${CMAKE_CURRENT_LIST_DIR}/../CommandTiming.cmake")
 
 foreach(required IN ITEMS PANGU_ENGINE_ROOT PANGU_TEST_ROOT PANGU_TEST_COMPILER)
     if(NOT DEFINED ${required} OR "${${required}}" STREQUAL "")
@@ -13,8 +14,10 @@ function(TestingRun)
        NOT arg_EXPECT MATCHES "^(pass|fail)$" OR NOT arg_COMMAND)
         message(FATAL_ERROR "Invalid TestingRun arguments")
     endif()
+    string(TIMESTAMP commandStarted "%s%f" UTC)
     execute_process(COMMAND ${arg_COMMAND} RESULT_VARIABLE result
         OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 900)
+    pangu_test_record_command_time("${commandStarted}" "${result}" ${arg_COMMAND})
     set(log "${output}\n${error}")
     file(APPEND "${PANGU_TEST_ROOT}/commands.log" "${arg_COMMAND}\nresult=${result}\n${log}\n")
     if((arg_EXPECT STREQUAL "pass" AND NOT result STREQUAL "0") OR

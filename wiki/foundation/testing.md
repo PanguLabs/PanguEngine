@@ -4,9 +4,13 @@
 
 测试按 `boundary.unit`、`boundary.integration`、`boundary.system` 标明验证边界，按 `area.*` 标明领域，按 `owner.engine` 或 `owner.project` 标明来源。显式启用且其所属方允许测试的 Plugin 沿用来源方 owner，附带 `plugin.*`；资源要求用 `requires.*` 标识。`run.fast`、`run.precommit`、`run.full` 是累计集合，不是互斥类别。回归与契约可叠加 `type.*`。
 
-GoogleTest 按用例登记；CTest 工作目录和 XML 输出位于宿主 BuildRoot 中隔离的测试目录。直接批量运行时也须指定 BuildRoot 内工作目录。并发仅保证单一验证会话内经过隔离的测试；不得同时运行多个共享同一 BuildRoot 的 configure、build 或 test 会话。嵌套构建应计入处理器预算。
+GoogleTest 按用例登记；CTest 工作目录和 XML 输出位于宿主 BuildRoot 中隔离的测试目录。直接批量运行时也须指定 BuildRoot 内工作目录。并发仅保证单一验证会话内经过隔离的测试；不得同时运行多个共享同一 BuildRoot 的 configure、build 或 test 会话。显式 BuildTools 的同一工具测试组共用 PRE_TEST 发现和 CTest 临时目录，使用工具级资源锁串行，不同工具可并行。嵌套构建应计入处理器预算。
 
 桌面使用根 preset 的 `<platform>-fast`、`<platform>-precommit`、`<platform>-full` workflow；依次配置、构建和执行。正式 Engine full 需要 BUILD_TESTING、PANGU_BUILD_ENGINE_TESTS 均开启；接入 Engine 测试时始终配置 Toolchain 探针。fast 60 秒及 precommit 5 分钟是测试执行优化目标，构建单独记录，超时不删除覆盖。空测试选择应失败。详细命令和维护约定见 Tests README。
+
+`PANGU_TEST_BUILD_JOBS` 是单项嵌套测试的处理器预算。根配置的显式值或已有 cache 优先，未指定的子配置从同名环境变量继承，完全未设置时为 2；启用测试上下文和执行测试脚本时初始化该预算。CTest 的嵌套测试环境与 `PROCESSORS` 使用同一预算，显式工具测试配置也消费父图预留预算，附加工具参数不能放大它。聚合构建外层保持串行，内层构建与 CTest 消费预留预算。
+
+Windows preset 在当前 12 逻辑处理器宿主的测量后采用内层 4、外层 CTest 预算 8；其他平台默认值不变。外层可同时调度两项占 4 处理器的测试，仍受资源锁约束。可用 `cmake --preset windows -DPANGU_TEST_BUILD_JOBS=<正整数>` 调整内层，用 `ctest --preset windows-full --parallel <正整数>` 调整外层；后续 workflow 配置会重新应用 preset 值。两层预算应结合宿主资源选择，不按进程层数相乘放大并发。测量边界与结果见[本轮计划](../../docs/superpowers/plans/2026-11-15-nested-test-builds.md)。
 
 BuildTools 日常 bootstrap 与独立宿主测试使用不同构建目录和 cache；根 full 调度独立工具测试，独立 CTest 可单独检查运行能力，不应将两次执行合并计数。Benchmark 默认关闭，独立于正确性测试开关；dry run 仅验证可运行，不能替代性能测量。正式测量记录源码及依赖版本、工具链、配置、宿主负载、原始样本和离散程度，运行时避免其他本机构建和测试。
 

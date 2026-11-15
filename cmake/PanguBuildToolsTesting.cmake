@@ -30,7 +30,8 @@ function(_pangu_finalize_build_tools_tests tool)
     add_custom_command(TARGET "${tool}TestsConfigure" POST_BUILD
         COMMAND "${CMAKE_COMMAND}" -S "${source}" -B "${binary}" -G Ninja
             "-DCMAKE_CXX_COMPILER:FILEPATH=${compiler}" -DCMAKE_BUILD_TYPE:STRING=Release
-            ${toolchainArgs} ${args} -DBUILD_TESTING:BOOL=ON -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON
+            ${toolchainArgs} ${args} "-DPANGU_TEST_BUILD_JOBS:STRING=${PANGU_TEST_BUILD_JOBS}"
+            -DBUILD_TESTING:BOOL=ON -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=ON
         VERBATIM)
     foreach(tier IN ITEMS Fast Precommit Full)
         get_property(targets GLOBAL PROPERTY "PANGU_BUILD_TOOLS_${tool}_${tier}_TARGETS")
@@ -98,6 +99,7 @@ function(pangu_add_build_tools_tests)
     endforeach()
     pangu_register_test(NAME "BuildTools.${tool}.${arg_GROUP}"
         COMMAND "${CMAKE_COMMAND}" -E env "CMAKE_BUILD_PARALLEL_LEVEL=${PANGU_TEST_BUILD_JOBS}"
+            "PANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
             "${CMAKE_COMMAND}"
             "-DPANGU_BUILD_TOOLS_TEST_BINARY_DIR=${CMAKE_BINARY_DIR}/Tests/BuildTools/${tool}"
             "-DPANGU_BUILD_TOOLS_TEST_REGEX=${arg_TEST_REGEX}"
@@ -106,4 +108,6 @@ function(pangu_add_build_tools_tests)
             -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/Testing/RunBuildToolsTests.cmake"
         BOUNDARY "${arg_BOUNDARY}" AREA build TIER "${arg_TIER}"
         REQUIRES subprocess PROCESSORS "${PANGU_TEST_BUILD_JOBS}" TIMEOUT 900)
+    # 同一工具的组共用 PRE_TEST 发现与 CTest 临时日志；不同工具仍可并行。
+    set_tests_properties("BuildTools.${tool}.${arg_GROUP}" PROPERTIES RESOURCE_LOCK "PanguBuildToolsCTest.${tool}")
 endfunction()

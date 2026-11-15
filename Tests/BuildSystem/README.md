@@ -79,6 +79,9 @@
 显式移动最终链接入口保留构建脚本定义的 `<BuildRoot>/Tests/ModuleLinkModes/<模式>/` 隔离目录；
 两者均不在本目录修改共享源码。
 Project / Full 的 Git 锁校验保持原策略；正式验收记录固定源码版本、override 状态和实际执行范围。
+
+Project、ModuleLinkModes、LogConfig 和 TestInfrastructure 的共享命令辅助函数还会在本轮夹具根写入 `command-times.tsv`，按 `configure`、`build`、`discovery`、`test`、`run` 记录命令壁钟耗时（微秒）、退出结果及原命令，不改变捕获输出与失败判断。配置耗时可能包含宿主工具准备，构建耗时可能包含嵌套工具构建，不能将这些阶段当作纯 CMake 或纯编译 CPU 时间。比较时保持相同源码、平台、配置及夹具准备条件。
+
 已有嵌套夹具的 CMake Cache 若记录原源码目录，迁移后需重新生成该夹具缓存；只处理受影响的
 隔离测试构建目录，不复用旧源码路径的 Cache，也不清空整个宿主 BuildRoot。
 Android/iOS 的 `ProjectIntegration/CrossCompileTests.cmake` 验证真实 Runtime / 业务 Module 的最终链接，

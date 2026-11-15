@@ -17,6 +17,23 @@ BuildConsumer(PASS "no work to do")
 if(CMAKE_HOST_WIN32)
     set(suffix .exe)
 endif()
+# 另一张原生图也可能进入同一宿主引导；无变化不能刷新 exe 并污染本图的 no-op。
+set(hostBinary "${PANGU_META_HOST_BUILD_ROOT}/BuildTools/PanguMetaTool")
+file(TIMESTAMP "${hostBinary}/PanguMetaTool${suffix}" hostBefore "%s.%f")
+ProjectCommand(PASS "no work to do" "${CMAKE_COMMAND}"
+    "-DPANGU_META_TOOL_SOURCE_DIR=${toolSource}" "-DPANGU_META_TOOL_BINARY_DIR=${hostBinary}"
+    "-DPANGU_ENGINE_SOURCE_DIR=${PANGU_ENGINE_SOURCE_DIR}"
+    -P "${PANGU_ENGINE_SOURCE_DIR}/cmake/BuildMetaTool.cmake")
+file(TIMESTAMP "${hostBinary}/PanguMetaTool${suffix}" hostAfter "%s.%f")
+if(NOT hostBefore STREQUAL hostAfter)
+    message(FATAL_ERROR "Unchanged shared host bootstrap refreshed the tool timestamp")
+endif()
+BuildConsumer(PASS "no work to do")
+# 未被编译的登记头也必须只失效一次，不能因 exe 未推进而反复进入引导。
+file(APPEND "${toolSource}/Private/Unused.h" "// 登记输入变化。\n")
+BuildConsumer(PASS "PanguMetaTool native host build")
+RequireText("${commandOutput}" "PanguMetaTool generate")
+BuildConsumer(PASS "no work to do")
 file(TIMESTAMP "${binary}/Consumer${suffix}" consumerBefore "%s.%f")
 SnapshotOutputs(before)
 file(APPEND "${toolSource}/Private/Main.cpp" "\n// 原生构建依赖失效回归。\n")
