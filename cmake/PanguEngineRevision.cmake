@@ -18,7 +18,8 @@ function(pangu_validate_engine_revision)
         message(FATAL_ERROR "Pangu Engine revision ALLOW_LOCAL_OVERRIDE must be ON or OFF")
     endif()
 
-    execute_process(COMMAND git -C "${PER_SOURCE_DIR}" rev-parse --show-toplevel
+    # 校验只读源码仓库，不让Git刷新共享索引而增加跨宿主的元数据租约竞争。
+    execute_process(COMMAND git --no-optional-locks -C "${PER_SOURCE_DIR}" rev-parse --show-toplevel
         RESULT_VARIABLE rootStatus OUTPUT_VARIABLE gitRoot ERROR_VARIABLE rootError
         OUTPUT_STRIP_TRAILING_WHITESPACE)
     if(NOT rootStatus EQUAL 0)
@@ -34,14 +35,14 @@ function(pangu_validate_engine_revision)
         message(FATAL_ERROR "Pangu Engine SOURCE_DIR must be the Git worktree root: ${PER_SOURCE_DIR}; Git root=${gitRoot}")
     endif()
 
-    execute_process(COMMAND git -C "${PER_SOURCE_DIR}" rev-parse --verify HEAD
+    execute_process(COMMAND git --no-optional-locks -C "${PER_SOURCE_DIR}" rev-parse --verify HEAD
         RESULT_VARIABLE shaStatus OUTPUT_VARIABLE actualSha ERROR_VARIABLE shaError
         OUTPUT_STRIP_TRAILING_WHITESPACE)
     if(NOT shaStatus EQUAL 0)
         message(FATAL_ERROR "Pangu Engine revision cannot read Git HEAD for ${PER_SOURCE_DIR}: ${shaError}")
     endif()
 
-    execute_process(COMMAND git -C "${PER_SOURCE_DIR}"
+    execute_process(COMMAND git --no-optional-locks -C "${PER_SOURCE_DIR}"
         status --porcelain --untracked-files=no --ignore-submodules=none
         RESULT_VARIABLE dirtyStatus OUTPUT_VARIABLE dirtyFiles ERROR_VARIABLE dirtyError
         OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -49,7 +50,7 @@ function(pangu_validate_engine_revision)
         message(FATAL_ERROR "Pangu Engine revision cannot check tracked dirty state: ${dirtyError}")
     endif()
 
-    execute_process(COMMAND git -C "${PER_SOURCE_DIR}" submodule status --recursive
+    execute_process(COMMAND git --no-optional-locks -C "${PER_SOURCE_DIR}" submodule status --recursive
         RESULT_VARIABLE subStatus OUTPUT_VARIABLE submodules ERROR_VARIABLE subError
         OUTPUT_STRIP_TRAILING_WHITESPACE)
     set(submoduleBroken OFF)

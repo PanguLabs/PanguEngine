@@ -44,6 +44,8 @@ endforeach()
 pangu_source_plugin_test(ProjectIntegration.EmbeddedEngine "${projectTests}/ProjectIntegrationTests.cmake"
     -DPANGU_PROJECT_TEST_STAGE=Engine)
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # 全量冷构建及三轮分类检查实测903.98秒；仅为准备过程留余量，业务与发现期限不变。
+    set_tests_properties(ProjectIntegration.EmbeddedEngine PROPERTIES TIMEOUT 1200)
     foreach(stage IN ITEMS Project Engine Provider)
         pangu_source_plugin_test("ProjectIntegration.PluginTestOwnership.${stage}"
             "${projectTests}/PluginTestOwnershipTests.cmake" "-DPANGU_OWNERSHIP_STAGE=${stage}")

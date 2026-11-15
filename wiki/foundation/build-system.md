@@ -28,6 +28,9 @@
 
 已实现 `BuildTools/PanguBuildTool`、`cmake/PanguPlugins.cmake` 的发现/启用接线及 `cmake/PanguEngineRevision.cmake` 的 Project Git 锁定校验。`ENGINE_ROOT` / `PROJECT_ROOT` 参数指向持有 `Plugins/` 的工程根。Engine standalone 默认启用内部测试；嵌入 Project 时内部测试默认关闭，父级拥有 `BUILD_TESTING`，需要时另开 `PANGU_BUILD_ENGINE_TESTS`。Project 及 Game/Editor STATIC Catalog、Assets 和显式 SHARED 部署以正式测试夹具验收；ModuleManager 原生 Loader 的当前实现与双模式实际验收见[新验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)；PanguMetaTool 首版现已单独实现，App 发布未因此实现。平台命令、结果和性能证据见[本次验收](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md)。
 
+Project Git 锁校验使用 `git --no-optional-locks` 只读查询，禁止因状态检查刷新共享源码的 Git 索引。
+HEAD、tracked dirty、子模块及显式 override 的判定保持不变；查询失败或真实不一致仍拒绝，不重试吞错。
+
 ## CMake Target 命名与职责（Frozen）
 
 | 命名 | 归属 | 示例 |

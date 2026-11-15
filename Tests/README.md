@@ -127,7 +127,9 @@ Tests/Foundation 与 Tests/Log 保留后端零分配、报告/卸载、Fatal 精
 
 `ProjectIntegration.Base` 的 Base 场景验证 Enabled/Disabled、ServiceHosts 和锁失效；独立
 `ProjectIntegration.EmbeddedEngine` 验证 EngineOptIn 的真实 Full 构建、发现、owner 分类及反例恢复。
-两者各用独立冷根与原 900 秒监督，Full 必须选择两者，原覆盖不重复执行或删除。手动
+两者各用独立冷根；Base 保留 900 秒监督，EmbeddedEngine 在 macOS 使用 1200 秒、其他平台
+保留 900 秒。macOS 完整冷场景实测 903.98 秒，新增余量只覆盖准备过程，不改变业务或发现期限。
+Full 必须选择两者，原覆盖不重复执行或删除。手动
 ProjectIntegrationTests.cmake 未指定阶段时仍运行 All。`PanguMetaProjectSwitch` 保留实际运行和 no-op
 断言，并读取真实 fmt/spdlog 对象的 CRT/Debug 信息验证 Debug→Release→旧 Debug 恢复。
 
