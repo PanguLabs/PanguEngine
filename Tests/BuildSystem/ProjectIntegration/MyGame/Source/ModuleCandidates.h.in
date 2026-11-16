@@ -1,6 +1,7 @@
 #pragma once
 
-#include "FixtureModules.h"
+#include <@dependent@Identity.h>
+#include <PhysicsIdentity.h>
 #include <ModuleManager.h>
 #include <array>
 #include <filesystem>

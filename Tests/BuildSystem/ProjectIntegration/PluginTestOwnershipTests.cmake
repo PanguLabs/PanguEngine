@@ -140,9 +140,35 @@ if(PANGU_OWNERSHIP_STAGE STREQUAL "All" OR PANGU_OWNERSHIP_STAGE STREQUAL "Engin
 endif()
 
 if(PANGU_OWNERSHIP_STAGE STREQUAL "All" OR PANGU_OWNERSHIP_STAGE STREQUAL "Provider")
+    ConfigureFixture(EngineProviderOnly "pangu.physics" PASS "" -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON
+        -DPANGU_LINK_MODE=Modular)
+    BuildFixture(MyGameProbe)
+    RejectText("${commandOutput}" "Physics.cpp")
+    RejectText("${commandOutput}" "PluginBehaviorTests.cpp")
+    file(GLOB unconsumedPhysics "${binary}/EngineBuild/Lib/*Physics*" "${binary}/EngineBuild/Bin/*Physics*")
+    if(unconsumedPhysics)
+        message(FATAL_ERROR "An unrelated host must not build the enabled Physics test runtime")
+    endif()
+
     ConfigureFixture(ProviderOnly "pangu.physics" PASS "" -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=OFF)
     BuildFixture(PanguTestsPrecommit)
     CheckOwnership(OFF OFF OFF ON)
+
+    set(physicsSource "${PANGU_TEST_ROOT}/PhysicsConsumer")
+    set(physicsBinary "${PANGU_TEST_ROOT}/PhysicsConsumerBuild")
+    file(COPY "${PANGU_ENGINE_SOURCE_DIR}/Tests/BuildSystem/PluginIntegration/Fixtures/PhysicsConsumer/"
+        DESTINATION "${physicsSource}")
+    ProjectCommand(PASS "" "${CMAKE_COMMAND}" -S "${physicsSource}" -B "${physicsBinary}" -G Ninja
+        "${compilerArgs}" -DCMAKE_BUILD_TYPE=Release -DPANGU_LINK_MODE=Modular
+        -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON
+        "-DPANGU_ENGINE_SOURCE_DIR=${PANGU_ENGINE_SOURCE_DIR}"
+        "-DPANGU_ENGINE_BUILD_ROOT=${physicsBinary}/EngineBuild"
+        "-DPANGU_META_HOST_BUILD_ROOT=${PANGU_META_HOST_BUILD_ROOT}"
+        "-DPANGU_FIXTURE_ENGINE_ROOT=${PANGU_TEST_ROOT}/FixtureEngine")
+    ProjectCommand(PASS "" "${CMAKE_COMMAND}" --build "${physicsBinary}"
+        --parallel "${PANGU_TEST_BUILD_JOBS}" --target PanguPhysicsPluginTests)
+    ProjectCommand(PASS "100% tests passed" "${CMAKE_CTEST_COMMAND}" --test-dir "${physicsBinary}"
+        --no-tests=error -R "^PanguPhysicsPluginTests[.]" --output-on-failure)
 
 endif()
 

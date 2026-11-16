@@ -1,9 +1,12 @@
 #pragma once
 
-#include "EditorService.h"
-#include "FixtureModules.h"
-#include "GameplayService.h"
 #include "LogOutcome.h"
+
+#include <EditorExtrasIdentity.h>
+#include <EditorService.h>
+#include <GameplayIdentity.h>
+#include <GameplayService.h>
+#include <PhysicsIdentity.h>
 
 #include <Check.h>
 #include <EngineHost.h>

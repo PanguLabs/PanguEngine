@@ -1,5 +1,5 @@
-#include "FixtureModules.h"
 #include "HostCheck.h"
+#include <EditorExtrasIdentity.h>
 #ifdef PANGU_FIXTURE_MODULAR
 #include "ModuleCandidates.h"
 #else

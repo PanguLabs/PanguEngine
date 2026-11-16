@@ -81,7 +81,6 @@ if(projectTestsEnabled)
         include("${PANGU_ENGINE_SOURCE_DIR}/cmake/PanguTestDependencies.cmake")
         pangu_require_googletest(RTTI ON)
         add_executable(MyGamePluginCollaborationTests EXCLUDE_FROM_ALL Tests/PluginCollaborationTests.cpp)
-        target_include_directories(MyGamePluginCollaborationTests PRIVATE Source)
         target_link_libraries(MyGamePluginCollaborationTests PRIVATE
             PanguBuildOptions Pangu::Gameplay Pangu::Physics ThirdParty::GoogleTestMain)
         pangu_stage_host_runtime(TARGET MyGamePluginCollaborationTests)
@@ -99,6 +98,8 @@ option(PANGU_FIXTURE_BUILD_HOSTS "Build the independent catalog consumer fixture
 if(PANGU_FIXTURE_BUILD_HOSTS)
     function(ConfigureConsumer host dependent dependentId)
         target_link_libraries(${host} PRIVATE PanguBuildOptions Pangu::EngineHost)
+        # 宿主读取身份和 Service 类型时不直接链接业务库。
+        target_link_libraries(${host} PRIVATE Pangu::PhysicsHeaders Pangu::GameplayHeaders Pangu::EditorExtrasHeaders)
         target_include_directories(${host} PRIVATE Source)
         if(PANGU_LINK_MODE STREQUAL "Monolithic")
             pangu_meta_host_catalog(TARGET ${host} MODULES Pangu${dependent} PanguPhysics)

@@ -1,5 +1,5 @@
 #include "SharedProbe.h"
-#include "FixtureModules.h"
+#include "SharedProbeIdentity.h"
 #include <ModuleBuiltin.h>
 #include <ModuleDeclaration.h>
 #include <ModuleDescriptor.h>

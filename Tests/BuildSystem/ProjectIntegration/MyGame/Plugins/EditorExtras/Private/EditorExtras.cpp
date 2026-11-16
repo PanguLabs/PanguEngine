@@ -1,9 +1,10 @@
+#include "EditorExtrasIdentity.h"
 #include "EditorExtrasModule.h"
 #include "EditorService.h"
-#include "FixtureModules.h"
 #include "ModuleDeclaration.h"
 #include "ModuleDescriptor.h"
 #include "Result.h"
+#include <PhysicsIdentity.h>
 
 #include <RegistrationContext.h>
 #include <ScopeBuildContext.h>

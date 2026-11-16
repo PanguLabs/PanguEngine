@@ -1,6 +1,6 @@
 #pragma once
 
-#include "FixtureModules.h"
+#include <ModuleDescriptor.h>
 #include <PanguEditorExtrasExport.h>
 
 namespace pg::fixture

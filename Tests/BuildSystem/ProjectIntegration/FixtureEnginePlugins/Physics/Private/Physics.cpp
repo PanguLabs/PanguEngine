@@ -1,13 +1,12 @@
-#include "FixtureModules.h"
 #include "ModuleDeclaration.h"
 #include "ModuleDescriptor.h"
+#include "PhysicsIdentity.h"
 #include "PhysicsModule.h"
 #include "Result.h"
 
 #include <ModuleBuiltin.h>
 #include <RegistrationContext.h>
 #include <array>
-#include <cstddef>
 
 namespace pg::fixture
 {
@@ -15,7 +14,7 @@ namespace
 {
 [[nodiscard]] pg::Status RegisterPhysics(module::RegistrationContext& context) noexcept
 {
-    return context.Declare(module::DeclarationId{.Bytes = {std::byte{0x11}}}, "Physics");
+    return context.Declare(kPhysicsDeclaration, "Physics");
 }
 } // namespace
 

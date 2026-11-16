@@ -73,6 +73,19 @@
 
 ## 执行与产物
 
+`ProjectIntegration/FixtureEnginePlugins/Physics` 与 `MyGame/Plugins` 下各插件拥有各自的 `Public/`
+接口、身份和 Query 声明；插件实现及自身测试不读取 `MyGame/Source`。`Pangu::PhysicsHeaders`、
+`Pangu::GameplayHeaders`、`Pangu::EditorExtrasHeaders`、`Pangu::SharedProbeHeaders` 只传递公开头文件及 Runtime 使用要求，
+Modular 宿主读取身份和 Service 类型不会因此直接链接业务库。Query 导出声明由实际 Module 目标提供。
+`MyGame/Source` 只保留宿主、运行断言和候选装配。
+
+`ProjectIntegration.PluginTestOwnership` 的 Provider 场景还使用
+`PluginIntegration/Fixtures/PhysicsConsumer` 构造不含 MyGame 的独立顶层工程，构建并运行 Physics
+自身测试，保护 Engine 插件的接口边界；插件测试显式部署自己的运行依赖。
+插件自身测试使用独立运行目录，避免共享 DLL 部署生产者使普通宿主隐式构建无关业务库；
+Provider 场景同时检查开启 Engine 测试时单独构建 MyGameProbe 不会构建 Physics。
+Base、EmbeddedEngine 及手动 All 每次使用新的夹具运行目录，防止覆盖复制遗留已删除或迁移的头文件。
+
 `ProjectIntegration.FindPackage` 遵循 ProjectIntegration 的 full 分层，使用无编译器的临时 CMake 工程验证发现、重复查找无副作用、QUIET/REQUIRED 失败语义及相对 BuildRoot 拒绝；真实初始化、链接与宿主运行继续由 MyGame、ModuleLinkModes、LogConfig 和 PanguMeta 夹具覆盖。完整 Engine 消费者使用 `find_package(PanguEngine REQUIRED MODULE)` 后调用 `pangu_initialize()`；单模块隔离夹具保留直接消费模块的边界。
 
 Shared 模块的独立配置入口为 `Tests/Module/Fixtures/SharedProject/`，Engine 内部目标仍定义在 `Tests/Module/Fixtures/Shared/`。`ModuleSharedProject` 验证独立配置、原生模块测试构建和运行；入口与内部目标分目录，避免同一源码目录被顶层和 Engine 子图重复加入而形成目录属性遍历环。

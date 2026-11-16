@@ -1,9 +1,10 @@
-#include "FixtureModules.h"
+#include "GameplayIdentity.h"
 #include "GameplayModule.h"
 #include "GameplayService.h"
 #include "ModuleDeclaration.h"
 #include "ModuleDescriptor.h"
 #include "Result.h"
+#include <PhysicsIdentity.h>
 
 #include <RegistrationContext.h>
 #include <ScopeBuildContext.h>
