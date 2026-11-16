@@ -19,7 +19,7 @@ unset(_pangu_third_party_links)
 if(NOT CMAKE_CROSSCOMPILING)
     add_executable(PanguToolchainLinkTests LinkProbe.cpp)
     target_compile_features(PanguToolchainLinkTests PRIVATE cxx_std_23)
-    target_link_libraries(PanguToolchainLinkTests PRIVATE ThirdParty::CompiledProbe Pangu::ToolchainProbe)
+    target_link_libraries(PanguToolchainLinkTests PRIVATE ThirdParty::CompiledProbe PanguToolchainProbe)
     set_target_properties(PanguToolchainLinkTests PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Tests/Toolchain"
     )

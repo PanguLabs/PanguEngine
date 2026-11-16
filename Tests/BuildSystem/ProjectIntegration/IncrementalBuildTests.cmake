@@ -14,7 +14,7 @@ file(COPY "${PANGU_ENGINE_SOURCE_DIR}/Source/ThirdParty/TomlPlusPlus/Repo/includ
 file(MAKE_DIRECTORY "${mirror}/cmake/Platform/Linux")
 file(COPY "${PANGU_ENGINE_SOURCE_DIR}/cmake/Platform/Linux/Toolchain.cmake"
     DESTINATION "${mirror}/cmake/Platform/Linux")
-set(enabled "pangu.physics;mygame.gameplay;mygame.editor-extras")
+set(enabled "fixture.physics;mygame.gameplay;mygame.editor-extras")
 ConfigureFixture(Incremental "${enabled}" PASS "" -DPANGU_FIXTURE_BUILD_HOSTS=ON
     -DPANGU_LINK_MODE=Modular
     "-DPANGU_FIXTURE_PLUGIN_CMAKE_DIR:PATH=${mirror}/cmake")
@@ -65,11 +65,11 @@ BuildFixture(MyGame)
 RequireText("${commandOutput}" "no work to do")
 ConfigureFixture(Incremental "${enabled}" FAIL "[plugin].id")
 file(WRITE "${newPlugin}/Plugin.toml" "[plugin]\nid = 'mygame.new-plugin'\n")
-ConfigureFixture(Incremental "pangu.physics;mygame.gameplay" PASS ""
-    -DPANGU_FIXTURE_BUILD_HOSTS=OFF "-DPANGU_FIXTURE_PROBE_DEPENDENCIES:STRING=Pangu::Gameplay")
+ConfigureFixture(Incremental "fixture.physics;mygame.gameplay" PASS ""
+    -DPANGU_FIXTURE_BUILD_HOSTS=OFF "-DPANGU_FIXTURE_PROBE_DEPENDENCIES:STRING=MyGameGameplay")
 BuildFixture(MyGameProbe)
 ProjectCommand(PASS "" ninja -C "${binary}" -t targets all)
-RejectText("${commandOutput}" "PanguEditorExtras")
+RejectText("${commandOutput}" "MyGameEditorExtras")
 
 if(CMAKE_HOST_WIN32)
     set(executableSuffix .exe)

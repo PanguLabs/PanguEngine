@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ModuleDescriptor.h>
-#include <PanguSharedProbeExport.h>
+#include <MyGameSharedProbeExport.h>
 
 namespace pg::fixture
 {

@@ -412,7 +412,7 @@ Task 4 新增 `ModuleManagerTests.cpp`、`ResidentModuleTests.cpp`、`BatchLoadT
 | SourcePluginStaticCatalog | 同名两模式脚本，Mono 保留 Catalog/裁剪；Modular 真实 Load/Register/Activate/Shutdown | 继续检查 Game/Editor 不同消费集合、未消费不构建、基础根启动和真实业务退出；动态用例补充，不替代归档根引用 |
 | SourcePluginSharedDeploy 的旧独立 SHARED Probe | 同名脚本真实 Runtime/业务 Query 与部署 | 保留文件 magic/名称/复制 SHA/no-op；新增宿主不直接导入业务库、真实动态启动和关闭，不以文件存在代替运行 |
 | SourcePluginIncremental/Project/Enable/EngineRevision/TestOwnership | 原同名脚本 + 双模式/锁验证 | 保留原负例、未消费不重编、空 Plugin/owner 隔离；锁当前干净 Engine SHA，local override OFF；往返不得消费旧模式产物 |
-| Toolchain PolicyProbe 固定 STATIC | 同一 Pangu::ToolchainProbe 服从模式 | ThirdParty::CompiledProbe 仍 STATIC 且不继承 Pangu 策略；ToolchainLibraryLink 两库最终链接与 expected 返回保留 |
+| Toolchain PolicyProbe 固定 STATIC | 同一 PanguToolchainProbe 服从模式 | ThirdParty::CompiledProbe 仍 STATIC 且不继承 Pangu 策略；ToolchainLibraryLink 两库最终链接与 expected 返回保留 |
 | 空 LinkSmoke/未消费 Runtime 的 SharedProbe | ProjectIntegration/CrossCompileTests.cmake | 旧 SDK 空程序冒烟已删除；保留 Android .a→原生宿主.so、iOS .a→Mach-O executable 与 Modular 真 Runtime/业务 Query/依赖，架构/platform 断言；不等效设备运行 |
 | ModuleIdentity/Descriptor 原 Module/Public 路径 | Foundation/Public 同名纯协议头 | 旧位置删除，无转发头；PUBLIC Foundation 依赖传播，身份/版本断言保留，无新增库或 Module→Foundation 链接环 |
 | ScopeTypeToken 地址比较 | ScopeBuild/SharedScopeLifecycle.TypedDependency、ModuleLifetime | 内部 RTTI 值比较，跨 DLL 公共/私有类型、错误类型与卸载后凭据真实回归；不凭地址/名字/hash 绕过 |

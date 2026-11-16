@@ -47,7 +47,7 @@ function(ConfigureProject name testing engineTests)
     set(binary "${PANGU_TEST_ROOT}/${name}")
     set(servicePlugins "")
     if(name STREQUAL "ServiceHosts")
-        set(servicePlugins "pangu.physics;mygame.gameplay;mygame.editor-extras")
+        set(servicePlugins "fixture.physics;mygame.gameplay;mygame.editor-extras")
     endif()
     execute_process(
         COMMAND "${CMAKE_COMMAND}" -S "${source}" -B "${binary}" -G Ninja

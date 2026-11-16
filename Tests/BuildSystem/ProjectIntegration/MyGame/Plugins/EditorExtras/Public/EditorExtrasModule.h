@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ModuleDescriptor.h>
-#include <PanguEditorExtrasExport.h>
+#include <MyGameEditorExtrasExport.h>
 
 namespace pg::fixture
 {

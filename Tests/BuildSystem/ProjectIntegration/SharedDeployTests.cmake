@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 4.0)
 include("${CMAKE_CURRENT_LIST_DIR}/ProjectTestHelpers.cmake")
-ConfigureFixture(Shared "pangu.physics;mygame.gameplay;mygame.editor-extras;mygame.shared-probe" PASS ""
+ConfigureFixture(Shared "fixture.physics;mygame.gameplay;mygame.editor-extras;mygame.shared-probe" PASS ""
     -DPANGU_FIXTURE_BUILD_HOSTS=ON -DPANGU_LINK_MODE=Modular)
 BuildFixture(MyGame)
-if(NOT EXISTS "${binary}/Generated/PanguMeta/Release/PanguGameplay/Private/ModuleQuery.gen.cpp")
+if(NOT EXISTS "${binary}/Generated/PanguMeta/Release/MyGameGameplay/Private/ModuleQuery.gen.cpp")
     message(FATAL_ERROR "Native Query must be emitted by the target's PanguMetaTool batch")
 endif()
 file(GLOB shared "${binary}/Bin/*SharedProbe*")

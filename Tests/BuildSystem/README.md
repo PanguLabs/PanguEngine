@@ -74,10 +74,17 @@
 ## 执行与产物
 
 `ProjectIntegration/FixtureEnginePlugins/Physics` 与 `MyGame/Plugins` 下各插件拥有各自的 `Public/`
-接口、身份和 Query 声明；插件实现及自身测试不读取 `MyGame/Source`。`Pangu::PhysicsHeaders`、
-`Pangu::GameplayHeaders`、`Pangu::EditorExtrasHeaders`、`Pangu::SharedProbeHeaders` 只传递公开头文件及 Runtime 使用要求，
+接口、身份和 Query 声明；插件实现及自身测试不读取 `MyGame/Source`。`FixtureEnginePhysicsHeaders`、
+`MyGameGameplayHeaders`、`MyGameEditorExtrasHeaders`、`MyGameSharedProbeHeaders` 只传递公开头文件及 Runtime 使用要求，
 Modular 宿主读取身份和 Service 类型不会因此直接链接业务库。Query 导出声明由实际 Module 目标提供。
+`Pangu::` 别名仅由 `Source/Runtime/` 定义；测试和 Project 自身使用普通目标名。模拟 Engine 的 Physics
+Module 使用 `FixtureEnginePhysics`，MyGame 的 Module 使用 `MyGameGameplay`、`MyGameEditorExtras`、
+`MyGameSharedProbe`，对应头文件辅助目标按同一来源命名。
 `MyGame/Source` 只保留宿主、运行断言和候选装配。
+
+Physics 夹具的 Plugin ID 为 `fixture.physics`，与实际库目标 `FixtureEnginePhysics` 分别表示插件身份和构建身份。
+Engine/Project 来源由发现根决定，测试归属仍为 `owner.engine`；启用列表、访问记录和插件标签使用同一 ID。
+Physics 自身测试目标为 `FixtureEnginePhysicsPluginTests`，对应 CTest 名称前缀与构建、发现及归属筛选一致。
 
 `ProjectIntegration.PluginTestOwnership` 的 Provider 场景还使用
 `PluginIntegration/Fixtures/PhysicsConsumer` 构造不含 MyGame 的独立顶层工程，构建并运行 Physics

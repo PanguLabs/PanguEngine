@@ -28,6 +28,8 @@ PanguEngine 的 CMake 4.0+ / Ninja 与 C++23/Clang 单图构建已替代自制 P
 
 2026-11-16 接入入口更新：独立 Project 通过 `FindPanguEngine.cmake` / `find_package(PanguEngine REQUIRED MODULE)` 查找源码包，在 `project()` 后调用 `pangu_initialize()`；内部仍为 `add_subdirectory()` 同图构建。当前产物分根与 Project 切换规则以[构建系统](../foundation/build-system.md)为准，不改变本 ADR 的源码交付、工具链和依赖所有权政策。
 
+2026-11-16 用户进一步收窄 CMake 命名边界：`Pangu::` 别名仅由 `Source/Runtime/` 定义；Project、测试夹具和 Toolchain Module 使用普通目标名，例如 `MyGameGameplay`、`FixtureEnginePhysics`、`PanguToolchainProbe`，外部消费者仍通过 Runtime 别名依赖 Engine。该规则使保留命名空间直接表达正式 Runtime 归属，替代第 6 项中更宽泛的 Module 别名范围；不改变一 Module 一真实库、ModuleId、C++ Query 或统一动态入口协议。
+
 ## Open Questions
 
 `PanguMetaTool` 自动生成 Catalog 的协议、运行时插件启停清单、SHARED 实际 Loader/热重载、资产管线、完整安装打包及设备级动态库装载策略待分别设计。以上都不构成恢复独立 Pangu 原生二进制 SDK/Plugin Preflight 的授权。

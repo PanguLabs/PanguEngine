@@ -46,9 +46,9 @@ HEAD、tracked dirty、子模块及显式 override 的判定保持不变；查�
 
 | 命名 | 归属 | 示例 |
 | --- | --- | --- |
-| `Pangu::` | **仅限真实 Pangu Module**；每个 Module 唯一对应实际 `STATIC` / `SHARED` Target | `Pangu::Foundation`、`Pangu::Module` |
+| `Pangu::` | **仅由 `Source/Runtime/` 下的真实 Module 定义**；每个 Module 唯一对应实际 `STATIC` / `SHARED` Target | `Pangu::Foundation`、`Pangu::Module` |
 | `ThirdParty::` | 第三方依赖的 CMake 构建接口；允许 `INTERFACE` / `STATIC` / `SHARED` / `IMPORTED` 和上游 Target `ALIAS` | `ThirdParty::NlohmannJson`、`ThirdParty::Flecs` |
-| 无上述命名空间 | Pangu 自有构建策略、宿主程序、构建工具、测试或辅助库（不是 Module） | `PanguBuildOptions`、`PanguToolchainLinkTests` |
+| 无上述命名空间 | Runtime 目录外的 Module、Project、测试夹具、构建策略、宿主、工具和辅助目标 | `FixtureEnginePhysics`、`MyGameGameplay`、`PanguBuildOptions` |
 
 ```cmake
 pangu_module_library_type(moduleType)
@@ -61,6 +61,8 @@ add_library(ThirdParty::NlohmannJson ALIAS ThirdPartyNlohmannJson)
 ```
 
 `PanguBuildOptions` 是普通 `INTERFACE` 配置目标，不创建 `Pangu::BuildOptions` 别名；第三方目标也不使用旧 `Pangu::NlohmannJson` 别名。**CMake 构建身份不等于引擎 Module 运行时身份。** `pangu_configure_module()` 仅用于 Pangu Module，不要为了包装第三方编译配置增加新的 Pangu Module。
+
+Runtime 外的消费者可引用上述 Runtime 别名；自身使用普通目标名，测试中的真实 Module 也遵守此规则。项目目标和其头文件辅助目标分别使用 `MyGameGameplay`、`MyGameGameplayHeaders` 等项目名称；模拟 Engine 插件的夹具使用 `FixtureEnginePhysics`、`FixtureEnginePhysicsHeaders`，不占用 Runtime 的命名空间。
 
 第三方可直接被现有 Target 引用、在现有 Module 内适配、作为独立技术编译 Target，或由承担 ECS/Renderer/Physics 等独立引擎功能的 Pangu Module 使用；只有最后一种引擎功能边界需要独立 Module 身份。不引入额外 ThirdParty Manager、External Module 或统一 Wrapper 系统。
 
@@ -239,7 +241,7 @@ Meta 输入头登记同时接入目标源码登记，每头有唯一 Module 所�
 
 ## 现行 Toolchain 与 ThirdParty 回归
 
-`BUILD_TESTING=ON` 时，`Tests/Toolchain/` 的两个 Probe 使用所选平台 Clang/C++23 编译为真实库：`ThirdParty::CompiledProbe` 始终为 STATIC，`Pangu::ToolchainProbe` 服从统一链接模式。普通第三方库不继承 `PanguBuildOptions`；桌面 `ToolchainLibraryLink` 通过链接两个库并运行 CTest 验证跨库 C++23 返回值。编译器/头依赖与命令变更导致的重编由 CMake + Ninja 判断，不执行自制 ABI 审计。
+`BUILD_TESTING=ON` 时，`Tests/Toolchain/` 的两个 Probe 使用所选平台 Clang/C++23 编译为真实库：`ThirdParty::CompiledProbe` 始终为 STATIC，`PanguToolchainProbe` 服从统一链接模式并直接使用普通目标名。普通第三方库不继承 `PanguBuildOptions`；桌面 `ToolchainLibraryLink` 通过链接两个库并运行 CTest 验证跨库 C++23 返回值。编译器/头依赖与命令变更导致的重编由 CMake + Ninja 判断，不执行自制 ABI 审计。
 
 `BUILD_TESTING=OFF` 时不构建上述测试目标。Android/iOS 正式 Preset 默认关闭 Tests；单独的移动平台最终链接冒烟须由显式目标执行，不纳入默认 `ALL`。详情见 [Toolchain 测试](../../Tests/Toolchain/README.md)。
 

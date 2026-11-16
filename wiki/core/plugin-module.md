@@ -35,9 +35,9 @@ Plugin / Module 体系要兼顾静态构建与动态扩展、Game 与 Editor 运
 
 **CMake Target 是构建依赖节点，Pangu Module 是引擎逻辑代码单元；前者不自动获得后者的运行时身份。**
 
-- `Pangu::` **MUST 仅用于真实 Pangu Module Target 的别名**（例如 `Pangu::Foundation`、`Pangu::ECS`）。每个 Module 仍对应唯一实际 `STATIC` / `SHARED` Library Target。
+- `Pangu::` **MUST 仅由 `Source/Runtime/` 下的真实 Module 定义 Target 别名**（例如 `Pangu::Foundation`、`Pangu::Module`）。每个 Module 仍对应唯一实际 `STATIC` / `SHARED` Library Target；其他目录通过这些别名消费 Runtime，自身的 Module 和辅助目标使用普通名称，例如 `FixtureEnginePhysics`、`MyGameGameplay`。
 - `ThirdParty::` **MUST 用于项目对外提供的第三方依赖 Target 名称**（例如 `ThirdParty::NlohmannJson`、`ThirdParty::Asio`）；允许原生 CMake `ALIAS` 指向上游 Target，不为命名创建多余库。第三方 SDK 可暴露多个 Target。
-- `PanguBuildOptions` 等自有构建策略、工具与辅助 Target 使用**无 `Pangu::` 前缀**的普通名称；它们不是 Pangu Module。**不保留旧 `Pangu::BuildOptions` 或 `Pangu::NlohmannJson` 别名。**
+- `PanguBuildOptions` 等自有构建策略、工具与辅助 Target 使用**无 `Pangu::` 前缀**的普通名称；测试中的 Module 目标同样使用普通名称，仍按统一模式构建为真实库。**不保留旧 `Pangu::BuildOptions` 或 `Pangu::NlohmannJson` 别名。**
 - 编译器、标准库、SDK/NDK 的基础选择由 CMake Toolchain/Preset 统一提供；`PanguBuildOptions` 为引擎代码施加 C++23、无异常和警告策略，ThirdParty 不调用 `pangu_configure_module()`。
 - 第三方依赖只需进入 CMake 图（`INTERFACE` / `STATIC` / `SHARED` / `IMPORTED` 或上游 Target），不引入 External Module、ThirdParty Manager、统一 Package Adapter 或构建 Wrapper。
 
@@ -85,7 +85,7 @@ Plugin / Module 体系要兼顾静态构建与动态扩展、Game 与 Editor 运
 
 | 主题 | 当前结论 |
 | --- | --- |
-| `Plugin.toml` | 源码 Plugin 必需；`[plugin].id` 全局唯一，形如 `pangu.physics` 的受限小写 ID，`name` 为可选字符串，`version` 为可选 SemVer 2.0.0；ADR-0014 的严格解析、双根发现和显式启用已实现，见[验收](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md) |
+| `Plugin.toml` | 源码 Plugin 必需；`[plugin].id` 全局唯一，形如 `fixture.physics` 的受限小写 ID，`name` 为可选字符串，`version` 为可选 SemVer 2.0.0；ADR-0014 的严格解析、双根发现和显式启用已实现，见[验收](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md) |
 | `Module.toml` | **不再视为强制文件**；CMake 采用后需重新评估 |
 | `CMakeLists.txt` | 负责构建表达，不自动替代所有运行时 Manifest |
 | `ModuleDescriptor` | 可由 PanguMetaTool 生成必要的模块运行时元数据；结构和序列化未冻结，不引入 ExtensionDescriptor |

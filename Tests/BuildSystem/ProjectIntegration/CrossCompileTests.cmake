@@ -35,7 +35,7 @@ ProjectCommand(PASS "" "${CMAKE_COMMAND}" --preset "${PANGU_TARGET_PRESET}"
     "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PANGU_ENGINE_SOURCE_DIR}"
     "-DPANGU_META_HOST_BUILD_ROOT=${PANGU_META_HOST_BUILD_ROOT}"
     "-DPANGU_FIXTURE_ENGINE_ROOT:PATH=${PANGU_TEST_ROOT}/FixtureEngine"
-    "-DPANGU_ENABLED_PLUGINS:STRING=pangu.physics;mygame.gameplay;mygame.editor-extras;mygame.assets-only;mygame.shared-probe"
+    "-DPANGU_ENABLED_PLUGINS:STRING=fixture.physics;mygame.gameplay;mygame.editor-extras;mygame.assets-only;mygame.shared-probe"
     -DPANGU_FIXTURE_BUILD_HOSTS=ON "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
     "-DPANGU_LINK_MODE=${PANGU_LINK_MODE}")
 foreach(target IN ITEMS MobileHost)
@@ -88,8 +88,8 @@ RejectText("${commandOutput}" "libLLVM")
 RejectText("${commandOutput}" "libclang")
 RejectText("${commandOutput}" "libstdc++")
 RejectText("${commandOutput}" "/opt/local")
-RejectText("${commandOutput}" "PanguGameplay")
-RejectText("${commandOutput}" "PanguPhysics")
+RejectText("${commandOutput}" "MyGameGameplay")
+RejectText("${commandOutput}" "FixtureEnginePhysics")
 if(PANGU_LINK_MODE STREQUAL "Modular")
     RequireText("${commandOutput}" "PanguEngineHost")
     RequireText("${commandOutput}" "PanguModule")

@@ -1,7 +1,7 @@
 #pragma once
 
+#include <FixtureEnginePhysicsExport.h>
 #include <ModuleDescriptor.h>
-#include <PanguPhysicsExport.h>
 
 namespace pg::fixture
 {

@@ -35,6 +35,7 @@
 
 - **构建产物名称不得包含平台名**；构建目录按宿主文件系统隔离，产物名称在各平台保持一致，文件前缀与扩展名遵循平台惯例。
 - **构建系统逻辑优先使用 C++ 实现**；CMake 负责接线与集成，包括目标声明、依赖连接和构建工具调用。
+- **`Pangu::` CMake 别名仅由 `Source/Runtime/` 下的真实 Module 定义**；其他目录通过这些别名消费 Runtime，自身使用普通目标名。测试夹具和 Project 的命名边界见 [`wiki/foundation/build-system.md`](wiki/foundation/build-system.md)。
 
 ## Agent 工作方式
 

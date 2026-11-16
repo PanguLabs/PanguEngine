@@ -15,10 +15,10 @@
 namespace
 {
 const std::array kCases{
-    std::tuple{"valid", "[plugin]\nid = 'pangu.physics'\nname = '中文物理'\nversion = '1.2.3-alpha.1+sha.7'\n", true},
+    std::tuple{"valid", "[plugin]\nid = 'fixture.physics'\nname = '中文物理'\nversion = '1.2.3-alpha.1+sha.7'\n", true},
     std::tuple{"minimal", "[plugin]\nid = 'mygame.gameplay'\n", true},
     std::tuple{"missing-id", "[plugin]\nname = 'No ID'\n", false},
-    std::tuple{"uppercase-id", "[plugin]\nid = 'Pangu.Physics'\n", false},
+    std::tuple{"uppercase-id", "[plugin]\nid = 'Fixture.Physics'\n", false},
     std::tuple{"empty-segment", "[plugin]\nid = 'foo..bar'\n", false},
     std::tuple{"bad-hyphen", "[plugin]\nid = 'foo.-bar'\n", false},
     std::tuple{"leading-zero-version", "[plugin]\nid = 'valid.id'\nversion = '01.2.3'\n", false},
@@ -67,7 +67,7 @@ TEST_P(PluginManifest, ParsesAndDiagnoses)
     }
     if (std::string_view(label) == "valid")
     {
-        EXPECT_EQ(result->Id, "pangu.physics");
+        EXPECT_EQ(result->Id, "fixture.physics");
         EXPECT_EQ(result->Name, "中文物理");
         EXPECT_EQ(result->Version, "1.2.3-alpha.1+sha.7");
     }

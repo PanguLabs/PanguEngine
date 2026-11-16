@@ -73,7 +73,7 @@ TEST_F(PluginDiscovery, SortsBothRootsAndIgnoresOrdinaryEntries)
 {
     const auto engine = Root() / "Engine";
     const auto project = Root() / "Project";
-    ASSERT_TRUE(AddPlugin(engine, "Physics", "pangu.physics"));
+    ASSERT_TRUE(AddPlugin(engine, "Physics", "fixture.physics"));
     ASSERT_TRUE(AddPlugin(project, "Gameplay", "mygame.gameplay"));
     ASSERT_TRUE(Write(engine / "Plugins/README.txt", "ordinary file is ignored"));
     std::error_code error;
@@ -82,8 +82,8 @@ TEST_F(PluginDiscovery, SortsBothRootsAndIgnoresOrdinaryEntries)
     const auto sorted = pg::build::plugin::DiscoverPlugins(engine, project);
     ASSERT_TRUE(sorted);
     ASSERT_EQ(sorted->size(), 2U);
-    EXPECT_EQ(sorted->front().Metadata.Id, "mygame.gameplay");
-    EXPECT_EQ(sorted->back().Metadata.Id, "pangu.physics");
+    EXPECT_EQ(sorted->front().Metadata.Id, "fixture.physics");
+    EXPECT_EQ(sorted->back().Metadata.Id, "mygame.gameplay");
 }
 
 TEST_F(PluginDiscovery, RejectsMissingEngineRoot)
@@ -102,7 +102,7 @@ TEST_F(PluginDiscovery, AllowsEngineWithoutPluginsDirectory)
 
 TEST_F(PluginDiscovery, RejectsSameActualRootTwice)
 {
-    ASSERT_TRUE(AddPlugin(Root(), "Physics", "pangu.physics"));
+    ASSERT_TRUE(AddPlugin(Root(), "Physics", "fixture.physics"));
     const auto result = pg::build::plugin::DiscoverPlugins(Root(), Root());
     ASSERT_FALSE(result);
     EXPECT_FALSE(result.error().empty());

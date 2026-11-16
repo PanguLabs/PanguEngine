@@ -20,6 +20,14 @@ function(CheckMetaHostIsolation)
     endif()
 endfunction()
 
+function(CheckFixturePluginDependencies)
+    # 普通目标名不触发 CMake 的命名空间目标校验，所有插件登记后再检查必需提供方。
+    if((TARGET MyGameGameplay OR TARGET MyGameEditorExtras) AND NOT TARGET FixtureEnginePhysics)
+        message(FATAL_ERROR "FixtureEnginePhysics must be enabled for the MyGame Gameplay/EditorExtras plugins")
+    endif()
+endfunction()
+cmake_language(DEFER CALL CheckFixturePluginDependencies)
+
 include(CTest)
 
 file(READ "${CMAKE_CURRENT_SOURCE_DIR}/Engine.commit" PANGU_ENGINE_EXPECTED_COMMIT)
@@ -77,12 +85,12 @@ pangu_tests_enabled(projectTestsEnabled)
 if(projectTestsEnabled)
     pangu_register_test(NAME MyGameProbe COMMAND MyGameProbe
         BOUNDARY integration AREA build TIER precommit BUILD_TARGETS MyGameProbe)
-    if("pangu.physics" IN_LIST PANGU_ENABLED_PLUGINS AND "mygame.gameplay" IN_LIST PANGU_ENABLED_PLUGINS)
+    if("fixture.physics" IN_LIST PANGU_ENABLED_PLUGINS AND "mygame.gameplay" IN_LIST PANGU_ENABLED_PLUGINS)
         include("${PANGU_ENGINE_SOURCE_DIR}/cmake/PanguTestDependencies.cmake")
         pangu_require_googletest(RTTI ON)
         add_executable(MyGamePluginCollaborationTests EXCLUDE_FROM_ALL Tests/PluginCollaborationTests.cpp)
         target_link_libraries(MyGamePluginCollaborationTests PRIVATE
-            PanguBuildOptions Pangu::Gameplay Pangu::Physics ThirdParty::GoogleTestMain)
+            PanguBuildOptions MyGameGameplay FixtureEnginePhysics ThirdParty::GoogleTestMain)
         pangu_stage_host_runtime(TARGET MyGamePluginCollaborationTests)
         set(collaborationDiscoveryArgs)
         if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
@@ -99,36 +107,36 @@ if(PANGU_FIXTURE_BUILD_HOSTS)
     function(ConfigureConsumer host dependent dependentId)
         target_link_libraries(${host} PRIVATE PanguBuildOptions Pangu::EngineHost)
         # 宿主读取身份和 Service 类型时不直接链接业务库。
-        target_link_libraries(${host} PRIVATE Pangu::PhysicsHeaders Pangu::GameplayHeaders Pangu::EditorExtrasHeaders)
+        target_link_libraries(${host} PRIVATE FixtureEnginePhysicsHeaders MyGameGameplayHeaders MyGameEditorExtrasHeaders)
         target_include_directories(${host} PRIVATE Source)
         if(PANGU_LINK_MODE STREQUAL "Monolithic")
-            pangu_meta_host_catalog(TARGET ${host} MODULES Pangu${dependent} PanguPhysics)
-            target_link_libraries(${host} PRIVATE Pangu::${dependent} Pangu::Physics)
+            pangu_meta_host_catalog(TARGET ${host} MODULES MyGame${dependent} FixtureEnginePhysics)
+            target_link_libraries(${host} PRIVATE MyGame${dependent} FixtureEnginePhysics)
         else()
             if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
                 set_target_properties(${host} PROPERTIES ENABLE_EXPORTS ON)
             endif()
             set(deployDirectory "${CMAKE_BINARY_DIR}/Deploy/${PANGU_LINK_MODE}/${host}")
-            set(dependentPath "${deployDirectory}/$<TARGET_FILE_NAME:Pangu${dependent}>")
-            set(physicsPath "${deployDirectory}/$<TARGET_FILE_NAME:PanguPhysics>")
+            set(dependentPath "${deployDirectory}/$<TARGET_FILE_NAME:MyGame${dependent}>")
+            set(physicsPath "${deployDirectory}/$<TARGET_FILE_NAME:FixtureEnginePhysics>")
             configure_file(Source/ModuleCandidates.h.in "Generated/${host}/ModuleCandidates.h.in" @ONLY)
             file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/Generated/${host}/ModuleCandidates.h"
                 INPUT "${CMAKE_CURRENT_BINARY_DIR}/Generated/${host}/ModuleCandidates.h.in")
             target_include_directories(${host} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/Generated/${host}")
             target_compile_definitions(${host} PRIVATE PANGU_FIXTURE_MODULAR)
             set(outputs)
-            foreach(module IN ITEMS Physics ${dependent})
-                set(output "${deployDirectory}/${CMAKE_SHARED_LIBRARY_PREFIX}Pangu${module}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+            foreach(module IN ITEMS FixtureEnginePhysics MyGame${dependent})
+                set(output "${deployDirectory}/${CMAKE_SHARED_LIBRARY_PREFIX}${module}${CMAKE_SHARED_LIBRARY_SUFFIX}")
                 add_custom_command(OUTPUT "${output}"
                     COMMAND "${CMAKE_COMMAND}" -E make_directory "${deployDirectory}"
-                    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:Pangu${module}>" "${output}"
-                    DEPENDS Pangu${module} VERBATIM)
+                    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:${module}>" "${output}"
+                    DEPENDS ${module} VERBATIM)
                 list(APPEND outputs "${output}")
             endforeach()
             add_custom_target(${host}DeployModules DEPENDS ${outputs})
             add_dependencies(${host} ${host}DeployModules)
             file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/${host}DeployManifest.txt"
-                CONTENT "$<TARGET_FILE:Pangu${dependent}>\n${dependentPath}\n$<TARGET_FILE:PanguPhysics>\n${physicsPath}\n")
+                CONTENT "$<TARGET_FILE:MyGame${dependent}>\n${dependentPath}\n$<TARGET_FILE:FixtureEnginePhysics>\n${physicsPath}\n")
         endif()
         file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/${host}Consumer.txt"
             CONTENT "mode=${PANGU_LINK_MODE}\nlinks=$<TARGET_PROPERTY:${host},LINK_LIBRARIES>\nfile=$<TARGET_FILE:${host}>\n")
@@ -151,18 +159,18 @@ if(PANGU_FIXTURE_BUILD_HOSTS)
     endif()
 endif()
 
-if(TARGET PanguSharedProbe)
-    get_target_property(sharedProbeType PanguSharedProbe TYPE)
+if(TARGET MyGameSharedProbe)
+    get_target_property(sharedProbeType MyGameSharedProbe TYPE)
 endif()
 if(sharedProbeType STREQUAL "SHARED_LIBRARY")
     set(deployDirectory "${CMAKE_BINARY_DIR}/Deploy")
-    set(deployFile "${deployDirectory}/${CMAKE_SHARED_LIBRARY_PREFIX}PanguSharedProbe${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set(deployFile "${deployDirectory}/${CMAKE_SHARED_LIBRARY_PREFIX}MyGameSharedProbe${CMAKE_SHARED_LIBRARY_SUFFIX}")
     file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/SharedDeployManifest.txt"
-        CONTENT "$<TARGET_FILE:PanguSharedProbe>\n${deployFile}\n")
+        CONTENT "$<TARGET_FILE:MyGameSharedProbe>\n${deployFile}\n")
     add_custom_command(OUTPUT "${deployFile}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${deployDirectory}"
-        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:PanguSharedProbe>" "${deployFile}"
-        DEPENDS PanguSharedProbe
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:MyGameSharedProbe>" "${deployFile}"
+        DEPENDS MyGameSharedProbe
         VERBATIM)
     add_custom_target(MyGameDeployShared DEPENDS "${deployFile}")
 endif()

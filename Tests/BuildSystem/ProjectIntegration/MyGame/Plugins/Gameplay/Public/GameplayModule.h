@@ -1,7 +1,7 @@
 #pragma once
 
 #include <ModuleDescriptor.h>
-#include <PanguGameplayExport.h>
+#include <MyGameGameplayExport.h>
 
 namespace pg::fixture
 {

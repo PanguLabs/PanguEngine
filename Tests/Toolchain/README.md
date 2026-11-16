@@ -7,7 +7,7 @@
 `BUILD_TESTING=ON` 且 `PANGU_BUILD_ENGINE_TESTS=ON` 时始终配置 Toolchain；任一关闭则不接入 Engine 测试。交叉编译时只构建编译型探针，不运行设备程序。
 
 - `ThirdParty/CompiledProbe.cpp`：真实 `ThirdParty::CompiledProbe` STATIC 库，直接使用平台 Clang、STL、C++23，不继承 Pangu Module 专属告警/异常选项。
-- `Module/PolicyProbe.cpp`：真实 `Pangu::ToolchainProbe` Module，服从 `PANGU_LINK_MODE`，编译期检查 C++23、无异常和平台 STL。
+- `Module/PolicyProbe.cpp`：真实 `PanguToolchainProbe` Module，服从 `PANGU_LINK_MODE`，编译期检查 C++23、无异常和平台 STL。
 - `LinkProbe.cpp`：桌面构建 `PanguToolchainLinkTests`，实际链接两座库，CTest 名 `ToolchainLibraryLink`，运行时验证跨库 `std::expected<int, int>`；Modular 下显式导入 Probe 函数。
 
 上述 Toolchain 测试的静态库、导入库、动态库及链接验证程序统一输出到所属宿主

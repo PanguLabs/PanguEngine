@@ -15,7 +15,7 @@ function(CheckOwnership engineExpected projectExpected collaborationExpected pro
     ProjectCommand(PASS "" "${CMAKE_CTEST_COMMAND}" --test-dir "${binary}" --show-only=json-v1)
     set(json "${commandStdout}")
     foreach(entry IN ITEMS
-            "PanguPhysicsPluginTests.PhysicsPlugin.DefinitionMatchesModule|${engineExpected}|engine|pangu.physics|unit"
+            "FixtureEnginePhysicsPluginTests.PhysicsPlugin.DefinitionMatchesModule|${engineExpected}|engine|fixture.physics|unit"
             "MyGameGameplayPluginTests.GameplayPlugin.DependsOnPhysics|${projectExpected}|project|mygame.gameplay|unit"
             "MyGamePluginCollaborationTests.ProjectPluginCollaboration.RegistersProviderFirst|${collaborationExpected}|project||integration"
             "MyGameProbe|${probeExpected}|project||integration")
@@ -78,7 +78,7 @@ if(PANGU_OWNERSHIP_STAGE STREQUAL "All" OR PANGU_OWNERSHIP_STAGE STREQUAL "Base"
     endfunction()
     function(execute_process)
         cmake_parse_arguments(arg "" "RESULT_VARIABLE;OUTPUT_VARIABLE;ERROR_VARIABLE" "COMMAND" ${ARGN})
-        set(json "{\"plugins\":[{\"id\":\"pangu.physics\",\"name\":\"\",\"version\":\"\",\"source_dir\":\"unused\",\"manifest_path\":\"unused\"")
+        set(json "{\"plugins\":[{\"id\":\"fixture.physics\",\"name\":\"\",\"version\":\"\",\"source_dir\":\"unused\",\"manifest_path\":\"unused\"")
         if(NOT PANGU_MOCK_ORIGIN STREQUAL "missing")
             string(APPEND json ",\"origin\":\"${PANGU_MOCK_ORIGIN}\"")
         endif()
@@ -103,7 +103,7 @@ if(PANGU_OWNERSHIP_STAGE STREQUAL "All" OR PANGU_OWNERSHIP_STAGE STREQUAL "Base"
 endif()
 
 if(PANGU_OWNERSHIP_STAGE STREQUAL "All" OR PANGU_OWNERSHIP_STAGE STREQUAL "Project")
-    ConfigureFixture(ProjectOnly "pangu.physics;mygame.gameplay" PASS "" -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=OFF
+    ConfigureFixture(ProjectOnly "fixture.physics;mygame.gameplay" PASS "" -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=OFF
         -DPANGU_LINK_MODE=Monolithic)
     BuildFixture(MyGameProbe)
     RejectText("${commandOutput}" "PluginBehaviorTests.cpp")
@@ -128,19 +128,19 @@ if(PANGU_OWNERSHIP_STAGE STREQUAL "All" OR PANGU_OWNERSHIP_STAGE STREQUAL "Proje
 endif()
 
 if(PANGU_OWNERSHIP_STAGE STREQUAL "All" OR PANGU_OWNERSHIP_STAGE STREQUAL "Engine")
-    ConfigureFixture(EngineAndProject "pangu.physics;mygame.gameplay" PASS "" -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON
+    ConfigureFixture(EngineAndProject "fixture.physics;mygame.gameplay" PASS "" -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON
         -DPANGU_LINK_MODE=Modular)
     BuildFixture(MyGameProbe)
     RejectText("${commandOutput}" "PluginBehaviorTests.cpp")
     # Engine 集合含嵌套工具准备；外层串行，内层继续使用同一处理器预算。
     ProjectCommand(PASS "" "${CMAKE_COMMAND}" --build "${binary}" --parallel 1 --target PanguTestsFast)
     CheckOwnership(ON ON ON ON)
-    ProjectCommand(PASS "" "${CMAKE_CTEST_COMMAND}" --test-dir "${binary}" --no-tests=error -R "^(PanguPhysicsPluginTests|MyGameGameplayPluginTests|MyGamePluginCollaborationTests)[.]" --output-on-failure)
+    ProjectCommand(PASS "" "${CMAKE_CTEST_COMMAND}" --test-dir "${binary}" --no-tests=error -R "^(FixtureEnginePhysicsPluginTests|MyGameGameplayPluginTests|MyGamePluginCollaborationTests)[.]" --output-on-failure)
 
 endif()
 
 if(PANGU_OWNERSHIP_STAGE STREQUAL "All" OR PANGU_OWNERSHIP_STAGE STREQUAL "Provider")
-    ConfigureFixture(EngineProviderOnly "pangu.physics" PASS "" -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON
+    ConfigureFixture(EngineProviderOnly "fixture.physics" PASS "" -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON
         -DPANGU_LINK_MODE=Modular)
     BuildFixture(MyGameProbe)
     RejectText("${commandOutput}" "Physics.cpp")
@@ -150,7 +150,7 @@ if(PANGU_OWNERSHIP_STAGE STREQUAL "All" OR PANGU_OWNERSHIP_STAGE STREQUAL "Provi
         message(FATAL_ERROR "An unrelated host must not build the enabled Physics test runtime")
     endif()
 
-    ConfigureFixture(ProviderOnly "pangu.physics" PASS "" -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=OFF)
+    ConfigureFixture(ProviderOnly "fixture.physics" PASS "" -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=OFF)
     BuildFixture(PanguTestsPrecommit)
     CheckOwnership(OFF OFF OFF ON)
 
@@ -166,14 +166,14 @@ if(PANGU_OWNERSHIP_STAGE STREQUAL "All" OR PANGU_OWNERSHIP_STAGE STREQUAL "Provi
         "-DPANGU_META_HOST_BUILD_ROOT=${PANGU_META_HOST_BUILD_ROOT}"
         "-DPANGU_FIXTURE_ENGINE_ROOT=${PANGU_TEST_ROOT}/FixtureEngine")
     ProjectCommand(PASS "" "${CMAKE_COMMAND}" --build "${physicsBinary}"
-        --parallel "${PANGU_TEST_BUILD_JOBS}" --target PanguPhysicsPluginTests)
+        --parallel "${PANGU_TEST_BUILD_JOBS}" --target FixtureEnginePhysicsPluginTests)
     ProjectCommand(PASS "100% tests passed" "${CMAKE_CTEST_COMMAND}" --test-dir "${physicsBinary}"
-        --no-tests=error -R "^PanguPhysicsPluginTests[.]" --output-on-failure)
+        --no-tests=error -R "^FixtureEnginePhysicsPluginTests[.]" --output-on-failure)
 
 endif()
 
 if(PANGU_OWNERSHIP_STAGE STREQUAL "All" OR PANGU_OWNERSHIP_STAGE STREQUAL "Base")
-    ConfigureFixture(AllDisabled "pangu.physics;mygame.gameplay" PASS "" -DBUILD_TESTING=OFF -DPANGU_BUILD_ENGINE_TESTS=ON)
+    ConfigureFixture(AllDisabled "fixture.physics;mygame.gameplay" PASS "" -DBUILD_TESTING=OFF -DPANGU_BUILD_ENGINE_TESTS=ON)
     CheckOwnership(OFF OFF OFF OFF)
     ProjectCommand(PASS "" "${CMAKE_CTEST_COMMAND}" --test-dir "${binary}" --show-only=json-v1)
     string(JSON count LENGTH "${commandStdout}" tests)
