@@ -2,7 +2,7 @@
 
 测试构建目标与累计运行集合的契约见[测试分类与运行契约](testing.md)；实际命令和维护要求见 [Tests](../../Tests/README.md)。普通 ALL 与测试专用准备目标是不同入口。
 
-本机终端可使用 `Scripts/build.ps1`（Windows/Android）或 `bash Scripts/build.sh`（Linux/macOS/iOS）。无参数显示中文构建清单，支持普通/纯引擎构建、三档桌面测试、样例、基准和移动最终链接验证；前置条件、参数、五平台示例和产物目录见 [本机构建脚本](../../Scripts/README.md)。两个入口只调用现有 Preset/正式验证，不改变 CMake/Ninja 的构建职责。
+本机终端可使用 `Scripts/build.ps1`（Windows/Android）或 `bash Scripts/build.sh`（Linux/macOS/iOS）。无参数显示中文构建清单，支持普通/纯引擎构建、三档桌面测试、基准和移动最终链接验证；前置条件、参数、五平台示例和产物目录见 [本机构建脚本](../../Scripts/README.md)。两个入口只调用现有 Preset/正式验证，不改变 CMake/Ninja 的构建职责。
 
 > 状态：Partially Frozen（CMake 4.0+、Ninja 原生增量、单 Module 单库、Target 命名空间及源码 Plugin/独立 Project 构建政策已冻结；源码插件与统一 ModuleManager/Loader 已实现，实际平台验收单独记录，完整发布未实现）
 > 更新：2026-11-16
@@ -253,10 +253,10 @@ Meta 输入头登记同时接入目标源码登记，每头有唯一 Module 所�
 
 基础诊断增加真实 PanguLog / Pangu::Log Module，跟随统一 Monolithic/Modular 模式。依赖方向为 EngineHost → Module → Log → Foundation；fmt/spdlog 使用普通 STATIC 第三方目标，不导入宿主 STL/LLVM 到移动目标。Assert 经 PANGU_ENABLE_ASSERTS 显式控制，默认 ON，不以 NDEBUG 替代。固定源码的三桌面 Full 与两移动双模式最终链接、恢复配置和实测版本见[基础诊断验收](../../docs/superpowers/plans/2026-11-12-foundation-diagnostics-validation.md)。
 
-## EngineHost 与样例验收入口
+## EngineHost 与最小宿主测试入口
 
-`PanguEngineHost`（`Pangu::EngineHost`）为跟随统一链接模式的常驻 Module；BuiltinResidentQueries 已随 Log 接入扩展为 Foundation/Log/Module 三项。根 `PANGU_BUILD_SAMPLES` 默认 OFF，开启后构建 MinimalHost 与独立服务 Module，并将 MinimalHostSmoke 接入 precommit/full。Project 的 Game/Editor/MobileHost 消费同一宿主协议；Modular 不通过隐式业务导入替代显式候选，部署集合仍与消费集合分开。
+`PanguEngineHost`（`Pangu::EngineHost`）为跟随统一链接模式的常驻 Module；BuiltinResidentQueries 已随 Log 接入扩展为 Foundation/Log/Module 三项。[MinimalHost](../../Tests/EngineHost/Fixtures/MinimalHost/README.md) 与独立服务 Module 由 EngineHost 测试子树组织，随 `BUILD_TESTING` 和 `PANGU_BUILD_ENGINE_TESTS` 启用，MinimalHostSmoke 固定进入 precommit/full；关闭测试时不创建这些目标，不再提供单独 Samples 开关。Project 的 Game/Editor/MobileHost 消费同一宿主协议；Modular 不通过隐式业务导入替代显式候选，部署集合仍与消费集合分开。
 
-正式桌面矩阵逐宿主按 Monolithic → Modular 配置 Samples ON，构建并执行对应 full；Modular ModuleRegression 保留旧 Mono 与 Host Mono 覆盖。完成后恢复桌面 Modular、Samples/Benchmark OFF、测试 ON 并验证 fast；移动根恢复 Monolithic、Samples/Benchmark/测试 OFF，构建 EngineHost，另用隔离 Project 的 CrossCompileTests 重验 MobileHost 最终链接。BuildRoot/共享源码规则不变。精确 SHA、完整命令、结果与局限见[EngineHost 验收](../../docs/superpowers/plans/2026-11-07-engine-host-lifecycle-validation.md)。
+此前正式桌面矩阵逐宿主按 Monolithic → Modular 执行 full，Modular ModuleRegression 保留旧 Mono 与 Host Mono 覆盖；当时使用的样例开关与恢复命令保留在历史验收。当前 MinimalHost 已随 Engine 测试构建，恢复桌面 Modular、Benchmark OFF、测试 ON 后验证 fast；移动根恢复 Monolithic、Benchmark/测试 OFF，构建 EngineHost，另用隔离 Project 的 CrossCompileTests 重验 MobileHost 最终链接。BuildRoot/共享源码规则不变。精确 SHA、历史命令、结果与局限见[EngineHost 验收](../../docs/superpowers/plans/2026-11-07-engine-host-lifecycle-validation.md)，迁移范围见[MinimalHost 测试迁移](../../docs/superpowers/specs/2026-11-16-minimal-host-test-design.md)。
 
 正式入口为 cmake/PanguMeta.cmake（headers/consume/module/host_catalog）；启用任一任务均要求可用宿主工具，包括仅 Query/Catalog。工具从 LLVM_ROOT 自动发现安装版开发包，zlib/zstd 随独立工具的普通目标构建，不需要 SDK 配置文件或准备阶段；链接后自检失败移除该次工具并阻断生成。宿主工具缓存与测试缓存分离，移动图只调用宿主程序，不导入 LLVM targets。现行构建取舍见 [ADR-0019](../decisions/0019-meta-tool-normal-build.md)，历史结果与限制见[Meta 验收](../../docs/superpowers/plans/2026-11-09-pangumeta-tool-validation.md)。

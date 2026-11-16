@@ -1,5 +1,7 @@
 # EngineHost 最小启动与关闭闭环
 
+> 2026-11-16 替代说明：本篇保留当时的样例路径、构建开关与验收命令。当前 MinimalHost 已迁至 `Tests/EngineHost/Fixtures/MinimalHost/`，随 Engine 测试构建，旧 Samples 开关及脚本操作已移除；参见 [MinimalHost 测试迁移](2026-11-16-minimal-host-test-design.md)。
+
 > 状态：Accepted；用户已批准按 SDD 实施，最小实现已交付，三桌面双模式与两移动最终链接已验收，等待独立及最终分支 Review；Public C++ API/ABI 未冻结。
 > 日期：2026-11-07
 > 起点：`ca0f8f9`；设计分支：`docs/engine-host-lifecycle`。

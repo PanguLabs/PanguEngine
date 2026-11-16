@@ -55,12 +55,6 @@ if(_pangu_engine_standalone)
     pangu_add_enabled_plugins(ENGINE_ROOT "${PANGU_ENGINE_SOURCE_DIR}" ENABLED ${PANGU_ENABLED_PLUGINS})
 endif()
 
-option(PANGU_BUILD_SAMPLES "Build PanguEngine samples" OFF)
-if(PANGU_BUILD_SAMPLES)
-    pangu_add_owned_subdirectory(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Samples/MinimalHost"
-        OWNER engine RELATIVE_BINARY_DIR Samples/MinimalHost)
-endif()
-
 if(BUILD_TESTING AND PANGU_BUILD_ENGINE_TESTS)
     pangu_add_owned_subdirectory(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Tests"
         OWNER engine RELATIVE_BINARY_DIR Tests)

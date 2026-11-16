@@ -1,5 +1,7 @@
 # EngineHost 最小启动与关闭闭环 Implementation Plan
 
+> 2026-11-16 替代说明：本篇保留当时的样例路径、构建开关与验收命令。当前 MinimalHost 已迁至 `Tests/EngineHost/Fixtures/MinimalHost/`，随 Engine 测试构建，旧 Samples 开关及脚本操作已移除；参见 [MinimalHost 测试迁移](../specs/2026-11-16-minimal-host-test-design.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 交付 Application 拥有的 EngineHost，贯通业务 Module 的 Concrete Service 创建、精确作用域访问、失败恢复和安全关闭。

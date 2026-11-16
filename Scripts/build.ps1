@@ -19,11 +19,10 @@ PanguEngine 本机构建（Windows / Android）
 help          全部              显示构建清单与参数（也可用 -Help / -List）
 configure     全部              仅配置 CMake
 build         全部              配置并构建普通 ALL，或 -Target 指定目标
-runtime       全部              关闭测试、样例、基准，仅构建正式引擎目标
+runtime       全部              关闭测试、基准，仅构建正式引擎目标
 fast          Windows           配置、准备并运行快速测试集合
 precommit     Windows           配置、准备并运行提交前测试集合
 full          Windows           配置、准备并运行完整测试集合
-samples       Windows           开启样例并构建 PanguMinimalHost
 benchmarks    Windows           构建 Module / Log / Meta 基准，不自动采样
 mobile-link   Android           编译根工程并验证真实 Module 最终链接，仅支持 Release
 
@@ -39,7 +38,7 @@ mobile-link   Android           编译根工程并验证真实 Module 最终链�
 前置条件：CMake 4.0+、Ninja；Windows 设置 LLVM_ROOT（Clang 23），并提供 MSVC STL/SDK。
 Android 设置 ANDROID_HOME 与 ANDROID_NDK_HOME，使用官方 NDK Clang。
 产物目录：Windows 为 Build/Windows/{Bin,Lib}；Android 为 Build/Android/{Bin,Lib}。
-普通桌面构建开启测试；Android 默认关闭测试。每个操作显式复位样例/基准开关。
+普通桌面构建开启测试；Android 默认关闭测试。每个操作显式复位基准开关。
 操作会切换本平台 BuildRoot 配置，请勿与其他使用同一 BuildRoot 的任务并发运行。
 mobile-link 不运行设备程序，不代表打包或签名；源码锁校验沿用现有正式验证入口。
 
@@ -99,7 +98,7 @@ for ($index = 0; $index -lt $args.Count; ++$index) {
 }
 
 if ($action -notin 'help', 'configure', 'build', 'runtime', 'fast', 'precommit', 'full',
-    'samples', 'benchmarks', 'mobile-link') { Stop-Usage "未知操作 $action" }
+    'benchmarks', 'mobile-link') { Stop-Usage "未知操作 $action" }
 if ($platform -notin 'windows', 'android') { Stop-Usage '此入口仅支持 Windows 宿主的 windows/android' }
 if ($config -notin 'Release', 'Debug') { Stop-Usage 'Config 必须为 Release 或 Debug' }
 $config = if ($config -eq 'Debug') { 'Debug' } else { 'Release' }
@@ -115,7 +114,7 @@ if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) {
 
 $mobile = $platform -eq 'android'
 $testAction = $action -in 'fast', 'precommit', 'full'
-if ($mobile -and ($testAction -or $action -in 'samples', 'benchmarks')) {
+if ($mobile -and ($testAction -or $action -eq 'benchmarks')) {
     Stop-Usage "$action 仅用于桌面平台"
 }
 if ($action -eq 'mobile-link' -and (-not $mobile -or $config -ne 'Release')) {
@@ -152,10 +151,9 @@ try {
     }
 
     $testing = if ($action -eq 'runtime' -or ($mobile -and $action -ne 'mobile-link')) { 'OFF' } else { 'ON' }
-    $samples = if ($action -eq 'samples') { 'ON' } else { 'OFF' }
     $benchmarks = if ($action -eq 'benchmarks') { 'ON' } else { 'OFF' }
     $configureArguments = @('--preset', $preset, "-DCMAKE_BUILD_TYPE=$config", "-DPANGU_LINK_MODE=$linkMode",
-        "-DBUILD_TESTING=$testing", "-DPANGU_BUILD_ENGINE_TESTS=$testing", "-DPANGU_BUILD_SAMPLES=$samples",
+        "-DBUILD_TESTING=$testing", "-DPANGU_BUILD_ENGINE_TESTS=$testing",
         "-DPANGU_BUILD_BENCHMARKS=$benchmarks", "-DPANGU_BUILD_META_BENCHMARKS=$benchmarks")
     if ($fresh) { $configureArguments += '--fresh' }
 
@@ -169,7 +167,6 @@ try {
             $buildArguments = @('--build', '--preset', $buildPreset)
             if ($jobs) { $buildArguments += @('--parallel', $jobs) }
             if ($target) { $buildArguments += @('--target', $target) }
-            elseif ($action -eq 'samples') { $buildArguments += @('--target', 'PanguMinimalHost') }
             elseif ($action -eq 'benchmarks') {
                 $buildArguments += @('--target', 'PanguModuleBenchmarks', 'PanguLogBenchmarks', 'PanguMetaAccessBenchmarks')
             }

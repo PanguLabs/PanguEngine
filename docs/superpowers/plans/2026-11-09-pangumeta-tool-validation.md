@@ -1,5 +1,7 @@
 # PanguMetaTool 正式验收
 
+> 2026-11-16 替代说明：本篇保留当时的样例路径、构建开关与验收命令。当前 MinimalHost 已迁至 `Tests/EngineHost/Fixtures/MinimalHost/`，随 Engine 测试构建，旧 Samples 开关及脚本操作已移除；参见 [MinimalHost 测试迁移](../specs/2026-11-16-minimal-host-test-design.md)。
+
 Task 1–13 实现与验证范围见下表；独立 Task13 review 和最终 whole-branch review 由 controller 后续执行。本记录区分实现、设计状态和实际平台覆盖；不把历史 PoC、部分定向或外层调度计数当作完整矩阵。
 
 ## 固定源码与复用边界

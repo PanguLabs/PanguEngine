@@ -436,4 +436,4 @@ Task 8 的真实平台失败保留为新增回归：独立无原生互导的 Sco
 | 关闭后的声明撤销 | 整体 Shutdown 后状态 Closed、Module/声明快照均为空；先释放 Borrow，单 Context 关闭后旧令牌不可借用、另一 Context 仍可访问 |
 | MobileHost 对 ModuleManager::Create 直接引用 | MobileHost 改验证 EngineHost::Start；Modular 在真实 EngineHost 动态库验证 Create 引用与 Start 定义，Mono 在最终 MobileHost 验证两者定义；仍保留架构、平台、Query、依赖和非设备执行边界 |
 
-新增 MinimalHostSmoke 仅在 PANGU_BUILD_SAMPLES=ON 时登记为 system / engine-host / precommit；运行程序本身断言两个 Context/World、真实服务值、隔离及显式关闭。Project 正式验收必须使用干净锁定提交和 override OFF，开发 override 轮次只作反馈。
+历史上新增 MinimalHostSmoke 仅在 Samples 开关开启时登记；2026-11-16 已将夹具迁至 `Tests/EngineHost/Fixtures/MinimalHost/`，移除该开关，随 Engine 测试固定登记为 system / engine-host / precommit。程序保留两个 Context/World、真实服务值、隔离及显式关闭断言；MyGame Base 的旧样例执行由正式 Smoke 承接，EngineOptIn 和 ModuleRegression 保留发现与构建。Project 正式验收必须使用干净锁定提交和 override OFF，开发 override 轮次只作反馈。

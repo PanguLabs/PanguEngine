@@ -165,20 +165,14 @@ if(NOT PANGU_PROJECT_TEST_STAGE STREQUAL "Engine")
         DESTINATION "${PANGU_TEST_ROOT}/FixtureEngine/Plugins")
     ConfigureProject(ServiceHosts OFF OFF -DPANGU_LINK_MODE=Monolithic
         -DPANGU_FIXTURE_BUILD_HOSTS=ON
-        -DPANGU_BUILD_SAMPLES=ON
         "-DPANGU_FIXTURE_ENGINE_ROOT=${PANGU_TEST_ROOT}/FixtureEngine")
     execute_process(COMMAND "${CMAKE_COMMAND}" --build "${PANGU_TEST_ROOT}/ServiceHosts"
-        --parallel "${PANGU_TEST_BUILD_JOBS}" --target MyGame MyEditor PanguMinimalHost RESULT_VARIABLE hostBuild)
+        --parallel "${PANGU_TEST_BUILD_JOBS}" --target MyGame MyEditor RESULT_VARIABLE hostBuild)
     if(NOT hostBuild EQUAL 0)
         message(FATAL_ERROR "Service hosts build failed")
     endif()
     if(CMAKE_HOST_WIN32)
         set(hostSuffix .exe)
-    endif()
-    execute_process(COMMAND "${PANGU_TEST_ROOT}/ServiceHosts/EngineBuild/Bin/PanguMinimalHost${hostSuffix}"
-        RESULT_VARIABLE sampleResult OUTPUT_VARIABLE sampleOutput ERROR_VARIABLE sampleError)
-    if(NOT sampleResult EQUAL 0 OR NOT sampleOutput MATCHES "Counter Context values: 7 -> 8; isolated=7")
-        message(FATAL_ERROR "Monolithic sample failed: ${sampleResult}\n${sampleOutput}\n${sampleError}")
     endif()
     foreach(host IN ITEMS MyGame MyEditor)
         execute_process(COMMAND "${PANGU_TEST_ROOT}/ServiceHosts/Bin/${host}${hostSuffix}"
@@ -201,7 +195,8 @@ if(NOT PANGU_PROJECT_TEST_STAGE STREQUAL "Base")
     CheckEmbeddedClassification(valid PASS)
     string(JSON engineTestCount LENGTH "${EngineOptIn_CTEST_JSON}" tests)
     if(engineTestCount EQUAL 0 OR
-       NOT EngineOptIn_CTEST_LIST MATCHES "PanguModuleUnitTests[.]ModuleIdentity[.]ParseAndFormat")
+       NOT EngineOptIn_CTEST_LIST MATCHES "PanguModuleUnitTests[.]ModuleIdentity[.]ParseAndFormat" OR
+       NOT EngineOptIn_CTEST_LIST MATCHES "MinimalHostSmoke")
         message(FATAL_ERROR "Project explicit PANGU_BUILD_ENGINE_TESTS=ON must discover actual Engine unit tests")
     endif()
     math(EXPR lastEngineTest "${engineTestCount} - 1")

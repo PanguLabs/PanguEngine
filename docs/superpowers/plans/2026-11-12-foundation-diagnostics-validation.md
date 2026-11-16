@@ -1,5 +1,7 @@
 # 基础失败现场与 Log 正式验收
 
+> 2026-11-16 替代说明：本篇保留当时的样例路径、构建开关与验收命令。当前 MinimalHost 已迁至 `Tests/EngineHost/Fixtures/MinimalHost/`，随 Engine 测试构建，旧 Samples 开关及脚本操作已移除；参见 [MinimalHost 测试迁移](../specs/2026-11-16-minimal-host-test-design.md)。
+
 > 状态：实现、任务评审、全分支评审及唯一修复复审完成；原 Full 与最终修复的必要定向分别归档，必要结论归档并核对无运行依赖后，临时材料已精确清理。
 > 设计：[批准规格](../specs/2026-11-12-foundation-diagnostics-design.md)；实施：[Task 1–12](2026-11-12-foundation-diagnostics.md)。
 

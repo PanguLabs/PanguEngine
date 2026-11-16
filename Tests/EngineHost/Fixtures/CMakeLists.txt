@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 4.0)
 
+add_subdirectory(MinimalHost)
+
 pangu_module_library_type(moduleType)
 add_library(PanguHostServiceFixture ${moduleType} HostServiceModule.cpp)
 pangu_configure_module(PanguHostServiceFixture)

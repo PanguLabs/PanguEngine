@@ -1,5 +1,7 @@
 # EngineHost 生命周期正式验收
 
+> 2026-11-16 替代说明：本篇保留当时的样例路径、构建开关与验收命令。当前 MinimalHost 已迁至 `Tests/EngineHost/Fixtures/MinimalHost/`，随 Engine 测试构建，旧 Samples 开关及脚本操作已移除；参见 [MinimalHost 测试迁移](../specs/2026-11-16-minimal-host-test-design.md)。
+
 > 被测最终源码：`08fbbfab8c4864d09f5e4df58b1b4ce7f9080097`。实现、正式矩阵、默认恢复和最终复审已完成；三项分支评审发现全部关闭。
 > 日期：2026-11-07。Public C++ API/ABI 未冻结；本文仅声明实际执行范围。
 

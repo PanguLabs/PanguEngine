@@ -48,11 +48,10 @@ Linux 构建产物写入 WSL ext4，macOS/iOS 写入 Mac APFS；二者只从 Win
 | --- | --- | --- | --- |
 | `configure` | 五平台 | 仅 `cmake --preset <平台>` 并设置所选配置 | 检查环境、重新生成构建图和编译数据库 |
 | `build` | 五平台 | 配置后普通 ALL 构建；可指定单个实际 Target | 日常编译或只编译改动目标；不会自动运行测试 |
-| `runtime` | 五平台 | 关闭测试、样例、所有基准开关，配置并构建正式目标 | 只需要引擎库，减少测试目标构建成本 |
+| `runtime` | 五平台 | 关闭测试、所有基准开关，配置并构建正式目标 | 只需要引擎库，减少测试目标构建成本 |
 | `fast` | 三桌面 | 配置 → `<平台>-fast` build preset → 同名 test preset | 高频快速检查 |
 | `precommit` | 三桌面 | 配置 → `<平台>-precommit` build preset → 同名 test preset | 提交前检查，累计包含 fast |
 | `full` | 三桌面 | 配置 → `<平台>-full` build preset → 同名 test preset | 当前平台/配置的完整回归，累计包含 precommit；耗时可能较长 |
-| `samples` | 三桌面 | 开启 `PANGU_BUILD_SAMPLES`，构建 `PanguMinimalHost` 及其服务依赖 | 编译最小 EngineHost 样例；不自动运行 |
 | `benchmarks` | 三桌面 | 开启普通/Meta 基准，构建 `PanguModuleBenchmarks`、`PanguLogBenchmarks`、`PanguMetaAccessBenchmarks` | 准备性能测量程序；不自动采样 |
 | `mobile-link` | Android/iOS | 开启根编译型测试并构建，再显式运行 `CrossCompileTests.cmake` | 检查真实 Runtime/业务 Module、目标架构、动态依赖和最小宿主最终链接 |
 
@@ -76,7 +75,7 @@ Linux 构建产物写入 WSL ext4，macOS/iOS 写入 Mac APFS；二者只从 Win
 
 脚本会显示源码目录、BuildRoot 和每条实际命令。任一步失败立即停止并返回其退出码；非法参数或组合返回 2，缺少命令返回 127。Bash 的配置及模式参数按表中大小写填写。
 
-所有构建默认 Release。`Modular` 将 Pangu Module 构建为原生动态库；`Monolithic` 为原生静态库，不表示把全部 Module 合成一个库。模式、编译配置、样例与基准会重配同一平台 BuildRoot，**不要与其他使用同一 BuildRoot 的 configure/build/test 会话并发运行**。
+所有构建默认 Release。`Modular` 将 Pangu Module 构建为原生动态库；`Monolithic` 为原生静态库，不表示把全部 Module 合成一个库。模式、编译配置、测试与基准会重配同一平台 BuildRoot，**不要与其他使用同一 BuildRoot 的 configure/build/test 会话并发运行**。
 
 `-Jobs/--jobs` 调整本次显式构建的并行数；`mobile-link` 还将其传给既有夹具。CTest 并行和测试内部处理器预算仍由现有配置管理。
 
@@ -100,9 +99,8 @@ Set-Location D:/Git/PanguEngine
 .\Scripts\build.ps1 precommit
 .\Scripts\build.ps1 full
 
-# 静态模式、样例和基准
+# 静态模式和基准
 .\Scripts\build.ps1 full -LinkMode Monolithic
-.\Scripts\build.ps1 samples
 .\Scripts\build.ps1 benchmarks
 
 # 更换 LLVM_ROOT 或 SDK 后显式重新初始化配置
@@ -139,7 +137,6 @@ bash Scripts/build.sh fast
 bash Scripts/build.sh precommit
 bash Scripts/build.sh full --link-mode Monolithic
 bash Scripts/build.sh build --config Debug --target PanguEngineHost
-bash Scripts/build.sh samples
 bash Scripts/build.sh benchmarks
 ```
 
@@ -153,7 +150,6 @@ bash Scripts/build.sh build
 bash Scripts/build.sh fast
 bash Scripts/build.sh precommit
 bash Scripts/build.sh full --link-mode Monolithic
-bash Scripts/build.sh samples
 bash Scripts/build.sh benchmarks
 
 bash Scripts/build.sh build --platform ios
@@ -162,30 +158,6 @@ bash Scripts/build.sh build --platform ios --link-mode Modular
 bash Scripts/build.sh mobile-link --platform ios --link-mode Monolithic
 bash Scripts/build.sh mobile-link --platform ios --link-mode Modular
 ```
-
-## 运行样例
-
-`samples` 只构建；运行前进入 Bin，样例日志将写到其工作目录下的 `MinimalHostLogs`。
-
-Windows 默认 Modular，需要传入服务动态库的绝对路径：
-
-```powershell
-.\Scripts\build.ps1 samples
-Push-Location Build/Windows/Bin
-try { .\PanguMinimalHost.exe (Join-Path (Get-Location).Path 'PanguMinimalServices.dll') }
-finally { Pop-Location }
-```
-
-Linux 对应 `libPanguMinimalServices.so`，macOS 对应 `libPanguMinimalServices.dylib`：
-
-```sh
-bash Scripts/build.sh samples
-(cd "$HOME/PanguEngineBuild/Linux/Bin" && ./PanguMinimalHost "$PWD/libPanguMinimalServices.so")
-# Mac 本机改用：
-(cd "$HOME/PanguEngineBuild/macOS/Bin" && ./PanguMinimalHost "$PWD/libPanguMinimalServices.dylib")
-```
-
-如果用 `samples -LinkMode Monolithic` / `samples --link-mode Monolithic` 构建，则直接运行 `PanguMinimalHost`，不传动态库路径。
 
 ## 运行基准
 
@@ -211,7 +183,7 @@ Linux/macOS 先运行 `bash Scripts/build.sh benchmarks`，再进入 `$HOME/Pang
 
 ## 恢复日常配置与定向测试
 
-每种操作都会显式设置 `BUILD_TESTING`、`PANGU_BUILD_ENGINE_TESTS`、`PANGU_BUILD_SAMPLES`、`PANGU_BUILD_BENCHMARKS`、`PANGU_BUILD_META_BENCHMARKS`。下次普通 `build` 会关闭样例/基准，并恢复桌面测试 ON、移动测试 OFF；默认 Release 和默认链接模式也会恢复。需要保留 Debug 或另一链接模式时，每次都显式传参。
+每种操作都会显式设置 `BUILD_TESTING`、`PANGU_BUILD_ENGINE_TESTS`、`PANGU_BUILD_BENCHMARKS`、`PANGU_BUILD_META_BENCHMARKS`。下次普通 `build` 会关闭基准，并恢复桌面测试 ON、移动测试 OFF；默认 Release 和默认链接模式也会恢复。需要保留 Debug 或另一链接模式时，每次都显式传参。
 
 例如：
 

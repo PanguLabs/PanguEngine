@@ -1,5 +1,7 @@
 # PanguMetaTool 首版生成与消费闭环 Implementation Plan
 
+> 2026-11-16 替代说明：本篇保留当时的样例路径、构建开关与验收命令。当前 MinimalHost 已迁至 `Tests/EngineHost/Fixtures/MinimalHost/`，随 Engine 测试构建，旧 Samples 开关及脚本操作已移除；参见 [MinimalHost 测试迁移](../specs/2026-11-16-minimal-host-test-design.md)。
+
 > 接入入口替代：本计划中的 `cmake/PanguEngine.cmake` / `pangu_add_engine()` 已由 [FindPanguEngine 迁移计划](2026-11-16-find-pangu-engine.md)替代；以下保留首版实施历史，当前入口见[构建系统](../../../wiki/foundation/build-system.md)。
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

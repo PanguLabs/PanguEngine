@@ -99,7 +99,7 @@ if(PANGU_TEST_LINK_MODE STREQUAL "Modular")
 else()
     set(moduleLifecycleRegression ScopeDestructor)
 endif()
-foreach(required IN ITEMS BuildEnvironment ToolchainLibraryLink
+foreach(required IN ITEMS BuildEnvironment ToolchainLibraryLink MinimalHostSmoke
         PluginIntegration.BuildToolConfigure PluginIntegration.DiscoveryFileLinks
         PluginIntegration.DiscoveryDirectoryLinks ProjectIntegration.EngineRevision ProjectIntegration.Base ProjectIntegration.EmbeddedEngine
         ProjectIntegration.PluginEnable ProjectIntegration.HostModuleConsumption ProjectIntegration.SharedDeploy ProjectIntegration.IncrementalBuild

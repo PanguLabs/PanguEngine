@@ -13,11 +13,10 @@ PanguEngine 本机构建（Linux / macOS / iOS）
 help          全部              显示构建清单与参数（也可用 --help / --list）
 configure     全部              仅配置 CMake
 build         全部              配置并构建普通 ALL，或 --target 指定目标
-runtime       全部              关闭测试、样例、基准，仅构建正式引擎目标
+runtime       全部              关闭测试、基准，仅构建正式引擎目标
 fast          Linux/macOS       配置、准备并运行快速测试集合
 precommit     Linux/macOS       配置、准备并运行提交前测试集合
 full          Linux/macOS       配置、准备并运行完整测试集合
-samples       Linux/macOS       开启样例并构建 PanguMinimalHost
 benchmarks    Linux/macOS       构建 Module / Log / Meta 基准，不自动采样
 mobile-link   iOS               编译根工程并验证真实 Module 最终链接，仅支持 Release
 
@@ -34,7 +33,7 @@ mobile-link   iOS               编译根工程并验证真实 Module 最终链�
 macOS/iOS 使用 MacPorts LLVM；iOS 还需要独立 iPhoneOS SDK，见 PANGU_IOS_SDK_PATH。
 Linux 源码：/home/moozen/WindowsGit/PanguEngine；macOS/iOS：/Users/moozen/WindowsGit/PanguEngine。
 产物目录：$HOME/PanguEngineBuild/{Linux,macOS,iOS}/{Bin,Lib}，按宿主本地文件系统隔离。
-普通桌面构建开启测试；iOS 默认关闭测试。每个操作显式复位样例/基准开关。
+普通桌面构建开启测试；iOS 默认关闭测试。每个操作显式复位基准开关。
 操作会切换本平台 BuildRoot 配置，请勿与其他使用同一 BuildRoot 的任务并发运行。
 mobile-link 不运行设备程序，不代表打包或签名；源码锁校验沿用现有正式验证入口。
 
@@ -95,7 +94,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 case "$action" in
-    help|configure|build|runtime|fast|precommit|full|samples|benchmarks|mobile-link) ;;
+    help|configure|build|runtime|fast|precommit|full|benchmarks|mobile-link) ;;
     *) fail "未知操作 $action" ;;
 esac
 case "$platform" in
@@ -117,7 +116,7 @@ mobile=0
 test_action=0
 case "$action" in fast|precommit|full) test_action=1 ;; esac
 if [ "$mobile" -eq 1 ]; then
-    case "$action" in fast|precommit|full|samples|benchmarks) fail "$action 仅用于桌面平台" ;; esac
+    case "$action" in fast|precommit|full|benchmarks) fail "$action 仅用于桌面平台" ;; esac
 fi
 if [ "$action" = mobile-link ] && { [ "$mobile" -ne 1 ] || [ "$config" != Release ]; }; then
     fail 'mobile-link 仅用于 iOS 的现有 Release 链接验证夹具'
@@ -149,12 +148,10 @@ fi
 
 testing=ON
 if [ "$action" = runtime ] || { [ "$mobile" -eq 1 ] && [ "$action" != mobile-link ]; }; then testing=OFF; fi
-samples=OFF
-[ "$action" != samples ] || samples=ON
 benchmarks=OFF
 [ "$action" != benchmarks ] || benchmarks=ON
 configure_args=(--preset "$preset" "-DCMAKE_BUILD_TYPE=$config" "-DPANGU_LINK_MODE=$link_mode"
-    "-DBUILD_TESTING=$testing" "-DPANGU_BUILD_ENGINE_TESTS=$testing" "-DPANGU_BUILD_SAMPLES=$samples"
+    "-DBUILD_TESTING=$testing" "-DPANGU_BUILD_ENGINE_TESTS=$testing"
     "-DPANGU_BUILD_BENCHMARKS=$benchmarks" "-DPANGU_BUILD_META_BENCHMARKS=$benchmarks")
 [ "$fresh" -eq 0 ] || configure_args+=(--fresh)
 
@@ -167,7 +164,6 @@ if [ "$action" != configure ]; then
     build_args=(--build --preset "$build_preset")
     [ -z "$jobs" ] || build_args+=(--parallel "$jobs")
     if [ -n "$target" ]; then build_args+=(--target "$target")
-    elif [ "$action" = samples ]; then build_args+=(--target PanguMinimalHost)
     elif [ "$action" = benchmarks ]; then
         build_args+=(--target PanguModuleBenchmarks PanguLogBenchmarks PanguMetaAccessBenchmarks)
     fi

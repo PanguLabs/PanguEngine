@@ -179,6 +179,6 @@ ProjectIntegration.PluginTestOwnership.Project、ProjectIntegration.PluginTestOw
 
 ## EngineHost 生命周期验收
 
-正式用例位于 `Tests/EngineHost`，覆盖 Startup、Failure、Shutdown、Scope、ServiceAccess、Concurrency 和 Modular 真实物理卸载；`Tests/Module/ScopeResourceAccessTests.cpp` 覆盖底层精确查询。样例开启时另运行 MinimalHostSmoke，独立 Project 保留消费集合/部署/增量/双模式测试。Modular 的 ModuleRegression 运行旧 Module Mono 和新增 EngineHost Mono，不能仅以根 Modular 用例替代。
+正式用例位于 `Tests/EngineHost`，覆盖 Startup、Failure、Shutdown、Scope、ServiceAccess、Concurrency 和 Modular 真实物理卸载；`Tests/Module/ScopeResourceAccessTests.cpp` 覆盖底层精确查询。MinimalHostSmoke 及其夹具位于 `Tests/EngineHost/Fixtures/MinimalHost`，随 Engine 测试固定进入 precommit/full，独立 Project 保留消费集合/部署/增量/双模式测试。Modular 的 ModuleRegression 构建最小宿主并运行旧 Module Mono 和新增 EngineHost Mono，不能仅以根 Modular 用例替代。
 
 失败阶段测试配置真实可观测业务候选，确认常驻失败不继续业务 Query；并发测试检查每次竞态 TryBorrow 的成功值或失败错误，若竞态成功则保留 Borrow 至关闭后，确认其独立阻止完成，不要求调度必然产生成功。规格补强对应 `NonBusyStopFailurePreservesStartupFailure` 与 `QueriedAccessSurvivesPhysicalUnload`，分别验证 E1/E2 分离和新具名令牌跨真实卸载。实际三桌面双模式和两移动双模式证据统一记录于[EngineHost 验收](../docs/superpowers/plans/2026-11-07-engine-host-lifecycle-validation.md)，移动仅最终链接/宿主检查，不运行交叉 GTest。

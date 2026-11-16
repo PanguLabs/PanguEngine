@@ -25,7 +25,7 @@ Project 仍拥有工具链、CTest、版本锁及插件启用策略。保留 `En
 Shared 独立入口迁至 `Tests/Module/Fixtures/SharedProject/`；内部目标保留在 `Shared/`，
 避免顶层与 Engine 内部重复加入同一源码目录导致属性遍历递归。
 单独引入 Foundation 或少数 Runtime 模块的隔离测试保持其现有测试边界。
-Engine 自己的 Samples 与内部 Targets 继续由 Engine 根工程组织。
+Engine 内部 Targets 继续由 Engine 根工程组织。原 Samples/MinimalHost 的组织方式已由[MinimalHost 测试迁移](2026-11-16-minimal-host-test-design.md)替代。
 
 ## 验证
 

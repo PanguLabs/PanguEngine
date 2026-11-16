@@ -1,14 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
 
-if(TARGET PanguMinimalHost)
-    set(minimalHostArguments)
-    if(PANGU_LINK_MODE STREQUAL "Modular")
-        list(APPEND minimalHostArguments "$<TARGET_FILE:PanguMinimalServices>")
-    endif()
-    pangu_register_test(NAME MinimalHostSmoke COMMAND PanguMinimalHost ${minimalHostArguments}
-        BOUNDARY system AREA engine-host TIER precommit BUILD_TARGETS PanguMinimalHost PanguMinimalServices)
-endif()
-
 include("${PROJECT_SOURCE_DIR}/cmake/PanguTestDependencies.cmake")
 pangu_require_googletest(RTTI ON)
 add_subdirectory(Support)

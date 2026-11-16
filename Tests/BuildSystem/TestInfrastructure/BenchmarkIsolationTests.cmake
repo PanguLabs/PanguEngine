@@ -5,7 +5,8 @@ TestingConfigure(NAME benchmark-only SOURCE "${PANGU_ENGINE_ROOT}" EXPECT pass A
    )
 set(binary "${Testing_BINARY}")
 TestingRun(EXPECT pass COMMAND "${CMAKE_COMMAND}" --build "${binary}" --target help)
-if(NOT Testing_OUTPUT MATCHES "PanguModuleBenchmarks" OR Testing_OUTPUT MATCHES "(^|[/ ])g(test|mock)([_ :/]|$)")
+if(NOT Testing_OUTPUT MATCHES "PanguModuleBenchmarks" OR Testing_OUTPUT MATCHES "(^|[/ ])g(test|mock)([_ :/]|$)" OR
+   Testing_OUTPUT MATCHES "PanguMinimal(Host|Services)")
     message(FATAL_ERROR "benchmark-only must provide benchmarks without GoogleTest/GoogleMock")
 endif()
 TestingListTests(BINARY "${binary}" OUTPUT tests)
@@ -37,6 +38,10 @@ TestingRun(EXPECT pass COMMAND "${CMAKE_COMMAND}" --build "${Testing_BINARY}" --
 if(Testing_OUTPUT MATCHES "PanguModuleBenchmarks")
     message(FATAL_ERROR "Correctness-only must not create benchmark target")
 endif()
+if(NOT Testing_OUTPUT MATCHES "PanguMinimalHost" OR NOT Testing_OUTPUT MATCHES "PanguMinimalServices" OR
+   NOT correctnessTests MATCHES "MinimalHostSmoke")
+    message(FATAL_ERROR "Engine tests must include MinimalHost targets and smoke without a separate sample option")
+endif()
 TestingConfigure(NAME benchmark-only SOURCE "${PANGU_ENGINE_ROOT}" EXPECT pass ARGS
     -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON -DPANGU_BUILD_BENCHMARKS=ON)
 TestingListTests(BINARY "${Testing_BINARY}" OUTPUT combinedTests)
@@ -47,7 +52,8 @@ endif()
 TestingConfigure(NAME benchmark-only SOURCE "${PANGU_ENGINE_ROOT}" EXPECT pass ARGS
     -DBUILD_TESTING=OFF -DPANGU_BUILD_ENGINE_TESTS=OFF -DPANGU_BUILD_BENCHMARKS=ON)
 TestingRun(EXPECT pass COMMAND "${CMAKE_COMMAND}" --build "${Testing_BINARY}" --target help)
-if(NOT Testing_OUTPUT MATCHES "PanguModuleBenchmarks" OR Testing_OUTPUT MATCHES "(^|[/ ])g(test|mock)([_ :/]|$)")
+if(NOT Testing_OUTPUT MATCHES "PanguModuleBenchmarks" OR Testing_OUTPUT MATCHES "(^|[/ ])g(test|mock)([_ :/]|$)" OR
+   Testing_OUTPUT MATCHES "PanguMinimal(Host|Services)")
     message(FATAL_ERROR "Switching to benchmark-only retained correctness targets")
 endif()
 TestingListTests(BINARY "${Testing_BINARY}" OUTPUT disabledTests)

@@ -1,18 +1,22 @@
-# 最小服务宿主
+# 最小服务宿主测试夹具
+
+本目录由 EngineHost 测试子树构建，随 `BUILD_TESTING` 和 `PANGU_BUILD_ENGINE_TESTS` 启用。
+`MinimalHostSmoke` 属于 system / engine-host / precommit，累计进入 full；独立进程的退出码
+验证服务访问、Context 隔离、Meta 消费和显式关闭。
 
 Application 拥有 `EngineHost`，显式 Start、创建两个 Context 及各自 World，再通过业务头内 `AcquireCounter` 取得服务。`CounterService` 是没有共同基类或虚函数的普通类型；Factory 固定创建初值 7，不提供通用构造参数注入。程序检查第一个服务改为 8 时另一个仍为 7，释放 Borrow 后关闭第一个 Context，最后显式关闭整个宿主。
 
 `pangu_meta_headers` 登记带 `pga::Type/Field` 的原始公共头，`pangu_meta_consume` 给宿主接入真实生成的 `MinimalService.gen.h`。具名 `ScopeAccess` 的 `TryBorrow` 保护服务实例，生成的 `FieldAccess` 在该借用内读写 `Value`；`BorrowTypeInfo` 独立持有 Module Pin，输出类型与字段描述，并在关闭前释放。业务 `ModuleDefinition` 引用生成 Provider；Modular 宿主不直接引用业务描述表或导入业务 DLL 方法。
 
-设置 LLVM_ROOT 指向完整 Clang 23 开发包并初始化 submodule 后走正常构建，无需独立 SDK 准备；见 [Meta 构建规范](../../wiki/foundation/build-system.md)。纯访问头不依赖 `EngineHost`，宿主按需包含 `HostMetaAccess.h`。
+设置 LLVM_ROOT 指向完整 Clang 23 开发包并初始化 submodule 后走正常构建，无需独立 SDK 准备；见 [Meta 构建规范](../../../../wiki/foundation/build-system.md)。纯访问头不依赖 `EngineHost`，宿主按需包含 `HostMetaAccess.h`。
 
 ```powershell
-cmake --preset windows -DPANGU_BUILD_SAMPLES=ON
+cmake --preset windows -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON
 cmake --build --preset windows --target PanguMinimalHost
 ctest --preset windows -R '^MinimalHostSmoke$' --no-tests=error --output-on-failure
 ```
 
-默认关闭 `PANGU_BUILD_SAMPLES`。Monolithic 直接运行 `PanguMinimalHost`，静态 Query 是显式链接根；Modular 运行 `PanguMinimalHost <PanguMinimalServices 动态库的绝对路径>`，程序不搜索目录，主程序不隐式导入业务库。Linux Modular 主程序导出 RTTI，公开服务类型使用 default visibility。
+Monolithic 直接运行 `PanguMinimalHost`，静态 Query 是显式链接根；Modular 运行 `PanguMinimalHost <PanguMinimalServices 动态库的绝对路径>`，程序不搜索目录，主程序不隐式导入业务库。CTest 自动传入正确参数，并为运行日志提供 BuildRoot 内的隔离工作目录。Linux Modular 主程序导出 RTTI，公开服务类型使用 default visibility。
 
 Application 创建当前工作目录下的 `MinimalHostLogs` 专属目录，并设置非零稳定 PartitionId；文件输出为必需能力，同一分区被占用时启动失败。Host 在业务注册前显式初始化异步 Log，业务结束后先销毁 Manager，再排空日志和回收原生消费者线程。
 
