@@ -156,10 +156,11 @@ bool RunFormatAllocationCases(const std::string& ownedText) noexcept
     success = success && record.Truncated && !record.ConstructionFailed && record.Message().size() == 1024;
     record = {};
     pg::log::detail::FormatRecord(record, "{}", std::string_view{"\xc2\x85\xe2\x80\xa8\xe2\x80\xa9"});
-    return success && record.Message() == R"(\u0085\u2028\u2029)" && associatedConversionsSafe;
+    return success && record.Message() == R"(\u0085\u2028\u2029)" && !record.Truncated && associatedConversionsSafe;
 }
 
 #ifndef PG_LOG_FORMAT_ALLOCATION_TEST
+#include <NativeLogIo.h>
 #include <SpdlogBackend.h>
 #include <gtest/gtest.h>
 
@@ -177,14 +178,6 @@ TEST(LogFormat, OwnsAllInput)
     EXPECT_EQ(copy.Message(), "plugin text");
     EXPECT_EQ(copy.Category(), "plugin category");
     EXPECT_FALSE(copy.File().empty());
-}
-
-TEST(LogFormat, AssociatedConversionsAndFormattersAreNeverInvoked)
-{
-    EXPECT_TRUE(CheckAssociatedConversions());
-    EXPECT_EQ(log_format_fixture::gCalls.Normalize, 0U);
-    EXPECT_EQ(log_format_fixture::gCalls.Value, 0U);
-    EXPECT_EQ(log_format_fixture::gCalls.Formatter, 0U);
 }
 
 TEST(LogFormat, LiteralBracesSurviveBackend)
@@ -257,14 +250,6 @@ TEST(LogFormat, ControlsAndInvalidUtf8AreBoundedEscapes)
     record = {};
     pg::log::detail::FormatRecord(record, "head\0tail");
     EXPECT_EQ(record.Message(), "head\\x00tail");
-}
-
-TEST(LogFormat, UnicodeControlsDoNotCreateExtraLines)
-{
-    pg::log::LogRecord record;
-    pg::log::detail::FormatRecord(record, "{}", std::string_view{"\xc2\x85\xe2\x80\xa8\xe2\x80\xa9"});
-    EXPECT_EQ(record.Message(), "\\u0085\\u2028\\u2029");
-    EXPECT_FALSE(record.Truncated);
 }
 
 TEST(LogFormat, SupportedExtremesAndLongText) { EXPECT_TRUE(RunFormatAllocationCases(std::string(4096, 'a'))); }

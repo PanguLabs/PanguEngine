@@ -18,14 +18,11 @@ function(pangu_source_plugin_test name script)
 endfunction()
 
 pangu_source_plugin_test(PluginIntegration.BuildToolConfigure "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolConfigureTests.cmake")
-foreach(scenario IN ITEMS Invalidation FileLinks DirectoryLinks)
+foreach(scenario IN ITEMS FileLinks DirectoryLinks)
     pangu_source_plugin_test("PluginIntegration.Discovery${scenario}"
         "${CMAKE_CURRENT_SOURCE_DIR}/PluginDiscoveryInvalidationTests.cmake"
         "-DPANGU_INVALIDATION_SCENARIO=${scenario}")
 endforeach()
-if(WIN32)
-    pangu_source_plugin_test(PluginIntegration.BuildToolSourceChange "${CMAKE_CURRENT_SOURCE_DIR}/BuildToolSourceChangeTests.cmake")
-endif()
 set(projectTests "${PROJECT_SOURCE_DIR}/Tests/BuildSystem/ProjectIntegration")
 foreach(pair IN ITEMS "EngineRevision|EngineRevisionTests" "Base|ProjectIntegrationTests" "PluginEnable|PluginEnableTests"
         "HostModuleConsumption|HostModuleConsumptionTests" "SharedDeploy|SharedDeployTests" "IncrementalBuild|IncrementalBuildTests"

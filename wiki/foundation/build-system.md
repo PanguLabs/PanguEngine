@@ -94,7 +94,7 @@ macOS 使用 `ssh -o BatchMode=yes moozen-macos`，通过 `/Users/moozen/Windows
 以下为 2026-10-27 的历史状态；相关构建入口与测试已按 [ADR-0013](../decisions/0013-native-build-abi-boundary.md) 从源码删除，不能作为当前操作说明：
 
 - 当时 CMake 通过 `cmake/BuildTools.cmake` 为 Windows/Linux/macOS 原生宿主构建并版本化发布 `PanguAbiProfileTool`；Android/iOS 的交叉编译使用对应 Windows/macOS 构建工具，不在目标平台运行。它不是 Pangu Runtime Module，不改变单 Module 单 Library Target 约束。`cmake/BuildTools.cmake` 已删除。
-- `Source/ThirdParty/NlohmannJson/Repo` 是保留的 nlohmann/json v3.12.0 Git submodule；`ThirdParty::NlohmannJson` 是 INTERFACE Target，设置 `JSON_USE_GLOBAL_UDLS=0`。旧 ABI 工具已删除，当前由 `Tests/ThirdParty/NlohmannJson` 验证；不配置上游工程，不在构建时下载。
+- `Source/ThirdParty/NlohmannJson/Repo` 是保留的 nlohmann/json v3.12.0 Git submodule；`ThirdParty::NlohmannJson` 是 INTERFACE Target，设置 `JSON_USE_GLOBAL_UDLS=0`。旧 ABI 工具已删除，当前由 PanguMetaTool 消费并通过工具自身测试验证；不配置上游工程，不在构建时下载。
 - 当时 `Tests/AbiProfile` 包含冻结 Schema/JCS/SHA256 向量、真实 CLI、依赖闭包/SCC、Host Bootstrap、Compiler Launcher/收据和五平台 Collector 测试；该目录已删除，历史结论仅保留在 [旧验收记录](../../docs/superpowers/plans/2026-10-23-abi-collection.md) 与 [ABI Profile / Fingerprint v1（历史协议）](abi-profile-fingerprint.md)。
 - 当时 Windows/Linux/macOS 与 Android/iOS 的正式 STATIC Module 均接入了 C++ 全 TU 编译收据、Profile 自动采集及依赖校验。该机制不再运行；当时 ADR-0013 曾计划独立 Pangu Plugin 二进制的可信绑定与 Preflight，但这一后续路线现已由 ADR-0014 取消。
 

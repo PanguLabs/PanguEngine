@@ -58,17 +58,22 @@ Linux/macOS 未重跑此旧版本的完整基线；移动端未在 Task 1 执行
 标签为 `boundary.unit;area.foundation;owner.engine;run.fast;run.precommit;run.full;platform.<当前平台>`。
 默认超时 30 秒，保留直接批量运行可执行程序的能力。
 
+后续淘汰审查将固定 Result/Status 值语义的三个运行入口归并到同文件已有的
+`static_assert(TestExpectedValues())`；MetaIdentity 的固定 TypeInfo/FieldOptions 检查也迁入静态断言。
+真正调用 `MakeError` 的运行测试与成功/失败传播测试继续保留。
+
 | 原函数或约束 | 新 suite.case | 关键判据 |
 | --- | --- | --- |
 | `TestErrorPropagation` 的 `MakeError` 比较，及 Error 值语义 | `Error.PreservesDomainCodeAndNativeValue` | Domain、code=42、无原生值、有原生值 Source=7/Value=-17；不同 Domain/原生值不相等 |
-| `TestExpectedValues` 的 Result 成功分支 | `Result.SuccessPreservesExactValue` | `has_value()` 且值精确为 17 |
+| `TestExpectedValues` 的 Result 成功分支 | `static_assert(TestExpectedValues())` | 成功且值精确为 17；撤除重复的 `Result.SuccessPreservesExactValue` 运行入口 |
 | `PropagateDummy(false)` | `Result.SuccessfulPropagationReturns124` | 检查成功后解引用，值精确为 124 |
 | `PropagateDummy(true)` / `ParseDummy(true)` | `Result.FailedPropagationPreservesOriginalError` | 失败；完整原始 `kWithNative` 相等；Source/Value 原样保留 |
-| `CheckDummy(false)` | `Status.SuccessHasNoError` | `has_value()`，成功 Status 不进入错误分支 |
-| `CheckDummy(true)` | `Status.FailurePreservesOriginalError` | 失败且原始 `kSimple` 相等 |
+| `CheckDummy(false)` | `static_assert(TestExpectedValues())` | 默认 Status 成功；撤除重复的 `Status.SuccessHasNoError` 运行入口 |
+| `CheckDummy(true)` | `static_assert(TestExpectedValues())` | Status 失败且原始 `kSimple` 相等；撤除重复的 `Status.FailurePreservesOriginalError` 运行入口 |
 | 全部原 `static_assert`，包括 `TestExpectedValues()` | 仍在同一 `ErrorTests.cpp`，随目标编译验证 | Domain 的受限构造/零值、Error 布局/拷贝/析构/大小/constexpr、Result/Status 类型别名和 constexpr 成功失败均保留 |
 
-旧布尔函数没有作为一个 `EXPECT_TRUE` 包装；`ParseDummy`、`PropagateDummy`、`CheckDummy` 的触发逻辑保留。
+旧布尔函数没有作为一个 `EXPECT_TRUE` 包装；`ParseDummy`、`PropagateDummy` 的触发逻辑保留，
+仅服务于已撤入口的 `CheckDummy` 随之删除。
 
 ## Module 单元：已迁移
 
@@ -147,7 +152,11 @@ Catalog 独立入口为 `PanguStaticCatalogTests.StaticCatalog.RetainsArchiveRoo
 | ScopeLifecycle owning 参数表 | 工厂不 Own 对象；工厂 Own 两个对象并忽略第二次错误；均 `kInvalidDeclaration`、未 Start、全部已构造对象被销毁、导出的 token 不可 borrow |
 | Catalog 编译/链接 | 保留两个真实 STATIC 目标、Catalog 生成、局部 `CXX_SCAN_FOR_MODULES=OFF`、`-ffunction-sections -fdata-sections` 及 Windows `/OPT:REF`、Linux `--gc-sections`、macOS `-dead_strip`；不能换成普通源文件或 whole-archive |
 
-## JSON：已迁移；其它第三方与 Toolchain 保留并分类
+## JSON：迁移记录（独立测试现已删除）；Toolchain 保留并分类
+
+后续按用户要求删除整个 `Tests/ThirdParty`，包括三个 JSON 运行用例、版本与配置宏编译检查，
+以及缺失头文件的 `NlohmannSubmoduleRequired` 回归。以下 JSON 条目记录迁移时的覆盖，不代表当前入口。
+实际 JSON 消费继续由 PanguMetaTool 测试验证；不宣称它等效替代已删除的全部接入检查。
 
 旧 `JsonExtras` / `PanguJsonExtrasTests` 替换为 `PanguJsonUnitTests.` 前缀的三个独立 CTest 用例，
 标签为 `boundary.unit;area.thirdparty;owner.engine;run.fast;run.precommit;run.full;platform.<当前平台>`。
@@ -159,18 +168,18 @@ Catalog 独立入口为 `PanguStaticCatalogTests.StaticCatalog.RetainsArchiveRoo
 | 正常无异常解析 | `Json.ParsesObjectWithoutExceptions` | 原 JSON 输入解析不 discarded，确为 object 且含 target；triple 原样匹配 `x86_64-pc-windows-msvc`，count=3 |
 | 非法无异常解析 | `Json.InvalidInputIsDiscarded` | 原输入 `{`、allow_exceptions=false，结果 discarded |
 
-以下脚本和真实编译/链接探针仍保留：
+以下为迁移时的脚本和真实编译/链接探针；除已注明删除的项外仍保留：
 
 | 入口 / 目标 | 原断言与后续映射边界 |
 | --- | --- |
-| NlohmannSubmoduleRequired / `MissingHeaders.cmake` | 复制适配层但缺少 Repo 头文件时配置明确失败，不在 configure 联网 |
+| NlohmannSubmoduleRequired / `MissingHeaders.cmake`（现已删除） | 复制适配层但缺少 Repo 头文件时配置明确失败，不在 configure 联网 |
 | ThirdPartyCompiledProbe / PanguToolchainProbe | 两个真实 STATIC 编译探针；相同平台工具链，ThirdParty 不链接 PanguBuildOptions，Pangu 目标沿用自有策略 |
 | ToolchainLibraryLink / `LinkProbe.cpp` | 两座探针库进入桌面最终链接并真实运行；不能以 STATIC 归档代替最终链接 |
-| Toolchain LinkSmoke | Android/iOS 显式最终链接入口保留，Task 1 未运行，不算设备覆盖 |
+| Toolchain LinkSmoke（现已删除） | 原空程序 SDK 链接检查由 ProjectIntegration/CrossCompileTests.cmake 的真实移动宿主最终链接承接，不算设备运行覆盖 |
 
 ## 根 CMake 脚本：保留原契约并统一分类
 
-| 旧 CTest 名称 | 脚本断言清单（全部仍在原脚本） |
+| 旧 CTest 名称 | 迁移时的脚本断言清单 |
 | --- | --- |
 | BuildEnvironment | 未设置 LLVM_ROOT、ANDROID_HOME 时子进程失败，保留 Pangu 专用诊断 |
 | SourcePluginBuildTool | 空插件根；首次配置构建独立宿主工具；无变化 Ninja 不做工作、warm configure 成功；Linux 选定 libc++ 头/链接而非 libstdc++ |
@@ -184,6 +193,10 @@ Catalog 独立入口为 `PanguStaticCatalogTests.StaticCatalog.RetainsArchiveRoo
 | SourcePluginStaticCatalog | MyGame/MyEditor 各自 Catalog、真实执行及依赖顺序；不构建另一 Host 的无关库；assets-only/仅启用但未消费 Plugin 不构建；删除必需 manifest 后 build 失败 |
 | SourcePluginSharedDeploy | 未消费 SHARED 不构建/部署；显式部署产物存在且非空、SHA256 一致；PE/ELF/Mach-O magic；产物名不含平台名；无变化部署不重写 |
 | SourcePluginIncremental | 既有生产源码与配置输入变更、失败后修复重试；禁用 Plugin 的 CMake 不得执行；新建未启用 Plugin 不应执行；宿主工具变动后必须重建 |
+
+后续测试淘汰维护将普通文件失效与恢复、Windows 工具源码失效及编译失败恢复合并至
+`ProjectIntegration.IncrementalBuild`，移除 `PluginIntegration.DiscoveryInvalidation` 和
+`PluginIntegration.BuildToolSourceChange` 重复入口；文件与目录链接回归仍独立保留。
 
 `PluginScaleTests.cmake` 与 `CrossCompileTests.cmake` 是保留的显式专项，不属于上述根 22 项统计。
 后者仍覆盖 Android/iOS 独立 Project 的 Game/Editor 最终链接、SHARED 部署及宿主工具运行；Task 1 未执行这些专项。
@@ -257,7 +270,7 @@ boundary、area、owner.engine、run.full、分层和工作目录，不以固定
 | BuildEnvironment | system / toolchain / precommit | 子进程检查原环境诊断；独立 Tests/Work 工作目录 |
 | ToolchainLibraryLink | integration / toolchain / precommit | 原最小链接目标及两个真实 STATIC 库；生产链接依赖不变 |
 | ThirdPartyCompiledProbe / PanguToolchainProbe | full 编译依赖 | 交叉构建保留编译验证，不登记设备运行 |
-| NlohmannSubmoduleRequired | system / thirdparty / full | 缺失任一上游头的独立配置失败；保留离线诊断和随机夹具 |
+| NlohmannSubmoduleRequired（现已删除） | system / thirdparty / full | 迁移时验证缺失任一上游头的独立配置失败、离线诊断和随机夹具 |
 | SourcePlugin* | system / plugins / full | 每测试名独立 Tests/Work 根；既有随机夹具保留；文件/目录链接能力分别可定位 |
 | Testing* | system / testing / full | 每测试名独立根；保留注册、依赖隔离、多工具组及失败传播契约 |
 
@@ -400,7 +413,7 @@ Task 4 新增 `ModuleManagerTests.cpp`、`ResidentModuleTests.cpp`、`BatchLoadT
 | SourcePluginSharedDeploy 的旧独立 SHARED Probe | 同名脚本真实 Runtime/业务 Query 与部署 | 保留文件 magic/名称/复制 SHA/no-op；新增宿主不直接导入业务库、真实动态启动和关闭，不以文件存在代替运行 |
 | SourcePluginIncremental/Project/Enable/EngineRevision/TestOwnership | 原同名脚本 + 双模式/锁验证 | 保留原负例、未消费不重编、空 Plugin/owner 隔离；锁当前干净 Engine SHA，local override OFF；往返不得消费旧模式产物 |
 | Toolchain PolicyProbe 固定 STATIC | 同一 Pangu::ToolchainProbe 服从模式 | ThirdParty::CompiledProbe 仍 STATIC 且不继承 Pangu 策略；ToolchainLibraryLink 两库最终链接与 expected 返回保留 |
-| 空 LinkSmoke/未消费 Runtime 的 SharedProbe | ProjectIntegration/CrossCompileTests.cmake | 旧 SDK 冒烟仍保留但不足；新增 Android .a→原生宿主.so、iOS .a→Mach-O executable 与 Modular 真 Runtime/业务 Query/依赖，架构/platform 断言；不等效设备运行 |
+| 空 LinkSmoke/未消费 Runtime 的 SharedProbe | ProjectIntegration/CrossCompileTests.cmake | 旧 SDK 空程序冒烟已删除；保留 Android .a→原生宿主.so、iOS .a→Mach-O executable 与 Modular 真 Runtime/业务 Query/依赖，架构/platform 断言；不等效设备运行 |
 | ModuleIdentity/Descriptor 原 Module/Public 路径 | Foundation/Public 同名纯协议头 | 旧位置删除，无转发头；PUBLIC Foundation 依赖传播，身份/版本断言保留，无新增库或 Module→Foundation 链接环 |
 | ScopeTypeToken 地址比较 | ScopeBuild/SharedScopeLifecycle.TypedDependency、ModuleLifetime | 内部 RTTI 值比较，跨 DLL 公共/私有类型、错误类型与卸载后凭据真实回归；不凭地址/名字/hash 绕过 |
 | Task 4/5 阶段门 | ModuleUnload/Concurrency、SharedScopeLifecycle、ModuleLifetime + 保留 Mono 子图 | 真实资源/Factory/Pin/原生释放失败与重入、失败批次/元数据环/Scope 回滚屏障保留；阶段数量与本轮平台矩阵分别归档 |

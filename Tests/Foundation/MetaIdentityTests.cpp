@@ -4,7 +4,6 @@
 #include <ModuleIdentity.h>
 
 #include <cstddef>
-#include <gtest/gtest.h>
 #include <optional>
 #include <type_traits>
 
@@ -19,17 +18,13 @@ static_assert(TypeId{} < kId);
 static_assert(!std::is_convertible_v<TypeId, pg::module::ModuleId>);
 static_assert(!std::is_convertible_v<pg::module::ModuleId, TypeId>);
 
-TEST(MetaIdentity, OptionalAndDistinct)
-{
-    EXPECT_FALSE(TypeId{}.IsValid());
-    constexpr pg::meta::TypeInfo kAnonymous{.Name = "Actor", .Id = std::nullopt, .Fields = {}};
-    EXPECT_FALSE(kAnonymous.Id.has_value());
-    constexpr pg::meta::TypeInfo kStable{.Name = "Actor", .Id = kId, .Fields = {}};
-    ASSERT_TRUE(kStable.Id.has_value());
-    EXPECT_EQ(*kStable.Id, kId);
-    EXPECT_TRUE(kStable.Id->IsValid());
-    constexpr pg::meta::FieldOptions kOptions;
-    EXPECT_EQ(kOptions.Key, nullptr);
-    EXPECT_FALSE(kOptions.ReadOnly);
-}
+constexpr pg::meta::TypeInfo kAnonymous{.Name = "Actor", .Id = std::nullopt, .Fields = {}};
+static_assert(!kAnonymous.Id.has_value());
+constexpr pg::meta::TypeInfo kStable{.Name = "Actor", .Id = kId, .Fields = {}};
+static_assert(kStable.Id.has_value());
+static_assert(*kStable.Id == kId);
+static_assert(kStable.Id->IsValid());
+constexpr pg::meta::FieldOptions kOptions;
+static_assert(kOptions.Key == nullptr);
+static_assert(!kOptions.ReadOnly);
 } // namespace

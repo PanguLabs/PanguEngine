@@ -38,9 +38,9 @@ git submodule update --init --recursive
   等可失败路径处理非受信任输入。只有静态受控的测试 JSON 字面量/输入才使用
   不返回错误的便利接口。
 
-- [`JsonExtras`](../../../Tests/ThirdParty/NlohmannJson/JsonExtrasTests.cpp) CTest 验证固定版本、字面量、JSON Pointer、DOM 访问与无异常解析失败路径；`NlohmannSubmoduleRequired` 验证缺少任一头文件时配置明确失败。
+- JSON 的实际消费行为通过 PanguMetaTool 的请求解析、上下文和发布测试验证。
   不引入其他版本的独立头文件或实验性零拷贝 API。
 
 升级必须明确更新版本要求，在 `Repo/` 检出目标提交并更新主仓库 gitlink，复核许可证、
-独立 JSON 接入测试及 Windows/WSL/macOS Clang 测试。
+PanguMetaTool 的相关测试及 Windows/WSL/macOS Clang 测试。
 不得将不同版本或提交的头文件复制混用。

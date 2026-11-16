@@ -10,7 +10,6 @@
 
 namespace pg::fixture
 {
-int SharedProbeValue() noexcept { return 1; }
 namespace
 {
 [[nodiscard]] pg::Status RegisterSharedProbe(module::RegistrationContext& context) noexcept

@@ -1,4 +1,0 @@
-struct ContextValue
-{
-    int Value;
-};

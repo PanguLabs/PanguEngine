@@ -8,15 +8,7 @@ set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(PANGU_BUILD_ENGINE_TESTS OFF CACHE BOOL "" FORCE)
 add_subdirectory("${PANGU_SOURCE_ROOT}" Engine)
 if(CMAKE_CROSSCOMPILING)
-    if(ANDROID)
-        add_library(PanguFoundationFatalLinkFixture SHARED FatalLinkFixture.cpp)
-    else()
-        add_executable(PanguFoundationFatalLinkFixture FatalLinkFixture.cpp)
-    endif()
-    target_link_libraries(PanguFoundationFatalLinkFixture PRIVATE PanguBuildOptions Pangu::Foundation)
-    set_target_properties(PanguFoundationFatalLinkFixture PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${PANGU_ENGINE_BUILD_ROOT}/Bin"
-        LIBRARY_OUTPUT_DIRECTORY "${PANGU_ENGINE_BUILD_ROOT}/Bin")
+    # 移动端最终链接由 ProjectIntegration/CrossCompileTests.cmake 的真实 MobileHost 覆盖。
     return()
 endif()
 add_library(AssertOtherConsumer STATIC OtherConsumer.cpp)

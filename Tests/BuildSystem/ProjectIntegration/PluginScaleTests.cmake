@@ -16,7 +16,6 @@ foreach(count IN ITEMS 0 10 100)
     ProjectCommand(PASS "discovered ${count} source plugins" "${CMAKE_COMMAND}"
         -S "${scaleSource}" -B "${scaleBinary}" -G Ninja)
     ProjectCommand(PASS "no work to do" "${CMAKE_COMMAND}" --build "${scaleBinary}")
-    ProjectCommand(PASS "no work to do" "${CMAKE_COMMAND}" --build "${scaleBinary}")
     ProjectCommand(PASS "" ninja -C "${scaleBinary}" -t commands all)
     RejectText("${commandOutput}" "Plugin1")
     ProjectCommand(PASS "" "${scaleBinary}/BuildTools/PanguBuildTool/PanguBuildTool${executableSuffix}"

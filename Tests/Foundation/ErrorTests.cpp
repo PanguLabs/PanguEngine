@@ -63,15 +63,6 @@ static_assert(std::same_as<pg::Result<void>, pg::Status>);
     return *value + 1;
 }
 
-[[nodiscard]] pg::Status CheckDummy(bool fail) noexcept
-{
-    if (fail)
-    {
-        return std::unexpected(kSimple);
-    }
-    return {};
-}
-
 [[nodiscard]] constexpr bool TestExpectedValues() noexcept
 {
     constexpr pg::Result<int> kResult{17};
@@ -102,13 +93,6 @@ TEST(Error, PreservesDomainCodeAndNativeValue)
     EXPECT_NE(kSimple, (Error{kDifferentDomain, 42}));
 }
 
-TEST(Result, SuccessPreservesExactValue)
-{
-    const pg::Result<int> result{17};
-    ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(*result, 17);
-}
-
 TEST(Result, SuccessfulPropagationReturns124)
 {
     const auto succeeded = PropagateDummy(false);
@@ -133,16 +117,4 @@ TEST(Result, FailedPropagationPreservesOriginalError)
     }
 }
 
-TEST(Status, SuccessHasNoError)
-{
-    const auto statusOk = CheckDummy(false);
-    EXPECT_TRUE(statusOk.has_value());
-}
-
-TEST(Status, FailurePreservesOriginalError)
-{
-    const auto statusFailed = CheckDummy(true);
-    ASSERT_FALSE(statusFailed.has_value());
-    EXPECT_EQ(statusFailed.error(), kSimple);
-}
 } // namespace

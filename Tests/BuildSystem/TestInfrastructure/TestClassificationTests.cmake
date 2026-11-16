@@ -99,8 +99,8 @@ if(PANGU_TEST_LINK_MODE STREQUAL "Modular")
 else()
     set(moduleLifecycleRegression ScopeDestructor)
 endif()
-foreach(required IN ITEMS BuildEnvironment ToolchainLibraryLink NlohmannSubmoduleRequired
-        PluginIntegration.BuildToolConfigure PluginIntegration.DiscoveryInvalidation PluginIntegration.DiscoveryFileLinks
+foreach(required IN ITEMS BuildEnvironment ToolchainLibraryLink
+        PluginIntegration.BuildToolConfigure PluginIntegration.DiscoveryFileLinks
         PluginIntegration.DiscoveryDirectoryLinks ProjectIntegration.EngineRevision ProjectIntegration.Base ProjectIntegration.EmbeddedEngine
         ProjectIntegration.PluginEnable ProjectIntegration.HostModuleConsumption ProjectIntegration.SharedDeploy ProjectIntegration.IncrementalBuild
         TestInfrastructure.Registration TestInfrastructure.DependencyIsolation TestInfrastructure.BuildToolsTestIntegration
@@ -109,9 +109,6 @@ foreach(required IN ITEMS BuildEnvironment ToolchainLibraryLink NlohmannSubmodul
         message(FATAL_ERROR "Missing original regression or explicit capability scenario: ${required}")
     endif()
 endforeach()
-if(CMAKE_HOST_WIN32 AND NOT "PluginIntegration.BuildToolSourceChange" IN_LIST seen)
-    message(FATAL_ERROR "Windows tool source invalidation/compile-failure recovery regression is missing")
-endif()
 if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
     foreach(stage IN ITEMS Project Engine Provider)
         if(NOT "ProjectIntegration.PluginTestOwnership.${stage}" IN_LIST seen)

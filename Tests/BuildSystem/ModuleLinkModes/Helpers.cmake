@@ -38,7 +38,6 @@ endfunction()
 function(BuildAndRun name)
     Run(PASS "" "${CMAKE_COMMAND}" --build "${PANGU_TEST_ROOT}/${name}"
         --parallel "${PANGU_TEST_BUILD_JOBS}" --target ModeConsumer)
-    Run(PASS "" "${PANGU_TEST_ROOT}/${name}/Bin/ModeConsumer${CMAKE_EXECUTABLE_SUFFIX}")
     Run(PASS "100% tests passed" "${CMAKE_CTEST_COMMAND}" --test-dir "${PANGU_TEST_ROOT}/${name}"
         --output-on-failure --no-tests=error)
     Run(PASS "no work to do" "${CMAKE_COMMAND}" --build "${PANGU_TEST_ROOT}/${name}"

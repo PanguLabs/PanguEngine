@@ -67,7 +67,7 @@ Source/ThirdParty/<DependencyName>/
 
 **Pangu Module 封装的是引擎功能，而不是每个第三方库。** 源码 Pangu Plugin 的交付限制只适用于 Pangu 自有 Plugin/SDK 路线，**不禁止普通 ThirdParty 预编译 SDK、系统库和 OS Framework**；它们继续按照 Target、Toolchain、ABI 与 Ownership 契约独立审核，也不自动继承 Pangu 独立插件 Preflight。一个功能 Module 可以依赖多个第三方 Target，不强制一库一 Module，也不为每个依赖新增 Service/Registry。
 
-第三方 API 默认优先通过使用方的 `PRIVATE` 依赖实现隔离；**不强制所有第三方类型都隐藏在 Pangu Module Public API 之外**。确需公开时应审查版本、API/ABI、对象/分配器所有权及销毁代码驻留。宿主工具和测试可以直接使用 `ThirdParty::` Target；`JsonExtras` 测试是当前实例。
+第三方 API 默认优先通过使用方的 `PRIVATE` 依赖实现隔离；**不强制所有第三方类型都隐藏在 Pangu Module Public API 之外**。确需公开时应审查版本、API/ABI、对象/分配器所有权及销毁代码驻留。宿主工具和测试可以直接使用 `ThirdParty::` Target；PanguMetaTool 直接消费 `ThirdParty::NlohmannJson`。
 
 对于 Gameplay Hot Swap，第三方代码实际链接/装载到哪个 DLL，必须据此管理对象、回调、任务、线程和卸载时序；静态链接进入可卸载 DLL 的代码也需要 CodePin/Drain 约束。ThirdParty Target 名称及 `PRIVATE` 传播设置本身不提供运行时卸载安全。一个 Pangu Module 仍对应唯一实际 STATIC/SHARED Library Target。
 
@@ -94,7 +94,8 @@ PanguMetaTool 的 SDK 配套依赖固定 zlib 1.3.2（`da607da739fa6047df13e66a2
 CRT/Debug信息并验证消费链接和no-op，私有上下文依赖实验已撤回。扫描接线调整不修改上游源码。
 
 `NlohmannJson/Repo` 固定到官方 v3.12.0 正式发布版，外层直接暴露 `single_include` 并设置
-`JSON_USE_GLOBAL_UDLS=0`。当前保留 `ThirdParty::NlohmannJson` 和独立 JSON 回归测试，
+`JSON_USE_GLOBAL_UDLS=0`。当前由 PanguMetaTool 消费 `ThirdParty::NlohmannJson`，
+实际消费行为通过工具自身的测试验证；独立的 `Tests/ThirdParty` 已删除。
 不再依赖已退役的 ABI Profile 工具；没有新增 Runtime Module、上游测试或配置时下载。
 
 ## 编译型第三方的实际验证（2026-10-23）

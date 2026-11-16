@@ -23,32 +23,10 @@ ctest --preset windows-full -R '^ToolchainLibraryLink$' --output-on-failure
 
 完整验证可用 `cmake --workflow --preset windows-full`；普通 ALL 构建不保证独立宿主测试已准备。Linux/macOS 改用相应 preset。Android/iOS 默认 `BUILD_TESTING=OFF`；要检查上述编译型 target，可在 configure 时显式追加 `-DBUILD_TESTING=ON`。这不验证设备执行或独立预编译 SDK 的 ABI 兼容。
 
-## 历史空程序工具链冒烟（仅 SDK 链接能力）
-
-`LinkSmoke/` 是与引擎根工程独立的最小 CMake 项目，目标为 `PanguPlatformLinkSmoke`。只验证目标 Clang + SDK 可以**最终链接一个 C++23 程序**，不链接 Pangu Runtime，不在设备执行，不加入根工程 `ALL` 或 CTest。
-
-Android（Windows 宿主，`S` 为新的 NTFS 目标目录）：
-
-```powershell
-cmake -S Tests/Toolchain/LinkSmoke -B $S -G Ninja "-DCMAKE_TOOLCHAIN_FILE=$env:ANDROID_NDK_HOME/build/cmake/android.toolchain.cmake" -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-29 -DANDROID_STL=c++_shared -DCMAKE_BUILD_TYPE=Release
-cmake --build $S --target PanguPlatformLinkSmoke --verbose
-& "$env:ANDROID_NDK_HOME/toolchains/llvm/prebuilt/windows-x86_64/bin/llvm-readobj.exe" --file-headers "$S/PanguPlatformLinkSmoke"
-```
-
-iOS（macOS 宿主，`S` 为新的 APFS 目标目录）：
-
-```sh
-cmake -S Tests/Toolchain/LinkSmoke -B "$S" -G Ninja -DCMAKE_TOOLCHAIN_FILE="$PWD/cmake/Platform/iOS/Toolchain.cmake" -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=18.0 -DCMAKE_BUILD_TYPE=Release
-cmake --build "$S" --target PanguPlatformLinkSmoke --verbose
-otool -hv "$S/PanguPlatformLinkSmoke.app/PanguPlatformLinkSmoke"
-otool -l "$S/PanguPlatformLinkSmoke.app/PanguPlatformLinkSmoke"
-```
-
-Android 需确认 ELF/AArch64；iOS 需确认 Mach-O/ARM64 可执行文件，且 `LC_BUILD_VERSION` 为 iOS 平台（`platform 2`），不可把 iOS CMake 的 `try_compile(STATIC_LIBRARY)` 当作最终链接。
-
 ## 现行移动端真实 Module 最终链接
 
-上方 LinkSmoke 不消费 Runtime，不能代替本轮验收。正式根分别 `cmake --preset android-arm64|ios-arm64 -DPANGU_LINK_MODE=<Monolithic|Modular> -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON` 并用对应 build preset 编译，再显式执行：
+旧 `LinkSmoke/` 空程序 SDK 冒烟已删除，其最终链接能力由下面的真实 Runtime/业务宿主检查承接。
+正式根分别 `cmake --preset android-arm64|ios-arm64 -DPANGU_LINK_MODE=<Monolithic|Modular> -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON` 并用对应 build preset 编译，再显式执行：
 
 ```sh
 cmake -DPANGU_ENGINE_SOURCE_DIR=<共享源码根> -DPANGU_TEST_ROOT=<本平台BuildRoot>/Tests/ModuleLinkModes/<模式> -DPANGU_TARGET_PRESET=<android-arm64|ios-arm64> -DPANGU_LINK_MODE=<模式> -P Tests/BuildSystem/ProjectIntegration/CrossCompileTests.cmake

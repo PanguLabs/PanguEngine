@@ -41,10 +41,10 @@
 | 原 CTest 名称 | 现 CTest 名称 |
 | --- | --- |
 | `SourcePluginBuildTool` | `PluginIntegration.BuildToolConfigure` |
-| `SourcePluginBuildToolInvalidation` | `PluginIntegration.DiscoveryInvalidation` |
+| `SourcePluginBuildToolInvalidation` | `ProjectIntegration.IncrementalBuild`（普通文件失效与恢复） |
 | `SourcePluginBuildToolFileLinks` | `PluginIntegration.DiscoveryFileLinks` |
 | `SourcePluginBuildToolDirectoryLinks` | `PluginIntegration.DiscoveryDirectoryLinks` |
-| `SourcePluginBuildToolSourceChange` | `PluginIntegration.BuildToolSourceChange` |
+| `SourcePluginBuildToolSourceChange` | `ProjectIntegration.IncrementalBuild`（工具源码失效；Windows 编译失败与恢复） |
 | `SourcePluginEngineRevision` | `ProjectIntegration.EngineRevision` |
 | `SourcePluginProject` | `ProjectIntegration.Base` |
 | `SourcePluginEmbeddedEngine` | `ProjectIntegration.EmbeddedEngine` |

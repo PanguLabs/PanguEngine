@@ -12,29 +12,6 @@
 #include <thread>
 namespace pg::log
 {
-TEST(LogDrain, TimeoutRetriesSameH)
-{
-    test::DrainOwner owner;
-    ASSERT_TRUE(owner.Start());
-    owner.Hooks.BlockOutput.store(true);
-    const auto writer = owner.System.GetWriter();
-    ASSERT_EQ(test::SubmitPaused(owner.System, writer,
-                                 [&](const auto& pausedWriter) { return PG_LOG_INFO(pausedWriter, "drain", "first"); }),
-              SubmitResult::kAccepted);
-    ASSERT_TRUE(test::Wait([&] { return owner.Hooks.OutputEntered.load(); }));
-    FlushReport first;
-    EXPECT_FALSE(test::Flush(owner.System, std::chrono::steady_clock::now(), first));
-    EXPECT_EQ(first.H, 1);
-    EXPECT_FALSE(first.Finished);
-    EXPECT_EQ(test::SubmitPaused(owner.System, writer,
-                                 [&](const auto& pausedWriter) { return PG_LOG_INFO(pausedWriter, "drain", "later"); }),
-              SubmitResult::kAccepted);
-    owner.Hooks.BlockOutput.store(false);
-    FlushReport retried;
-    ASSERT_TRUE(test::Flush(owner.System, test::Deadline(), retried));
-    EXPECT_EQ(retried.H, first.H);
-    EXPECT_EQ(retried.Outputs.at(0).Delivered, 1);
-}
 TEST(LogDrain, FlushDoesNotFollowLaterRecords)
 {
     test::DrainOwner owner;
@@ -47,6 +24,8 @@ TEST(LogDrain, FlushDoesNotFollowLaterRecords)
     ASSERT_TRUE(test::Wait([&] { return owner.Hooks.OutputEntered.load(); }));
     FlushReport first;
     EXPECT_FALSE(test::Flush(owner.System, std::chrono::steady_clock::now(), first));
+    EXPECT_EQ(first.H, 1);
+    EXPECT_FALSE(first.Finished);
     for (int index = 0; index < 32; ++index)
     {
         EXPECT_EQ(test::SubmitPaused(owner.System, writer, [&](const auto& pausedWriter)
@@ -57,6 +36,7 @@ TEST(LogDrain, FlushDoesNotFollowLaterRecords)
     FlushReport retried;
     ASSERT_TRUE(test::Flush(owner.System, test::Deadline(), retried));
     EXPECT_EQ(retried.H, 1);
+    EXPECT_EQ(retried.H, first.H);
     EXPECT_EQ(retried.Outputs.at(0).Delivered, 1);
 }
 TEST(LogDrain, StopRetainsTimedOutFlush)

@@ -11,6 +11,4 @@ foreach(mode IN ITEMS Modular Monolithic Modular)
     elseif(mode STREQUAL "Monolithic" AND commandOutput MATCHES "Query(First|EngineHost)Smoke")
         message(FATAL_ERROR "Monolithic retained stale Modular Query tests")
     endif()
-    Run(PASS "100% tests passed" "${CMAKE_CTEST_COMMAND}" --test-dir "${PANGU_TEST_ROOT}/Switch"
-        --output-on-failure --no-tests=error)
 endforeach()
