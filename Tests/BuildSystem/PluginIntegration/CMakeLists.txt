@@ -24,6 +24,7 @@ foreach(scenario IN ITEMS FileLinks DirectoryLinks)
         "-DPANGU_INVALIDATION_SCENARIO=${scenario}")
 endforeach()
 set(projectTests "${PROJECT_SOURCE_DIR}/Tests/BuildSystem/ProjectIntegration")
+pangu_source_plugin_test(ProjectIntegration.FindPackage "${projectTests}/FindPackageTests.cmake")
 foreach(pair IN ITEMS "EngineRevision|EngineRevisionTests" "Base|ProjectIntegrationTests" "PluginEnable|PluginEnableTests"
         "HostModuleConsumption|HostModuleConsumptionTests" "SharedDeploy|SharedDeployTests" "IncrementalBuild|IncrementalBuildTests"
         "PluginTestOwnership|PluginTestOwnershipTests" "PluginCollaboration|PluginCollaborationTests")

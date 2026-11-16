@@ -5,6 +5,7 @@
 > 更新：2026-11-04
 > 关联：[Plugin / Module 架构](../../../wiki/core/plugin-module.md)、[构建系统](../../../wiki/foundation/build-system.md)、[ADR-0013](../../../wiki/decisions/0013-native-build-abi-boundary.md)
 > 实现状态：本篇规定目标方案，示例中的新增接口尚未实现；不得将设计确认视为已通过五平台构建或运行时验收。
+> 接入入口替代：2026-11-16 起，直接嵌入 Engine 的 Project 示例由 [FindPanguEngine 接入设计](2026-11-16-find-pangu-engine-design.md)替代；本篇其余设计和历史状态保留。
 
 ## 1. 背景、目标与非目标
 

@@ -5,7 +5,7 @@
 本机终端可使用 `Scripts/build.ps1`（Windows/Android）或 `bash Scripts/build.sh`（Linux/macOS/iOS）。无参数显示中文构建清单，支持普通/纯引擎构建、三档桌面测试、样例、基准和移动最终链接验证；前置条件、参数、五平台示例和产物目录见 [本机构建脚本](../../Scripts/README.md)。两个入口只调用现有 Preset/正式验证，不改变 CMake/Ninja 的构建职责。
 
 > 状态：Partially Frozen（CMake 4.0+、Ninja 原生增量、单 Module 单库、Target 命名空间及源码 Plugin/独立 Project 构建政策已冻结；源码插件与统一 ModuleManager/Loader 已实现，实际平台验收单独记录，完整发布未实现）
-> 更新：2026-11-11
+> 更新：2026-11-16
 > 决策：[ADR-0001：采用 CMake](../decisions/0001-adopt-cmake.md)、[ADR-0005：一个 Module 一个库](../decisions/0005-one-module-one-library.md)、[ADR-0012：构建树按宿主本地化](../decisions/0012-host-local-build-trees.md)、[ADR-0013：原生构建](../decisions/0013-native-build-abi-boundary.md)、[ADR-0014：源码 Plugin 与独立 Project](../decisions/0014-source-plugins-project-build.md)
 
 ## 已确定的决策
@@ -24,7 +24,18 @@
 
 ## 源码 Plugin / Project 构建政策与最小实现
 
-依据 [ADR-0014](../decisions/0014-source-plugins-project-build.md)：Engine 可独立顶层构建；Game Project 自行选择 Toolchain、CTest、隔离 BuildRoot，通过 Engine 源码 `add_subdirectory()` 进入同一目标图。配置期仅从 Engine/Project 两个固定 `Plugins/` 根扫描直接子目录，所有候选必须同时包含 `Plugin.toml` + `CMakeLists.txt`，严格验证稳定 ID 和可选 SemVer。顶层每次 Configure（**包括无 Plugin**）都须通过宿主 Clang/C++23 独立增量构建并运行 `PanguBuildTool`（`toml++`、JSON）；不能因插件为空跳过。Plugin 显式启用后仍用 `EXCLUDE_FROM_ALL`，只由实际 Game/Editor/Tool Target 链接/依赖触发编译，部署和激活另行控制。
+依据 [ADR-0014](../decisions/0014-source-plugins-project-build.md)：Engine 可独立顶层构建；Game Project 自行选择 Toolchain、CTest、隔离 BuildRoot，通过 `find_package(PanguEngine REQUIRED MODULE)` 查找源码包，再调用 `pangu_initialize()`。内部以 `add_subdirectory()` 将 Engine 源码加入同一目标图。配置期仅从 Engine/Project 两个固定 `Plugins/` 根扫描直接子目录，所有候选必须同时包含 `Plugin.toml` + `CMakeLists.txt`，严格验证稳定 ID 和可选 SemVer。顶层每次 Configure（**包括无 Plugin**）都须通过宿主 Clang/C++23 独立增量构建并运行 `PanguBuildTool`（`toml++`、JSON）；不能因插件为空跳过。Plugin 显式启用后仍用 `EXCLUDE_FROM_ALL`，只由实际 Game/Editor/Tool Target 链接/依赖触发编译，部署和激活另行控制。
+
+Project 在自身 `project()` 后按以下方式接入；`PANGU_ENGINE_SOURCE_DIR` 指向选定的 Engine 源码根，`PANGU_ENGINE_BUILD_ROOT` 为绝对路径：
+
+```cmake
+list(PREPEND CMAKE_MODULE_PATH "${PANGU_ENGINE_SOURCE_DIR}/cmake")
+find_package(PanguEngine REQUIRED MODULE)
+set(PANGU_ENGINE_BUILD_ROOT "${CMAKE_BINARY_DIR}/EngineBuild" CACHE PATH "Engine artifacts")
+pangu_initialize()
+```
+
+`FindPanguEngine.cmake` 只发现源码树并提供初始化函数，重复查找不添加目标、不运行宿主工具。显式 `PANGU_ENGINE_SOURCE_DIR` 必须与所选 Find 模块所在源码树一致；也可仅通过 `CMAKE_MODULE_PATH` 选定 Engine，由包返回该变量。`pangu_initialize()` 不接受参数；未设置 EngineBuildRoot 时默认使用顶层 binary root。Engine/Project 的目标和生成结果仍按源码所有权分根；父级继续拥有 Toolchain、CTest、Git 锁校验与 Plugin 启用。完整 Project 示例见 [MyGame](../../Tests/BuildSystem/ProjectIntegration/MyGame/CMakeLists.txt)，包发现契约由 `ProjectIntegration.FindPackage` 验证。此入口用于源码集成，尚未提供安装版二进制 Engine 包。
 
 已实现 `BuildTools/PanguBuildTool`、`cmake/PanguPlugins.cmake` 的发现/启用接线及 `cmake/PanguEngineRevision.cmake` 的 Project Git 锁定校验。`ENGINE_ROOT` / `PROJECT_ROOT` 参数指向持有 `Plugins/` 的工程根。Engine standalone 默认启用内部测试；嵌入 Project 时内部测试默认关闭，父级拥有 `BUILD_TESTING`，需要时另开 `PANGU_BUILD_ENGINE_TESTS`。Project 及 Game/Editor STATIC Catalog、Assets 和显式 SHARED 部署以正式测试夹具验收；ModuleManager 原生 Loader 的当前实现与双模式实际验收见[新验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)；PanguMetaTool 首版现已单独实现，App 发布未因此实现。平台命令、结果和性能证据见[本次验收](../../docs/superpowers/plans/2026-11-04-source-plugins-project-build-validation.md)。
 

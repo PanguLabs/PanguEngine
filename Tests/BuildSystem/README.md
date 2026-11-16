@@ -6,9 +6,9 @@
 | 目录 / 文件 | 职责 |
 | --- | --- |
 | `PluginIntegration/` | 源码插件构建接线、宿主工具引导、源码和文件链接变化引发的失效重建；集中登记相关插件与 Project 回归 |
-| `ProjectIntegration/` | 独立 Project 接入 Engine 的测试脚本、共享辅助函数，以及 MyGame / Engine Plugin 夹具；覆盖版本锁定、启用、协作、链接、部署和移动最终链接 |
+| `ProjectIntegration/` | 独立 Project 通过 FindPanguEngine / pangu_initialize 接入 Engine 的测试脚本、共享辅助函数，以及 MyGame / Engine Plugin 夹具；覆盖包发现、版本锁定、启用、协作、链接、部署和移动最终链接 |
 | `TestInfrastructure/` | 测试注册、分类、依赖与基准隔离、构建工具测试准备及 workflow 完整性 |
-| `ModuleLinkModes/` | Monolithic / Modular 配置、切换及跨模式回归 |
+| `ModuleLinkModes/` | Monolithic / Modular 配置、切换、跨模式回归及独立 SharedProject 接入 |
 | `PanguMeta/` | Meta 注册、增量、失败恢复、BuildRoot 归属与 Project 切换 |
 | `LogConfig/` | 编译配置与 Assert 选项组合、第三方宏隔离及真实分配夹具验证 |
 | `EnvironmentTests.cmake` | 工具链环境变量缺失时的配置预检 |
@@ -72,6 +72,10 @@
 先按下文准备对应测试构建。名称派生的测试工作目录随新名变化，仍位于同一宿主 BuildRoot 的 Tests/Work 内。
 
 ## 执行与产物
+
+`ProjectIntegration.FindPackage` 遵循 ProjectIntegration 的 full 分层，使用无编译器的临时 CMake 工程验证发现、重复查找无副作用、QUIET/REQUIRED 失败语义及相对 BuildRoot 拒绝；真实初始化、链接与宿主运行继续由 MyGame、ModuleLinkModes、LogConfig 和 PanguMeta 夹具覆盖。完整 Engine 消费者使用 `find_package(PanguEngine REQUIRED MODULE)` 后调用 `pangu_initialize()`；单模块隔离夹具保留直接消费模块的边界。
+
+Shared 模块的独立配置入口为 `Tests/Module/Fixtures/SharedProject/`，Engine 内部目标仍定义在 `Tests/Module/Fixtures/Shared/`。`ModuleSharedProject` 验证独立配置、原生模块测试构建和运行；入口与内部目标分目录，避免同一源码目录被顶层和 Engine 子图重复加入而形成目录属性遍历环。
 
 由 [Tests/CMakeLists.txt](../CMakeLists.txt) 接入根 CTest。使用相应宿主的根 Preset，先完成所选测试集合的构建，再执行 CTest；具体规则见 [Tests 维护规范](../README.md)。
 

@@ -1,15 +1,5 @@
 cmake_minimum_required(VERSION 4.0)
 
-# Monolithic 外层可显式配置此独立 Modular 入口；不向外层登记原生运行测试。
-if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR AND NOT TARGET PanguModule)
-    project(PanguSharedModuleFixture LANGUAGES CXX)
-    include(CTest)
-    set(PANGU_LINK_MODE Modular CACHE STRING "Pangu Module linkage" FORCE)
-    set(PANGU_BUILD_ENGINE_TESTS ON CACHE BOOL "Build engine tests" FORCE)
-    add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../../../.." Engine)
-    return()
-endif()
-
 foreach(name IN ITEMS Provider Consumer)
     add_library(PanguShared${name} SHARED ${name}.cpp)
     string(TOUPPER "${name}" upperName)

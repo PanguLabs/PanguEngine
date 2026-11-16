@@ -1,5 +1,7 @@
 # PanguMetaTool 首版生成与消费闭环 Implementation Plan
 
+> 接入入口替代：本计划中的 `cmake/PanguEngine.cmake` / `pangu_add_engine()` 已由 [FindPanguEngine 迁移计划](2026-11-16-find-pangu-engine.md)替代；以下保留首版实施历史，当前入口见[构建系统](../../../wiki/foundation/build-system.md)。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 交付实际 Engine/Project 产物分根、独立 PanguMetaTool、MetaIR、按需强类型生成、受保护描述借用及 Query/Catalog 原生增量生成闭环。

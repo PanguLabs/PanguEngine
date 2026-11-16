@@ -26,6 +26,8 @@ PanguEngine 的 CMake 4.0+ / Ninja 与 C++23/Clang 单图构建已替代自制 P
 - 新的 `Plugin.toml` 和 `PanguBuildTool` 是**目标方案**；在实际代码、CTest 和各平台产物落地前，不应宣称功能已经实现。历史 ADR-0013 对普通增量构建的决定继续有效，但其独立 Pangu Plugin/SDK 未来交付分支由本 ADR 精确替代。
 - 与本 ADR 同步修订 [Plugin/Module](../core/plugin-module.md)、[ABI](../foundation/abi.md)、[构建系统](../foundation/build-system.md)、[ThirdParty](../foundation/third-party.md) 的现行规范；不篡改已经发生的 ABI Profile 历史实验和验证记录。
 
+2026-11-16 接入入口更新：独立 Project 通过 `FindPanguEngine.cmake` / `find_package(PanguEngine REQUIRED MODULE)` 查找源码包，在 `project()` 后调用 `pangu_initialize()`；内部仍为 `add_subdirectory()` 同图构建。当前产物分根与 Project 切换规则以[构建系统](../foundation/build-system.md)为准，不改变本 ADR 的源码交付、工具链和依赖所有权政策。
+
 ## Open Questions
 
 `PanguMetaTool` 自动生成 Catalog 的协议、运行时插件启停清单、SHARED 实际 Loader/热重载、资产管线、完整安装打包及设备级动态库装载策略待分别设计。以上都不构成恢复独立 Pangu 原生二进制 SDK/Plugin Preflight 的授权。
