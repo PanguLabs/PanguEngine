@@ -85,6 +85,8 @@ Source/ThirdParty/<DependencyName>/
 
 ## 当前接入
 
+`ThirdParty::Flecs` 固定 Git 子模块的 flecs `v4.2.0`（`6566d4b7bdc597d0b74d5e0a4104d4ae6ac49402`，MIT）。它以目标 Clang 编译拆分 C99 源码，C++23 消费者经 `PanguFlecs.h` 使用原生类型。Monolithic 生产图含一份 STATIC flecs，Modular 共用一份 SHARED flecs。编译宏随公开头传播，包含 `FLECS_CPP_NO_AUTO_REGISTRATION` 与 `FLECS_KEEP_ASSERT`。Release Monolithic 的可选断言对照基准单独链接一份去掉 `FLECS_KEEP_ASSERT` 的副本，生产目标始终保留此宏。上游源码维持独立编译诊断边界。[接入配置](../../Source/ThirdParty/Flecs/README.md) · [ECS 验收](../../docs/superpowers/plans/2026-11-18-ecs-world.md#ecs-交付验收)
+
 PanguMetaTool 的 SDK 配套依赖固定 zlib 1.3.2（`da607da739fa6047df13e66a2af6b8bec7c2a498`）和 zstd 1.5.7（`f8745da6ff1ad1e7bab384bd1f9d742439278e99`），来源、许可证及选项见 `Source/ThirdParty/Zlib` 与 `Source/ThirdParty/Zstd`。`ThirdParty::Zlib`、`ThirdParty::Zstd` 是上游静态目标的别名，作为 PanguMetaTool 同图普通私有依赖，不接入 Engine 主图；标准命名目标连接安装版 LLVM 包导出，不先安装成另一个 SDK。无独立准备命令、包管理器或配置期下载，不编译 LLVM；现行流程见 [ADR-0019](../decisions/0019-meta-tool-normal-build.md)，实际验证见[普通工具计划](../../docs/superpowers/plans/2026-11-14-pangumeta-normal-build.md)。
 
 日志适配固定 fmt 12.2.1（208219daff58f2a7438f6931cc2ddc358acf33ef）与 spdlog v1.17.0（79524ddd08a4ec981b7fea76afd08ee05f83755d），来源及许可证见各自 Source/ThirdParty 外层 README。ThirdParty::Fmt/ThirdParty::Spdlog 都是编译型 STATIC/PIC 库，统一外部 fmt；设置 FMT_EXCEPTIONS=0、SPDLOG_FMT_EXTERNAL、SPDLOG_NO_EXCEPTIONS、SPDLOG_NO_THREAD_ID、SPDLOG_DISABLE_DEFAULT_LOGGER，保持 RTTI，不继承 PanguBuildOptions 的警告策略，不启用上游 tests/examples/install。无上游补丁。私有 SpdlogBackend 直接通过两个内联 RawSink（spdlog 同步 Sink）消费已经编码的有界文本，不实例化 logger 的字符串、sinks/backtracer 容器，避开 formatter、默认 logger/registry/thread pool；无分配和可恢复初始化的结论限定在已审计路径与实际探针覆盖，详见[正式验收](../../docs/superpowers/plans/2026-11-12-foundation-diagnostics-validation.md)。

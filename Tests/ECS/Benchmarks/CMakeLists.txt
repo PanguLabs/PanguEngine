@@ -1,0 +1,13 @@
+cmake_minimum_required(VERSION 4.0)
+
+foreach(mode IN ITEMS On Off)
+    add_executable(PanguFlecsAssertBench${mode} FlecsAssertBenchmark.cpp)
+    if(mode STREQUAL "On")
+        set(flecs ThirdParty::Flecs)
+    else()
+        set(flecs PanguThirdPartyFlecsAssertOff)
+    endif()
+    target_include_directories(PanguFlecsAssertBench${mode} PRIVATE "${PROJECT_SOURCE_DIR}/Source/Runtime/ECS/Public")
+    target_link_libraries(PanguFlecsAssertBench${mode} PRIVATE PanguBuildOptions ThirdParty::GoogleBenchmarkMain ${flecs})
+    set_target_properties(PanguFlecsAssertBench${mode} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")
+endforeach()

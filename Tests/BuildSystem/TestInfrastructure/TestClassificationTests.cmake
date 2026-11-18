@@ -102,7 +102,8 @@ endif()
 foreach(required IN ITEMS BuildEnvironment ToolchainLibraryLink MinimalHostSmoke
         PluginIntegration.BuildToolConfigure PluginIntegration.DiscoveryFileLinks
         PluginIntegration.DiscoveryDirectoryLinks ProjectIntegration.EngineRevision ProjectIntegration.Base ProjectIntegration.EmbeddedEngine
-        ProjectIntegration.PluginEnable ProjectIntegration.HostModuleConsumption ProjectIntegration.SharedDeploy ProjectIntegration.IncrementalBuild
+        ProjectIntegration.PluginEnable ProjectIntegration.HostModuleConsumption ProjectIntegration.EcsWorld
+        ProjectIntegration.SharedDeploy ProjectIntegration.IncrementalBuild
         TestInfrastructure.Registration TestInfrastructure.DependencyIsolation TestInfrastructure.BuildToolsTestIntegration
         TestInfrastructure.BuildToolsFailurePropagation TestInfrastructure.TestClassification ${moduleLifecycleRegression})
     if(NOT required IN_LIST seen)

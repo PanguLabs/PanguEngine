@@ -22,3 +22,6 @@
 [submodule "Source/ThirdParty/Zstd/Repo"]
 	path = Source/ThirdParty/Zstd/Repo
 	url = https://github.com/facebook/zstd.git
+[submodule "Source/ThirdParty/Flecs/Repo"]
+	path = Source/ThirdParty/Flecs/Repo
+	url = https://github.com/SanderMertens/flecs.git

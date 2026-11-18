@@ -39,6 +39,8 @@ foreach(pair IN ITEMS "EngineRevision|EngineRevisionTests" "Base|ProjectIntegrat
     endif()
     pangu_source_plugin_test("ProjectIntegration.${name}" "${projectTests}/${script}.cmake" ${stageArgs})
 endforeach()
+pangu_source_plugin_test(ProjectIntegration.EcsWorld "${projectTests}/EcsWorldTests.cmake"
+    "-DPANGU_LINK_MODE=${PANGU_LINK_MODE}")
 pangu_source_plugin_test(ProjectIntegration.EmbeddedEngine "${projectTests}/ProjectIntegrationTests.cmake"
     -DPANGU_PROJECT_TEST_STAGE=Engine)
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")

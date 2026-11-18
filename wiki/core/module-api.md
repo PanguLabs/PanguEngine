@@ -95,6 +95,8 @@ ModuleCodePin 是仅移动代码保护，TryPinForBusiness 仅在 Active 且业�
 
 整体 Shutdown 按**实际有效资源 DAG、同 Module 跨 Scope 后代资源顺序**逐项 Stop/Poll/Destroy、退休 Factory，随后等待对应外部 Pin、释放该记录原生持有。依赖方原生释放未确认前不销毁 Provider 资源；不能先清空所有 Scope，也不能等待整个闭包的内部 Borrow 全归零才开始销毁。常驻 Consumer 资源排空且接纳中计数与外部 Pin 均归零后可解除其有效依赖边，允许业务 Provider 退出，但常驻记录最后统一确认。Scope 记录回收仍遵守 Owner 句柄契约。
 
+EngineHost 整体关闭在启动以上 ModuleManager 流程前关闭新业务接纳，并经内部关闭入口排空 World Scope。此阶段保持父 Context/Host Provider 的实例，以及 World 清理需调用的 Module 代码。已发 `ScopeAccess` 无法获取新 Borrow，已有 Borrow 仍受保护。完成预排空后进入普通 Module 关闭，独立 ModuleManager 仍按上述资源 DAG 管理原生释放。[EngineHost 生命周期](engine-host.md)
+
 Busy、停止错误或 OS Release 错误保留必要资源、依赖、记录、持有与原错，可继续重试；没有 ForceUnload 或超时强毁。最后 Pin/Borrow Release 只更新保护，不在任意业务线程执行 OS Unload。正常调用显式推进 Shutdown，析构最多同步尝试一次，未完成则进入所有配置有效的终止路径。
 
 TryFinishUnload 成功表示受管生命周期完成、Manager 自己的原生释放调用成功、身份和句柄失效；系统或额外宿主导入/OS 引用仍可使库驻留。实际物理卸载证据须来自排除额外导入持有的可卸载夹具及库级事件；不承诺任意共享 Runtime 从进程移除。

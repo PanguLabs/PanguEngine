@@ -68,7 +68,8 @@ Service Contract Identity 独立于 Provider ModuleId；同一单 Provider Contr
 - Ready → Quiescing：拒绝新的业务访问；在途 ServiceRef、Task、Callback 和资源清理继续使用之前合法取得的 Lifetime Guard。
 - Draining：结束异步工作，并等待使用者释放对当前服务的外部 Borrow/Lease 及对应 CodePin；**当前服务持有的依赖 Borrow/Lease，以及 Destroy/清理所需的实例和代码保护，须保留到清理完成之后**。Busy 不等于已成功停止。
 - 按依赖逆序逐个排空并销毁服务：在实现代码及被依赖实例仍有效时执行 Destroy，之后释放该服务持有的依赖保护，再处理被依赖服务；不得要求整个 DAG 的依赖 Borrow 在任何 Destroy 之前全部归零。最后的 Callback/Destroy、Registry Contribution 使用及相关 CodePin 都结束后，才允许卸载实际承载代码的动态库。
-- 不自动调度 Tick/Update。World Tick 由 WorldContext/flecs 管理，GPU 执行由 Renderer 管理，任务由 TaskScheduler 管理。
+- EngineHost 整体关闭先排空所有 World。父 Context/Host Provider 在此期间保持有效，World 的原生清理可继续使用显式依赖的父资源。ECS 回调数据由 World 或这些父资源持有，安装资源先销毁时回调数据仍须有效。[ECS 生命周期](../runtime/ecs.md)
+- 不自动调度 Tick/Update。应用显式推动 ECS World，GPU 执行由 Renderer 管理，任务由 TaskScheduler 管理。
 - Module Dependency 与 Service Dependency 是**不同的图**；协调器最终必须验证二者的关闭顺序。
 
 ## 服务注册的最小 API 方向

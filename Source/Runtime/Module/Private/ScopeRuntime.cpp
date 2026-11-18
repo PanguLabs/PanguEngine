@@ -42,6 +42,11 @@ namespace
 {
 using Kind = pg::service::Scope;
 constexpr std::size_t kMaxScopes = 256;
+enum class ScopeRange : std::uint8_t
+{
+    kAll,
+    kWorlds,
+};
 
 void Snapshot(ModuleOperationReport& report, ModuleOperationProgress progress, ModuleId module = ModuleId(),
               ScopeHandle scope = ScopeHandle(), std::optional<pg::Error> error = std::nullopt,
@@ -135,6 +140,10 @@ struct ScopeRuntime::State
         std::unique_ptr<Scope> Owner;
         bool Exhausted{};
     };
+    [[nodiscard]] static bool Includes(const Slot& slot, ScopeRange range)
+    {
+        return slot.Owner && (range == ScopeRange::kAll || slot.Owner->Type == Kind::kWorld);
+    }
     struct Operation
     {
         State* Owner;
@@ -167,6 +176,7 @@ struct ScopeRuntime::State
     std::vector<Slot> Slots;
     std::uint64_t NextResource{1};
     bool Operating{};
+    bool AdmissionClosed{};
     bool ShuttingDown{};
     bool CleanupBlocked{};
     std::optional<pg::Error> ShutdownOriginal;
@@ -659,6 +669,18 @@ struct ScopeRuntime::State
         resource.Closing = true;
         resource.Control->Gate.Close();
     }
+    static void Close(Scope& scope)
+    {
+        scope.Closing = true;
+        scope.Gate->Close();
+        for (const auto& resource : scope.Resources)
+        {
+            if (!resource->Destroyed)
+            {
+                Close(*resource);
+            }
+        }
+    }
     void CloseScope(Scope& scope)
     {
         const auto root = scope.Handle;
@@ -666,15 +688,7 @@ struct ScopeRuntime::State
         {
             if (slot.Owner && Descendant(*slot.Owner, root))
             {
-                slot.Owner->Closing = true;
-                slot.Owner->Gate->Close();
-                for (auto const& resource : slot.Owner->Resources)
-                {
-                    if (!resource->Destroyed)
-                    {
-                        Close(*resource);
-                    }
-                }
+                Close(*slot.Owner);
             }
         }
     }
@@ -743,12 +757,12 @@ struct ScopeRuntime::State
         }
         return false;
     }
-    bool RetireScopes()
+    bool RetireScopes(ScopeRange range)
     {
         bool changed = false;
         for (auto& slot : Slots)
         {
-            if (!slot.Owner || !slot.Owner->Closing || HasChildren(slot.Owner->Handle) ||
+            if (!Includes(slot, range) || !slot.Owner->Closing || HasChildren(slot.Owner->Handle) ||
                 std::ranges::any_of(slot.Owner->Resources, [](const auto& value) { return !value->Destroyed; }))
             {
                 continue;
@@ -828,7 +842,8 @@ struct ScopeRuntime::State
         }
         return changed;
     }
-    void Cleanup(bool finalizeModules, ModuleId target = {}, ScopeHandle diagnosticScope = {})
+    void Cleanup(bool finalizeModules, ModuleId target = ModuleId(), ScopeHandle diagnosticScope = ScopeHandle(),
+                 ScopeRange range = ScopeRange::kAll)
     {
         // 包括 CreateScope/Activate 的内部失败回滚，以及无资源 Scope 的槽位回收。
         if (CleanupBlocked)
@@ -847,7 +862,7 @@ struct ScopeRuntime::State
         bool progress = true;
         while (progress)
         {
-            progress = RetireScopes();
+            progress = RetireScopes(range);
             struct Entry
             {
                 Scope* Owner;
@@ -856,13 +871,14 @@ struct ScopeRuntime::State
             std::vector<Entry> resources;
             for (auto const& slot : Slots)
             {
-                if (slot.Owner)
+                if (Includes(slot, range))
                 {
                     for (auto const& resource : slot.Owner->Resources)
                     {
                         if (resource->Closing && !resource->Destroyed &&
                             (target.IsValid() ? resource->Owner == target
-                                              : Find(resource->Owner)->Record->State != ModuleState::kCleanupPending))
+                                              : range == ScopeRange::kWorlds || Find(resource->Owner)->Record->State !=
+                                                                                    ModuleState::kCleanupPending))
                         {
                             resources.push_back({.Owner = slot.Owner.get(), .Value = resource.get()});
                         }
@@ -962,23 +978,24 @@ struct ScopeRuntime::State
             {
                 progress |= FinalizeModules(target);
             }
-            progress |= RetireScopes();
+            progress |= RetireScopes(range);
         }
         // Destroyed nodes no longer have inbound graph references: a Provider is
         // destroyed only after all live dependants released their edges.
         for (auto const& slot : Slots)
         {
-            if (slot.Owner)
+            if (Includes(slot, range))
             {
                 std::erase_if(slot.Owner->Resources, [](const auto& resource) { return resource->Destroyed; });
             }
         }
     }
-    pg::Error PendingError(ModuleId module = ModuleId(), ScopeHandle scope = ScopeHandle())
+    pg::Error PendingError(ModuleId module = ModuleId(), ScopeHandle scope = ScopeHandle(),
+                           ScopeRange range = ScopeRange::kAll)
     {
         for (auto const& slot : Slots)
         {
-            if (!slot.Owner || (scope.IsValid() && !Descendant(*slot.Owner, scope)))
+            if (!Includes(slot, range) || (scope.IsValid() && !Descendant(*slot.Owner, scope)))
             {
                 continue;
             }
@@ -1013,7 +1030,8 @@ struct ScopeRuntime::State
         }
         return false;
     }
-    void Explain(ModuleOperationReport& report, ModuleId waitModule = {}, ScopeHandle waitScope = {}) const noexcept
+    void Explain(ModuleOperationReport& report, ModuleId waitModule = ModuleId(), ScopeHandle waitScope = ScopeHandle(),
+                 ScopeRange range = ScopeRange::kAll) const noexcept
     {
         const auto choose = [&](const FailureReport& failure, ModuleFailureOrigin origin)
         {
@@ -1028,7 +1046,11 @@ struct ScopeRuntime::State
         ScopeHandle originScope = report.Scope;
         DeclarationId originDeclaration = report.Declaration;
         const HistoryDiagnostic* selectedHistory{};
-        if (report.OriginalError)
+        const bool matchesShutdown =
+            AdmissionClosed && report.OriginalError && report.OriginalError == ShutdownOriginal;
+        // 全局关闭报告沿用接纳关闭时锁存的现场，其他 Scope 仍可能持有同值错误。
+        const bool useShutdownHistory = matchesShutdown && !waitModule.IsValid() && !waitScope.IsValid();
+        if (report.OriginalError && !useShutdownHistory)
         {
             if (report.Module.IsValid())
             {
@@ -1068,20 +1090,20 @@ struct ScopeRuntime::State
                     }
                 }
             }
-            if (selectedHistory != nullptr)
-            {
-                choose(selectedHistory->Failure, selectedHistory->Origin);
-                originModule = selectedHistory->Module;
-                originScope = selectedHistory->Scope;
-                originDeclaration = selectedHistory->Declaration;
-            }
-            else if (ShuttingDown && report.OriginalError == ShutdownOriginal)
-            {
-                choose(ShutdownFailure, ShutdownOrigin);
-                originModule = ShutdownModule;
-                originScope = ShutdownScope;
-                originDeclaration = ShutdownDeclaration;
-            }
+        }
+        if (selectedHistory != nullptr)
+        {
+            choose(selectedHistory->Failure, selectedHistory->Origin);
+            originModule = selectedHistory->Module;
+            originScope = selectedHistory->Scope;
+            originDeclaration = selectedHistory->Declaration;
+        }
+        else if (matchesShutdown)
+        {
+            choose(ShutdownFailure, ShutdownOrigin);
+            originModule = ShutdownModule;
+            originScope = ShutdownScope;
+            originDeclaration = ShutdownDeclaration;
         }
         const bool pollMatches = (!waitModule.IsValid() || waitModule == PollPrimaryModule) &&
                                  (!waitScope.IsValid() || waitScope == PollPrimaryScope ||
@@ -1104,7 +1126,8 @@ struct ScopeRuntime::State
         }
         for (const auto& module : Modules)
         {
-            if (module.WaitingDependency && (!waitModule.IsValid() || waitModule == module.Record->Descriptor.Id))
+            if (range == ScopeRange::kAll && module.WaitingDependency &&
+                (!waitModule.IsValid() || waitModule == module.Record->Descriptor.Id))
             {
                 ModuleId related;
                 std::uint64_t count{};
@@ -1143,7 +1166,7 @@ struct ScopeRuntime::State
         }
         for (const auto& slot : Slots)
         {
-            if (!slot.Owner)
+            if (!Includes(slot, range))
             {
                 continue;
             }
@@ -1254,33 +1277,65 @@ struct ScopeRuntime::State
         }
         return std::nullopt;
     }
+    void LatchShutdownFailure()
+    {
+        if (AdmissionClosed)
+        {
+            return;
+        }
+        ShutdownOriginal = OriginalFailure();
+        ModuleOperationReport history{.PrimaryError = ShutdownOriginal, .OriginalError = ShutdownOriginal};
+        Explain(history);
+        ShutdownFailure = history.Failure;
+        ShutdownOrigin = history.FailureOrigin;
+        ShutdownModule = history.Module;
+        ShutdownScope = history.Scope;
+        ShutdownDeclaration = history.Declaration;
+        AdmissionClosed = true;
+    }
+    void ShutdownWorlds()
+    {
+        if (AdmissionClosed)
+        {
+            return;
+        }
+        LatchShutdownFailure();
+        for (const auto& module : Modules)
+        {
+            module.Gate->Close();
+        }
+        for (const auto& slot : Slots)
+        {
+            if (!slot.Owner)
+            {
+                continue;
+            }
+            if (slot.Owner->Type == Kind::kWorld)
+            {
+                Close(*slot.Owner);
+                continue;
+            }
+            // 父 Scope 及其资源先拒绝新借用，生命周期仍由 Module 阶段推进。
+            slot.Owner->Gate->Close();
+            for (const auto& resource : slot.Owner->Resources)
+            {
+                resource->Control->Gate.Close();
+            }
+        }
+    }
+    [[nodiscard]] bool HasWorlds() const
+    {
+        return std::ranges::any_of(Slots, [](const auto& slot) { return Includes(slot, ScopeRange::kWorlds); });
+    }
     void Shutdown()
     {
-        if (!ShuttingDown)
-        {
-            ShutdownOriginal = OriginalFailure();
-            ModuleOperationReport history{.PrimaryError = ShutdownOriginal, .OriginalError = ShutdownOriginal};
-            Explain(history);
-            ShutdownFailure = history.Failure;
-            ShutdownOrigin = history.FailureOrigin;
-            ShutdownModule = history.Module;
-            ShutdownScope = history.Scope;
-            ShutdownDeclaration = history.Declaration;
-        }
+        LatchShutdownFailure();
         ShuttingDown = true;
         for (auto const& slot : Slots)
         {
             if (slot.Owner)
             {
-                slot.Owner->Closing = true;
-                slot.Owner->Gate->Close();
-                for (auto const& resource : slot.Owner->Resources)
-                {
-                    if (!resource->Destroyed)
-                    {
-                        Close(*resource);
-                    }
-                }
+                Close(*slot.Owner);
             }
         }
         for (auto& module : Modules)
@@ -1352,9 +1407,10 @@ bool ScopeRuntime::RememberFailure(ModuleHandle owner, ModuleId module, ScopeHan
     return Data->Remember(owner, module, scope, declaration, failure, origin);
 }
 bool ScopeRuntime::IsShuttingDown() const noexcept { return Data->ShuttingDown; }
+bool ScopeRuntime::IsAdmissionClosed() const noexcept { return Data->AdmissionClosed; }
 std::optional<pg::Error> ScopeRuntime::PendingFailure() const noexcept
 {
-    return Data->ShuttingDown ? Data->ShutdownOriginal : Data->OriginalFailure();
+    return Data->AdmissionClosed ? Data->ShutdownOriginal : Data->OriginalFailure();
 }
 bool ScopeRuntime::HasBusinessDependency(ModuleHandle handle) const noexcept
 {
@@ -1429,7 +1485,7 @@ pg::Result<ScopeHandle> ScopeRuntime::CreateScope(Kind kind, ScopeHandle parent,
     {
         return std::unexpected(Fail(report, ModuleError::kBusy).error());
     }
-    if (Data->ShuttingDown)
+    if (Data->AdmissionClosed)
     {
         return std::unexpected(Fail(report, ModuleError::kInvalidState).error());
     }
@@ -1531,7 +1587,7 @@ pg::Status ScopeRuntime::Activate(ModuleId id, ModuleOperationReport& report)
     {
         return Fail(report, ModuleError::kNotFound, id);
     }
-    if (Data->ShuttingDown || module->Record->State != ModuleState::kRegistered)
+    if (Data->AdmissionClosed || module->Record->State != ModuleState::kRegistered)
     {
         return Fail(report, ModuleError::kInvalidState, id);
     }
@@ -1759,6 +1815,46 @@ pg::Status ScopeRuntime::PollCleanup(ModuleOperationReport& report)
     }
     Snapshot(report, ModuleOperationProgress::kUnchanged, ModuleId(), ScopeHandle(), std::nullopt, original);
     Data->Explain(report);
+    return {};
+}
+pg::Result<bool> ScopeRuntime::BeginWorldShutdown(ModuleOperationReport& report)
+{
+    State::Operation const operation(*Data);
+    if (!operation.Accepted)
+    {
+        return std::unexpected(Fail(report, ModuleError::kBusy).error());
+    }
+    Data->ShutdownWorlds();
+    Snapshot(report, ModuleOperationProgress::kCleanupPending, ModuleId(), ScopeHandle(), std::nullopt,
+             Data->ShutdownOriginal);
+    Data->Explain(report, ModuleId(), ScopeHandle(), ScopeRange::kWorlds);
+    return Data->HasWorlds();
+}
+pg::Status ScopeRuntime::TryFinishWorldShutdown(ModuleOperationReport& report)
+{
+    State::Operation const operation(*Data);
+    if (!operation.Accepted)
+    {
+        return Fail(report, ModuleError::kBusy);
+    }
+    if (!Data->AdmissionClosed)
+    {
+        return Fail(report, ModuleError::kInvalidState);
+    }
+    Data->Cleanup(false, ModuleId(), ScopeHandle(), ScopeRange::kWorlds);
+    if (Data->HasWorlds())
+    {
+        const auto error = Data->CleanupBlocked ? MakeModuleError(ModuleError::kBusy)
+                                                : Data->PendingError(ModuleId(), ScopeHandle(), ScopeRange::kWorlds);
+        Snapshot(report, ModuleOperationProgress::kCleanupPending, ModuleId(), ScopeHandle(), error,
+                 Data->ShutdownOriginal);
+        report.CleanupError = error;
+        Data->Explain(report, ModuleId(), ScopeHandle(), ScopeRange::kWorlds);
+        return std::unexpected(error);
+    }
+    Snapshot(report, ModuleOperationProgress::kScopeClosed, ModuleId(), ScopeHandle(), std::nullopt,
+             Data->ShutdownOriginal);
+    Data->Explain(report, ModuleId(), ScopeHandle(), ScopeRange::kWorlds);
     return {};
 }
 pg::Status ScopeRuntime::BeginShutdown(ModuleOperationReport& report)

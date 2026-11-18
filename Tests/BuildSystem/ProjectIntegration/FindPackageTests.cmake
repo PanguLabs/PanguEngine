@@ -9,6 +9,7 @@ file(MAKE_DIRECTORY "${root}")
 set(project [=[
 cmake_minimum_required(VERSION 4.0)
 project(PackageDiscovery LANGUAGES NONE)
+get_property(initialLanguages GLOBAL PROPERTY ENABLED_LANGUAGES)
 set(BUILD_TESTING OFF)
 list(PREPEND CMAKE_MODULE_PATH "@PANGU_SOURCE_ROOT@/cmake")
 if(SCENARIO MATCHES "^Invalid")
@@ -32,7 +33,9 @@ if(NOT PanguEngine_FOUND OR NOT COMMAND pangu_initialize OR
     message(FATAL_ERROR "Package discovery did not expose the selected source Engine")
 endif()
 get_property(targets DIRECTORY PROPERTY BUILDSYSTEM_TARGETS)
-if(targets OR TARGET Pangu::Foundation OR BUILD_TESTING OR
+get_property(languages GLOBAL PROPERTY ENABLED_LANGUAGES)
+if(targets OR TARGET Pangu::Foundation OR TARGET ThirdParty::Flecs OR BUILD_TESTING OR
+   NOT languages STREQUAL initialLanguages OR
    NOT CMAKE_PROJECT_NAME STREQUAL "PackageDiscovery" OR
    EXISTS "${CMAKE_BINARY_DIR}/Generated/BuildContext/CurrentProject.json" OR
    EXISTS "${CMAKE_BINARY_DIR}/BuildTools")
@@ -41,12 +44,14 @@ endif()
 if(SCENARIO STREQUAL "RelativeBuildRoot")
     set(PANGU_ENGINE_BUILD_ROOT relative)
     pangu_initialize()
+elseif(SCENARIO STREQUAL "UnexpectedArgument")
+    pangu_initialize("")
 endif()
 ]=])
 string(CONFIGURE "${project}" project @ONLY)
 file(WRITE "${root}/CMakeLists.txt" "${project}")
 
-foreach(scenario IN ITEMS Implicit Explicit InvalidQuiet InvalidRequired RelativeBuildRoot)
+foreach(scenario IN ITEMS Implicit Explicit InvalidQuiet InvalidRequired RelativeBuildRoot UnexpectedArgument)
     execute_process(COMMAND "${CMAKE_COMMAND}" -S "${root}" -B "${root}/${scenario}" -G Ninja
         "-DSCENARIO=${scenario}"
         RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
@@ -56,6 +61,8 @@ foreach(scenario IN ITEMS Implicit Explicit InvalidQuiet InvalidRequired Relativ
         set(expectedDiagnostic "Could NOT find PanguEngine")
     elseif(scenario STREQUAL "RelativeBuildRoot")
         set(expectedDiagnostic "Pangu Engine build root must be absolute")
+    elseif(scenario STREQUAL "UnexpectedArgument")
+        set(expectedDiagnostic "pangu_initialize takes no arguments")
     endif()
     if(expectedDiagnostic)
         string(FIND "${output}\n${error}" "${expectedDiagnostic}" found)
@@ -66,4 +73,4 @@ foreach(scenario IN ITEMS Implicit Explicit InvalidQuiet InvalidRequired Relativ
         message(FATAL_ERROR "${scenario}: package discovery failed:\n${output}\n${error}")
     endif()
 endforeach()
-message(STATUS "PanguEngine package discovery: all 5 scenarios passed")
+message(STATUS "PanguEngine package discovery scenarios passed")

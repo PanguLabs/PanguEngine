@@ -3,7 +3,8 @@ cmake_minimum_required(VERSION 4.0)
 # 真实 ThirdParty 库与 Pangu Module 使用相同平台工具链、不同目标策略。
 add_subdirectory(ThirdParty)
 add_subdirectory(Module)
-pangu_test_build_dependencies(TIER full TARGETS ThirdPartyCompiledProbe PanguToolchainProbe)
+add_subdirectory(Flecs)
+pangu_test_build_dependencies(TIER full TARGETS ThirdPartyCompiledProbe PanguToolchainProbe FlecsCompileProbe)
 
 get_target_property(_pangu_third_party_type ThirdPartyCompiledProbe TYPE)
 get_target_property(_pangu_third_party_links ThirdPartyCompiledProbe LINK_LIBRARIES)

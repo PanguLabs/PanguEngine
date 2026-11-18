@@ -17,6 +17,7 @@
       "cacheVariables": {
         "PANGU_LINK_MODE": "Modular",
         "PANGU_TEST_BUILD_JOBS": "4",
+        "CMAKE_C_COMPILER": "$env{LLVM_ROOT}/bin/clang.exe",
         "CMAKE_CXX_COMPILER": "$env{LLVM_ROOT}/bin/clang++.exe",
         "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS": "$env{LLVM_ROOT}/bin/clang-scan-deps.exe"
       }

@@ -37,6 +37,7 @@ public:
                                        DeclarationId declaration, const FailureReport& failure,
                                        ModuleFailureOrigin origin) noexcept;
     [[nodiscard]] bool IsShuttingDown() const noexcept;
+    [[nodiscard]] bool IsAdmissionClosed() const noexcept;
     [[nodiscard]] bool HasBusinessDependency(ModuleHandle handle) const noexcept;
     [[nodiscard]] std::optional<pg::Error> PendingFailure() const noexcept;
     void RegistrationFailed(ModuleId id, pg::Error error) noexcept;
@@ -56,6 +57,8 @@ public:
     [[nodiscard]] pg::Status BeginCloseScope(ScopeHandle handle, ModuleOperationReport& report);
     [[nodiscard]] pg::Status TryFinishCloseScope(ScopeHandle handle, ModuleOperationReport& report);
     [[nodiscard]] pg::Status PollCleanup(ModuleOperationReport& report);
+    [[nodiscard]] pg::Result<bool> BeginWorldShutdown(ModuleOperationReport& report);
+    [[nodiscard]] pg::Status TryFinishWorldShutdown(ModuleOperationReport& report);
     [[nodiscard]] pg::Status BeginShutdown(ModuleOperationReport& report);
     [[nodiscard]] pg::Status TryFinishShutdown(ModuleOperationReport& report);
 

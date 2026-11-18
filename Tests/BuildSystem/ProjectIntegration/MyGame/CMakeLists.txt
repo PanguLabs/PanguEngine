@@ -70,6 +70,7 @@ set(PANGU_FIXTURE_PLUGIN_CMAKE_DIR "${PANGU_ENGINE_SOURCE_DIR}/cmake" CACHE PATH
 include("${PANGU_FIXTURE_PLUGIN_CMAKE_DIR}/PanguPlugins.cmake")
 set(PANGU_FIXTURE_ENGINE_ROOT "${PANGU_ENGINE_SOURCE_DIR}" CACHE PATH "Isolated Engine plugin fixture root")
 set(PANGU_ENABLED_PLUGINS "" CACHE STRING "Enabled source Plugin IDs")
+option(PANGU_FIXTURE_BUILD_ECS_HOST "Build the headless ECS Project fixture" OFF)
 file(WRITE "${CMAKE_BINARY_DIR}/PluginVisits.txt" "")
 pangu_add_enabled_plugins(
     ENGINE_ROOT "${PANGU_FIXTURE_ENGINE_ROOT}"
@@ -157,6 +158,10 @@ if(PANGU_FIXTURE_BUILD_HOSTS)
         add_executable(MyEditor Source/EditorMain.cpp)
         ConfigureConsumer(MyEditor EditorExtras kEditorExtrasId)
     endif()
+endif()
+
+if(PANGU_FIXTURE_BUILD_ECS_HOST)
+    include(EcsHost.cmake)
 endif()
 
 if(TARGET MyGameSharedProbe)

@@ -3,10 +3,11 @@ cmake_minimum_required(VERSION 4.0)
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(_pangu_engine_standalone ON)
     include(cmake/ValidateBuildEnvironment.cmake)
+    project(PanguEngine LANGUAGES C CXX)
 else()
     set(_pangu_engine_standalone OFF)
+    project(PanguEngine LANGUAGES CXX)
 endif()
-project(PanguEngine LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,12 +23,20 @@ pangu_initialize_build_layout()
 include(cmake/PanguRuntimeDeployment.cmake)
 include(cmake/Platform/Common/Module.cmake)
 
+option(PANGU_BUILD_BENCHMARKS "Build native performance benchmarks" OFF)
+set(_pangu_flecs_assert_benchmarks OFF)
+if(_pangu_engine_standalone AND PANGU_BUILD_BENCHMARKS AND NOT CMAKE_CROSSCOMPILING
+   AND PANGU_LINK_MODE STREQUAL "Monolithic" AND CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(_pangu_flecs_assert_benchmarks ON)
+endif()
+
 pangu_owned_build_root(_pangu_engine_root engine)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${_pangu_engine_root}/Lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${_pangu_engine_root}/Bin")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${_pangu_engine_root}/Bin")
 foreach(directory IN ITEMS Source/ThirdParty/NlohmannJson Source/ThirdParty/Fmt Source/ThirdParty/Spdlog
-        Source/Runtime/Foundation Source/Runtime/Log Source/Runtime/Module Source/Runtime/EngineHost)
+        Source/ThirdParty/Flecs
+        Source/Runtime/Foundation Source/Runtime/Log Source/Runtime/Module Source/Runtime/EngineHost Source/Runtime/ECS)
     pangu_add_owned_subdirectory(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/${directory}"
         OWNER engine RELATIVE_BINARY_DIR "${directory}")
 endforeach()
@@ -60,7 +69,6 @@ if(BUILD_TESTING AND PANGU_BUILD_ENGINE_TESTS)
         OWNER engine RELATIVE_BINARY_DIR Tests)
 endif()
 
-option(PANGU_BUILD_BENCHMARKS "Build native performance benchmarks" OFF)
 if(PANGU_BUILD_BENCHMARKS AND NOT CMAKE_CROSSCOMPILING)
     include(cmake/PanguTestDependencies.cmake)
     pangu_require_googlebenchmark()
@@ -68,4 +76,8 @@ if(PANGU_BUILD_BENCHMARKS AND NOT CMAKE_CROSSCOMPILING)
         OWNER engine RELATIVE_BINARY_DIR Tests/Module/Benchmarks)
     pangu_add_owned_subdirectory(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Tests/Log/Benchmarks"
         OWNER engine RELATIVE_BINARY_DIR Tests/Log/Benchmarks)
+    if(_pangu_flecs_assert_benchmarks)
+        pangu_add_owned_subdirectory(SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/Tests/ECS/Benchmarks"
+            OWNER engine RELATIVE_BINARY_DIR Tests/ECS/Benchmarks)
+    endif()
 endif()

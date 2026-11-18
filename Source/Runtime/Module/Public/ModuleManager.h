@@ -20,6 +20,7 @@ class RegistrationScope;
 namespace detail
 {
 struct ModuleManagerTestAccess;
+class ModuleHostShutdownAccess;
 class ScopeResourceAccess;
 class ModuleMetadataAccess;
 struct ScopeResourceQuery;
@@ -123,6 +124,7 @@ public:
 
 private:
     friend struct detail::ModuleManagerTestAccess;
+    friend class detail::ModuleHostShutdownAccess;
     friend class detail::ScopeResourceAccess;
     friend class detail::ModuleMetadataAccess;
     [[nodiscard]] Result<ModuleMetaBorrow> AcquireMetadata(ModuleId owner, const std::type_info& type) const noexcept;

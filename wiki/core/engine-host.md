@@ -1,7 +1,7 @@
 # Pangu EngineHost 启动与生命周期
 
 > 状态：Partially Frozen（宿主职责、单次启动、Scope 与安全关闭行为已确定；Public C++ API/ABI 未冻结）
-> 更新：2026-11-13
+> 更新：2026-11-18
 > 决策：[ADR-0002](../decisions/0002-name-engine-host.md)、[ADR-0016](../decisions/0016-engine-host-lifecycle.md)
 
 ## 职责与所有权
@@ -42,11 +42,15 @@ GetState/HostScope 为无副作用观察，Cold/Closed 无有效 HostScope。Ins
 
 ELF 可执行宿主参与跨 DSO 公共 RTTI 时需要正确的类型可见性及可执行文件动态符号导出（CMake `ENABLE_EXPORTS`）。这不替代受控 ABI/ODR 约束或最小公共导出，也不采用逐类型身份锚点。
 
-当前关闭先完成业务/Module 清理，再 Stop Log，最后发布 Closed。业务清理完成不代表日志线程资源已回收；Log Stop 超时保留 Closing 与责任，最终首错 E1、清理错误 E2 和 Log 错误分开保存。安全关闭与输出完整性分别表示，残留 Writer 在 Host 关闭后安全失效。此诊断扩展的正式平台与预算记录见[基础诊断验收](../../docs/superpowers/plans/2026-11-12-foundation-diagnostics-validation.md)。
+整体关闭先关闭 Scope、Borrow 和业务 CodePin 的接纳。EngineHost 使用同一个 Scope 清理器排空全部 World，包括未交付的失败装配。World 全部退休前，父 Context/Host Provider 不开始 Stop，本宿主保留已接纳 Module 的原生持有。Busy 或清理失败保留当前阶段和既有保护，外部 CodePin 可阻塞后续原生释放，World 仍能排空。[ECS 关闭契约](../runtime/ecs.md)
+
+World 排空后进入既有业务/Module 关闭，再 Stop Log，最后发布 Closed。Log Stop 超时保留 Closing 与责任，最终首错 E1、清理错误 E2 和 Log 错误分开保存。安全关闭与输出完整性分别表示，残留 Writer 在 Host 关闭后安全失效。诊断扩展的平台与预算见[基础诊断验收](../../docs/superpowers/plans/2026-11-12-foundation-diagnostics-validation.md)。
 
 ## 实现与验收边界
 
 最小生命周期、Concrete 查询、[MinimalHost 测试夹具](../../Tests/EngineHost/Fixtures/MinimalHost/README.md) 以及独立 Project Game/Editor/MobileHost 消费已实现。正式回归保留在 `Tests/EngineHost` 和 `Tests/Module`；实际平台、模式、失败与重跑记录见[本轮验收](../../docs/superpowers/plans/2026-11-07-engine-host-lifecycle-validation.md)。设计规格见[生命周期规格](../../docs/superpowers/specs/2026-11-07-engine-host-lifecycle-design.md)。实现存在不等于平台已验收。
+
+World 预排空的正式回归分别覆盖父实例存活、失败 Scope、Borrow/CodePin 重试和实际业务库回调清理。三桌面运行与移动最终链接的实际范围见 [ECS 最终验收](../../docs/superpowers/plans/2026-11-18-ecs-world.md#ecs-交付验收)。
 
 完整 Contract Provider 选择、Registry Contribution、TaskScheduler/GPU 排空集成、热更新、窗口/渲染/主循环、设备运行、打包和签名仍未交付。Public C++ 签名、布局与 ABI 不作为长期冻结接口；现有三种 Service 模式、依赖方向和安全销毁语义继续有效。
 

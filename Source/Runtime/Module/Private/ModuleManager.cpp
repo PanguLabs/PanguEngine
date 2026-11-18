@@ -21,6 +21,7 @@
 #include <LogModule.h>
 #include <ModuleBuiltin.h>
 #include <ModuleError.h>
+#include <ModuleHostShutdownAccess.h>
 #include <ModuleManager.h>
 #include <ModuleMetaBorrow.h>
 #include <ModuleMetaProvider.h>
@@ -567,7 +568,7 @@ Result<ModuleLoadResult> ModuleManager::Load(std::span<const ModuleLoadCandidate
     {
         return Reject(report, ModuleError::kBusy);
     }
-    if (Data->Runtime->IsShuttingDown())
+    if (Data->Runtime->IsAdmissionClosed())
     {
         return Reject(report, ModuleError::kInvalidState);
     }
@@ -698,7 +699,7 @@ Status ModuleManager::Register(ModuleHandle handle, ModuleOperationReport& desti
         return Reject(report, ModuleError::kInvalidHandle, handle);
     }
     const auto id = record->Descriptor.Id;
-    if (Data->Runtime->IsShuttingDown() || record->State != ModuleState::kLoaded)
+    if (Data->Runtime->IsAdmissionClosed() || record->State != ModuleState::kLoaded)
     {
         return Reject(report, ModuleError::kInvalidState, handle, id);
     }
@@ -987,7 +988,7 @@ Result<ModuleMetaBorrow> ModuleManager::AcquireMetadata(ModuleId owner, const st
     {
         return std::unexpected(MakeModuleError(ModuleError::kBusy));
     }
-    if (!Data || Data->Closed || Data->Runtime->IsShuttingDown())
+    if (!Data || Data->Closed || Data->Runtime->IsAdmissionClosed())
     {
         return std::unexpected(MakeModuleError(ModuleError::kInvalidState));
     }
@@ -1025,7 +1026,7 @@ ModuleManager::AcquireScopeResource(const detail::ScopeResourceQuery& query, con
     {
         return std::unexpected(MakeModuleError(ModuleError::kBusy));
     }
-    if (!Data || Data->Closed || Data->Runtime->IsShuttingDown())
+    if (!Data || Data->Closed || Data->Runtime->IsAdmissionClosed())
     {
         return std::unexpected(MakeModuleError(ModuleError::kInvalidState));
     }
@@ -1349,6 +1350,42 @@ Status ModuleManager::PollCleanup(ModuleOperationReport& destination) noexcept
     }
     return Cleanup(report, false);
 }
+Result<bool> detail::ModuleHostShutdownAccess::BeginWorldShutdown(ModuleManager& manager,
+                                                                  ModuleOperationReport& destination) noexcept
+{
+    ModuleOperationReport report;
+    const ReportPublication publication(destination, report);
+    if (!manager.Data)
+    {
+        return Reject(report, ModuleError::kInvalidState);
+    }
+    const ModuleManager::State::Operation operation(*manager.Data);
+    if (!operation.Accepted)
+    {
+        return Reject(report, ModuleError::kBusy);
+    }
+    const auto result = manager.Data->Runtime->BeginWorldShutdown(report);
+    report.CleanupOwner = ModuleCleanupOwner::kManagerShutdown;
+    return result;
+}
+Status detail::ModuleHostShutdownAccess::TryFinishWorldShutdown(ModuleManager& manager,
+                                                                ModuleOperationReport& destination) noexcept
+{
+    ModuleOperationReport report;
+    const ReportPublication publication(destination, report);
+    if (!manager.Data)
+    {
+        return Reject(report, ModuleError::kInvalidState);
+    }
+    const ModuleManager::State::Operation operation(*manager.Data);
+    if (!operation.Accepted)
+    {
+        return Reject(report, ModuleError::kBusy);
+    }
+    const auto result = manager.Data->Runtime->TryFinishWorldShutdown(report);
+    report.CleanupOwner = ModuleCleanupOwner::kManagerShutdown;
+    return result;
+}
 Status ModuleManager::BeginShutdown(ModuleOperationReport& destination) noexcept
 {
     ModuleOperationReport report;
@@ -1381,9 +1418,9 @@ Status ModuleManager::BeginShutdown(ModuleOperationReport& destination) noexcept
             }
         }
     }
-    report.OriginalError = Data->ShutdownError;
-    if (Data->ShutdownError)
+    if (Data->ShutdownError && !report.OriginalError)
     {
+        report.OriginalError = Data->ShutdownError;
         report.PrimaryError = Data->ShutdownError;
         report.Module = Data->ShutdownModule;
         report.Scope = Data->ShutdownScope;

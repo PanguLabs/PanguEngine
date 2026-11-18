@@ -17,6 +17,7 @@
 #include <LogTypes.h>
 #include <LogWriter.h>
 #include <ModuleDiagnostics.h>
+#include <ModuleHostShutdownAccess.h>
 #include <chrono>
 
 #include <EngineHostModule.h>
@@ -46,8 +47,7 @@ EngineHost::~EngineHost()
     const auto deadline =
         Data->DefaultWait >= available ? std::chrono::steady_clock::time_point::max() : now + Data->DefaultWait;
     module::ModuleOperationReport moduleReport;
-    PG_CHECK(Data->FinishShutdown(report, moduleReport, deadline, HostOperationStage::kShutdown, {}, false, true),
-             "Host 在有限等待后仍未安全关闭");
+    PG_CHECK(Data->FinishShutdown(report, moduleReport, deadline), "Host 在有限等待后仍未安全关闭");
 }
 module::ModuleManager* detail::EngineHostTestAccess::Manager(EngineHost& host) noexcept
 {
@@ -132,15 +132,14 @@ Status EngineHost::State::FailStartup(HostOperationReport& report, HostOperation
     {
         // 首错摘要已拥有；复用原 Module 报告区推进回滚，避免再持一份完整报告。
         const auto cleanup =
-            FinishShutdown(report, *moduleReport, std::chrono::steady_clock::now(), stage, cause, true, true);
+            FinishShutdown(report, *moduleReport, std::chrono::steady_clock::now(), stage, cause, true);
         // 返回仍是 E1；清理状态/错误由本次报告交付。
         static_cast<void>(cleanup.has_value());
     }
     else
     {
         module::ModuleOperationReport cleanup;
-        const auto stopped =
-            FinishShutdown(report, cleanup, std::chrono::steady_clock::now(), stage, cause, false, true);
+        const auto stopped = FinishShutdown(report, cleanup, std::chrono::steady_clock::now(), stage, cause);
         static_cast<void>(stopped.has_value());
     }
     return std::unexpected(cause);
@@ -285,8 +284,7 @@ Status EngineHost::BeginShutdown(HostOperationReport& report) noexcept
     {
         return Data->FinishShutdown(report, moduleReport, std::chrono::steady_clock::now());
     }
-    Data->Value = HostState::kClosing;
-    const auto status = Data->Manager->BeginShutdown(moduleReport);
+    const auto status = Data->AdvanceShutdown(moduleReport, false);
     // 嵌套 Manager 的报告工作区先退出，再组装完整 Host 报告。
     auto result = Data->Report(HostOperationStage::kShutdown);
     result.ModuleReport = moduleReport;
@@ -311,28 +309,57 @@ Status EngineHost::TryFinishShutdown(HostOperationReport& report) noexcept
     module::ModuleOperationReport moduleReport;
     return Data->FinishShutdown(report, moduleReport, std::chrono::steady_clock::now());
 }
+Status EngineHost::State::AdvanceShutdown(module::ModuleOperationReport& report, bool finish) noexcept
+{
+    if (!Manager)
+    {
+        return {};
+    }
+    auto& manager = *Manager;
+    Value = HostState::kClosing;
+    using module::detail::ModuleHostShutdownAccess;
+    if (Phase == ShutdownPhase::kNone || (Phase == ShutdownPhase::kWorlds && !finish))
+    {
+        const auto worlds = ModuleHostShutdownAccess::BeginWorldShutdown(manager, report);
+        if (!worlds)
+        {
+            return std::unexpected(worlds.error());
+        }
+        if (*worlds)
+        {
+            Phase = ShutdownPhase::kWorlds;
+            if (!finish)
+            {
+                return {};
+            }
+        }
+    }
+    if (Phase == ShutdownPhase::kWorlds && finish)
+    {
+        if (const auto drained = ModuleHostShutdownAccess::TryFinishWorldShutdown(manager, report); !drained)
+        {
+            return drained;
+        }
+    }
+    if (Phase != ShutdownPhase::kModules || !finish)
+    {
+        if (const auto begun = manager.BeginShutdown(report); !begun)
+        {
+            return begun;
+        }
+        Phase = ShutdownPhase::kModules;
+    }
+    return finish ? manager.TryFinishShutdown(report) : Status{};
+}
 Status EngineHost::State::FinishShutdown(HostOperationReport& report, module::ModuleOperationReport& moduleReport,
                                          std::chrono::steady_clock::time_point deadline, HostOperationStage stage,
-                                         std::optional<pg::Error> startupCause, bool hasModuleReport,
-                                         bool begin) noexcept
+                                         std::optional<pg::Error> startupCause, bool hasModuleReport) noexcept
 {
     hasModuleReport = Manager.has_value() || hasModuleReport;
-    Status status;
-    if (Manager)
+    auto status = AdvanceShutdown(moduleReport, true);
+    if (status)
     {
-        Value = HostState::kClosing;
-        if (begin)
-        {
-            status = Manager->BeginShutdown(moduleReport);
-        }
-        if (status)
-        {
-            status = Manager->TryFinishShutdown(moduleReport);
-        }
-        if (status)
-        {
-            Manager.reset();
-        }
+        Manager.reset();
     }
     // 完整 Host 报告及 LogStop 只在嵌套 Module 操作返回之后同时存活。
     auto result = Report(stage);

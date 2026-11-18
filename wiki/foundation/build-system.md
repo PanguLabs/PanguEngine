@@ -131,7 +131,7 @@ cmake/
     iOS/Settings.cmake     + Toolchain.cmake + CMakePresets.json
 ```
 
-- `PanguPlatform.cmake` 在 `project(... LANGUAGES CXX)` 后按 **目标平台** 选择配置，并拒绝错误的 Clang 版本/不支持的平台；Android 只允许官方 NDK Toolchain 的 Clang，不套用桌面 LLVM 23 规则。
+- `PanguPlatform.cmake` 在语言启用后按**目标平台**校验工具链。独立 Engine 项目声明 `LANGUAGES C CXX`。嵌入时，`find_package(PanguEngine)` 只发现源码包，`pangu_initialize()` 在调用者配置中按需启用 C，再接入 Engine 子目录。C 与 CXX 选择同一目标工具链，Android 使用官方 NDK 自带 Clang。Windows 的 CXX-only 调用者未指定 C 编译器且未设置 `CC` 时，使用其 CXX Clang 同目录的 `clang.exe`。父项目保留原名称和 CXX 编译器。C++ 保持 C++23，flecs 的 C 源码使用目标 Clang 的 C99。
 - `PanguBuildOptions` 是无产物、无 `Pangu::` 别名的 **INTERFACE 编译策略 Target**，仅为显式依赖它的 Pangu 自有 Target 设置 C++23、`-fno-exceptions` 和基础告警参数；工具链/标准库选择由 Preset/Toolchain 在 `project()` 之前完成，普通 ThirdParty Target 不需要链接 `PanguBuildOptions`。Pangu 自有 Runtime、BuildTools、测试和基准保留 RTTI；独立 PanguMetaTool 的 Clang 适配编译单元匹配 Clang 库 RTTI，Linux 宿主工具可使用 libstdc++，例外见 [ADR-0018](../decisions/0018-installed-pangumeta-sdk.md)；框架与消费方保持 RTTI 一致，CRT/Iterator 等有效配置遵守平台工具链策略，不恢复逐 TU Collector。
 - `pangu_configure_module(<existing-target>)` 仅为现有 `add_library(... STATIC|SHARED ...)` Target **PRIVATE** 应用 Pangu 编译策略，并设置 PIC 和输出目录；必须**先创建**真实 Module Target，不隐式生成 Library、Manifest、Catalog 或 ModuleId。当前 `PanguModule` 通过 `pangu_module_library_type` 得到统一模式类型后创建，`Pangu::Module` 仅是 Alias。
 - 平台 Settings 负责目标特殊规则：Windows 使用 Clang + MSVC STL（Windows ARM 不在 v1）；Linux Toolchain 在 `project()` 前选择并核对匹配 LLVM 的 libc++ 头文件、`__config_site`、运行库及 RPATH；缺失时拒绝，不退回 `libstdc++`，不同安装布局可用 `PANGU_LIBCXX_ROOT` 显式覆盖；macOS Toolchain 统一选择 MacPorts Clang 23 与 libc++；Android 采用 NDK Clang；iOS 采用 MacPorts Clang 23 + 独立 iPhoneOS SDK。
@@ -172,7 +172,7 @@ Android/iOS Preset 默认 `BUILD_TESTING=OFF`，因此默认构建仅包含正�
 
 本次将 Linux/macOS 标准库参数从 `PanguBuildOptions` 迁移至 Toolchain，**升级已有构建目录时必须使用** `cmake --fresh --preset <name>` 使 `CMAKE_CXX_FLAGS_INIT` 与链接参数重新初始化；之后可使用普通 `cmake --preset <name>`。切换 `LLVM_ROOT` 或 SDK/NDK 时也应重新配置。不同平台及 Host 的二进制缓存必须独立；更换构建根时重新配置，禁止复用旧目录的 CMake Cache。
 
-当前统一链接选项为 `PANGU_LINK_MODE=Monolithic|Modular`：同图全部 Pangu Module 分别使用原生 STATIC 或 SHARED Target，桌面默认 Modular，Android/iOS 默认 Monolithic。Engine 子目录服从父 Project 的缓存或普通变量选择；非法值及同图中途改值在配置期拒绝。ThirdParty 不受该选项影响。同一构建树可重新配置切换模式。
+当前统一链接选项为 `PANGU_LINK_MODE=Monolithic|Modular`，同图全部 Pangu Module 分别使用原生 STATIC 或 SHARED Target，桌面默认 Modular，Android/iOS 默认 Monolithic。Engine 子目录服从父 Project 的缓存或普通变量选择，非法值及同图中途改值在配置期拒绝。同一构建树可重新配置切换模式。ThirdParty 由各自适配器决定链接类型，生产 `ThirdParty::Flecs` 明确跟随模式，保证 Modular 的 ECS、App 及业务 Module 共用同一 SHARED flecs。[ECS 最终验收](../../docs/superpowers/plans/2026-11-18-ecs-world.md#ecs-交付验收)
 
 `pangu_configure_module(target EXPORT_MACRO macro)` 验证目标类型并生成 PUBLIC 构建包含目录中的 `<Target>Export.h`；Foundation/Module 分别使用 `PG_FOUNDATION_API`、`PG_MODULE_API`，显式标注所需符号，不使用自动导出全部符号。`pangu_export_module_query(TARGET target ID id_symbol ID_HEADER identity_header QUERY function HEADER query_header)` 在两种模式均登记 Module 身份与 Query binding，供 Meta 描述和 Host Catalog 消费；仅 SHARED Target 发射并编译固定 `PanguModuleQueryV1` 包装。ID 引用 C++ 公共 ModuleId 常量，ID_HEADER 声明该常量，HEADER 声明 Query；两者可为同一头文件。ModuleManager 已消费真实 Loader，当前阶段证据与最终平台矩阵分别记录于[正式验收](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。
 

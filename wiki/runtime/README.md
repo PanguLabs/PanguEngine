@@ -1,17 +1,17 @@
 # Pangu Runtime 功能领域
 
 > 状态：Partially Frozen（选型确定；各模块接口与集成仍需独立规范）
-> 更新：2026-10-21
+> 更新：2026-11-18
 > 说明：**Runtime 不是统一 Subsystem 基类或额外生命周期层级**；遵循 [ADR-0003](../decisions/0003-no-subsystem-service-context.md) 和 [Service 架构](../core/service.md)。
 
 ## 已确定的选型
 
 | 功能领域 | 已确定 | 尚未冻结 |
 | --- | --- | --- |
-| ECS | 采用 **flecs** | World/Entity/Component 与 pg Object、Meta、Task 的集成 |
+| ECS | **flecs v4.2.0**。已交付并验收原生 API、登记、推进与 World 关闭顺序。[首版 World 契约](ecs.md) | 公开 C++ API/ABI、后续 Meta/Task 集成 |
 | Rendering | 采用 **The Forge** 作为底层图形/渲染基础库 | Renderer 后端真实设备集成、Pipeline、Shader/Material、场景与编辑器预览 |
 
-选型不等于对应 CMake 集成已经完成，也不表示整个 ECS/Renderer API 或五平台实现已经通过验证。
+ECS 的桌面运行和移动链接覆盖见[最终验收](../../docs/superpowers/plans/2026-11-18-ecs-world.md#ecs-交付验收)。Rendering 当前记录底层库选型。
 
 ## C++ 最佳实践对 Runtime 的指导（SHOULD；非 API 冻结）
 
