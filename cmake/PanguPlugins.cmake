@@ -3,9 +3,11 @@ include("${CMAKE_CURRENT_LIST_DIR}/PanguBuildTool.cmake")
 
 function(pangu_discover_plugins)
     cmake_parse_arguments(PDP "" "ENGINE_ROOT;PROJECT_ROOT;OUTPUT_JSON" "" ${ARGN})
-    if(PDP_UNPARSED_ARGUMENTS OR PDP_KEYWORDS_MISSING_VALUES OR
-       NOT PDP_ENGINE_ROOT OR NOT PDP_OUTPUT_JSON)
-        message(FATAL_ERROR "pangu_discover_plugins requires ENGINE_ROOT <dir> [PROJECT_ROOT <dir>] OUTPUT_JSON <variable>")
+    if(PDP_UNPARSED_ARGUMENTS OR PDP_KEYWORDS_MISSING_VALUES OR NOT PDP_ENGINE_ROOT OR NOT PDP_OUTPUT_JSON)
+        message(
+            FATAL_ERROR
+            "pangu_discover_plugins requires ENGINE_ROOT <dir> [PROJECT_ROOT <dir>] OUTPUT_JSON <variable>"
+        )
     endif()
 
     # 只追踪当前工具的固定源码输入；不遍历插件的源码文件。
@@ -34,21 +36,44 @@ function(pangu_discover_plugins)
         list(APPEND toolInputs "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/Platform/Linux/Toolchain.cmake")
     endif()
     # toml++ v3.4.0 的 header-only 实现文件为配置依赖；不建立自制时间戳索引。
-    file(GLOB tomlHeaders LIST_DIRECTORIES false
+    file(
+        GLOB tomlHeaders
+        LIST_DIRECTORIES false
         "${thirdParty}/Repo/include/toml++/*.hpp"
         "${thirdParty}/Repo/include/toml++/impl/*.hpp"
         "${thirdParty}/Repo/include/toml++/impl/*.inl"
     )
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${toolInputs} ${tomlHeaders})
+    set_property(
+        DIRECTORY
+        APPEND
+        PROPERTY
+            CMAKE_CONFIGURE_DEPENDS
+                ${toolInputs}
+                ${tomlHeaders}
+    )
 
     pangu_prepare_build_tool(tool)
-    set(command "${tool}" discover --engine-root "${PDP_ENGINE_ROOT}")
+    set(command
+        "${tool}"
+        discover
+        --engine-root
+        "${PDP_ENGINE_ROOT}"
+    )
     if(PDP_PROJECT_ROOT)
-        list(APPEND command --project-root "${PDP_PROJECT_ROOT}")
+        list(
+            APPEND command
+            --project-root
+            "${PDP_PROJECT_ROOT}"
+        )
     endif()
-    execute_process(COMMAND ${command}
-        RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE error
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(
+        COMMAND
+            ${command}
+        RESULT_VARIABLE status
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
     if(NOT status EQUAL 0)
         message(FATAL_ERROR "PanguBuildTool plugin discovery failed (${status}):\n${error}")
     endif()
@@ -68,44 +93,119 @@ function(pangu_discover_plugins)
     if(count GREATER 0)
         math(EXPR last "${count} - 1")
         foreach(index RANGE 0 ${last})
-            foreach(field IN ITEMS id origin name version source_dir manifest_path)
-                string(JSON fieldType ERROR_VARIABLE jsonError TYPE "${output}" plugins ${index} ${field})
+            foreach(
+                field
+                IN
+                ITEMS
+                    id
+                    origin
+                    name
+                    version
+                    source_dir
+                    manifest_path
+            )
+                string(
+                    JSON fieldType
+                    ERROR_VARIABLE jsonError
+                    TYPE "${output}"
+                    plugins
+                    ${index}
+                    ${field}
+                )
                 if(jsonError OR NOT fieldType STREQUAL "STRING")
                     message(FATAL_ERROR "PanguBuildTool JSON plugins[${index}].${field} is not a string")
                 endif()
             endforeach()
-            string(JSON origin GET "${output}" plugins ${index} origin)
-            string(JSON id GET "${output}" plugins ${index} id)
+            string(
+                JSON origin
+                GET "${output}"
+                plugins
+                ${index}
+                origin
+            )
+            string(
+                JSON id
+                GET "${output}"
+                plugins
+                ${index}
+                id
+            )
             if(NOT origin MATCHES "^(engine|project)$")
                 message(FATAL_ERROR "PanguBuildTool JSON plugins[${index}].origin must be engine|project")
             endif()
             if(NOT id MATCHES "^[a-z0-9][a-z0-9_.-]*$")
                 message(FATAL_ERROR "PanguBuildTool JSON plugins[${index}].id is invalid")
             endif()
-            string(JSON manifest GET "${output}" plugins ${index} manifest_path)
-            string(JSON source GET "${output}" plugins ${index} source_dir)
+            string(
+                JSON manifest
+                GET "${output}"
+                plugins
+                ${index}
+                manifest_path
+            )
+            string(
+                JSON source
+                GET "${output}"
+                plugins
+                ${index}
+                source_dir
+            )
             if(NOT IS_DIRECTORY "${source}" OR NOT EXISTS "${manifest}")
                 message(FATAL_ERROR "PanguBuildTool JSON has an invalid source/manifest path: ${manifest}")
             endif()
-            string(JSON inputsType ERROR_VARIABLE jsonError TYPE "${output}" plugins ${index} configure_inputs)
+            string(
+                JSON inputsType
+                ERROR_VARIABLE jsonError
+                TYPE "${output}"
+                plugins
+                ${index}
+                configure_inputs
+            )
             if(jsonError OR NOT inputsType STREQUAL "ARRAY")
                 message(FATAL_ERROR "PanguBuildTool JSON plugins[${index}].configure_inputs is not an array")
             endif()
-            string(JSON inputCount LENGTH "${output}" plugins ${index} configure_inputs)
+            string(
+                JSON inputCount
+                LENGTH "${output}"
+                plugins
+                ${index}
+                configure_inputs
+            )
             if(inputCount LESS 2)
                 message(FATAL_ERROR "PanguBuildTool JSON plugins[${index}] is missing required Configure inputs")
             endif()
             math(EXPR lastInput "${inputCount} - 1")
             foreach(inputIndex RANGE 0 ${lastInput})
-                string(JSON inputType ERROR_VARIABLE jsonError TYPE "${output}" plugins ${index} configure_inputs ${inputIndex})
+                string(
+                    JSON inputType
+                    ERROR_VARIABLE jsonError
+                    TYPE "${output}"
+                    plugins
+                    ${index}
+                    configure_inputs
+                    ${inputIndex}
+                )
                 if(jsonError OR NOT inputType STREQUAL "STRING")
                     message(FATAL_ERROR "PanguBuildTool Configure input is not a string")
                 endif()
-                string(JSON input GET "${output}" plugins ${index} configure_inputs ${inputIndex})
+                string(
+                    JSON input
+                    GET "${output}"
+                    plugins
+                    ${index}
+                    configure_inputs
+                    ${inputIndex}
+                )
                 if(NOT IS_ABSOLUTE "${input}" OR NOT EXISTS "${input}")
                     message(FATAL_ERROR "PanguBuildTool Configure input is invalid: ${input}")
                 endif()
-                set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${input}")
+                set_property(
+                    DIRECTORY
+                    APPEND
+                    PROPERTY
+                        CMAKE_CONFIGURE_DEPENDS
+                            "${input}"
+                )
             endforeach()
         endforeach()
     endif()
@@ -116,11 +216,21 @@ endfunction()
 function(pangu_add_enabled_plugins)
     cmake_parse_arguments(PAEP "" "ENGINE_ROOT;PROJECT_ROOT" "ENABLED" ${ARGN})
     if(PAEP_UNPARSED_ARGUMENTS OR NOT PAEP_ENGINE_ROOT)
-        message(FATAL_ERROR "pangu_add_enabled_plugins requires ENGINE_ROOT <dir> [PROJECT_ROOT <dir>] [ENABLED <id>...]")
+        message(
+            FATAL_ERROR
+            "pangu_add_enabled_plugins requires ENGINE_ROOT <dir> [PROJECT_ROOT <dir>] [ENABLED <id>...]"
+        )
     endif()
-    set(roots ENGINE_ROOT "${PAEP_ENGINE_ROOT}")
+    set(roots
+        ENGINE_ROOT
+        "${PAEP_ENGINE_ROOT}"
+    )
     if(PAEP_PROJECT_ROOT)
-        list(APPEND roots PROJECT_ROOT "${PAEP_PROJECT_ROOT}")
+        list(
+            APPEND roots
+            PROJECT_ROOT
+            "${PAEP_PROJECT_ROOT}"
+        )
     endif()
     pangu_discover_plugins(${roots} OUTPUT_JSON plugins)
     # 保存调用方的 Project 策略；逐个 Plugin 的上下文只在本函数作用域变化。
@@ -133,11 +243,29 @@ function(pangu_add_enabled_plugins)
     if(count GREATER 0)
         math(EXPR last "${count} - 1")
         foreach(index RANGE 0 ${last})
-            string(JSON id GET "${plugins}" plugins ${index} id)
+            string(
+                JSON id
+                GET "${plugins}"
+                plugins
+                ${index}
+                id
+            )
             list(APPEND knownIds "${id}")
-            string(JSON source GET "${plugins}" plugins ${index} source_dir)
+            string(
+                JSON source
+                GET "${plugins}"
+                plugins
+                ${index}
+                source_dir
+            )
             set("pluginSource_${id}" "${source}")
-            string(JSON origin GET "${plugins}" plugins ${index} origin)
+            string(
+                JSON origin
+                GET "${plugins}"
+                plugins
+                ${index}
+                origin
+            )
             set("pluginOrigin_${id}" "${origin}")
         endforeach()
     endif()
@@ -171,8 +299,17 @@ function(pangu_add_enabled_plugins)
         else()
             set(sourceRoot "${PAEP_PROJECT_ROOT}")
         endif()
-        file(RELATIVE_PATH relative "${sourceRoot}" "${pluginSource_${id}}")
-        pangu_add_owned_subdirectory(SOURCE_DIR "${pluginSource_${id}}" OWNER "${owner}"
-            RELATIVE_BINARY_DIR "${relative}" EXCLUDE_FROM_ALL)
+        file(
+            RELATIVE_PATH
+            relative
+            "${sourceRoot}"
+            "${pluginSource_${id}}"
+        )
+        pangu_add_owned_subdirectory(
+            SOURCE_DIR "${pluginSource_${id}}"
+            OWNER "${owner}"
+            RELATIVE_BINARY_DIR "${relative}"
+            EXCLUDE_FROM_ALL
+        )
     endforeach()
 endfunction()

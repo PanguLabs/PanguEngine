@@ -3,9 +3,18 @@ include_guard(GLOBAL)
 function(pangu_test_context)
     cmake_parse_arguments(PARSE_ARGV 0 arg "" "OWNER;ENABLED;PLUGIN_ID" "")
     string(TOUPPER "${arg_ENABLED}" enabled)
-    if(arg_UNPARSED_ARGUMENTS OR arg_KEYWORDS_MISSING_VALUES OR
-       NOT arg_OWNER MATCHES "^(engine|project)$" OR
-       NOT DEFINED arg_ENABLED OR NOT enabled MATCHES "^(ON|OFF|TRUE|FALSE|YES|NO|Y|N|1|0)$")
+    if(
+        arg_UNPARSED_ARGUMENTS
+        OR arg_KEYWORDS_MISSING_VALUES
+        OR NOT arg_OWNER
+            MATCHES
+            "^(engine|project)$"
+        OR NOT DEFINED
+            arg_ENABLED
+        OR NOT enabled
+            MATCHES
+            "^(ON|OFF|TRUE|FALSE|YES|NO|Y|N|1|0)$"
+    )
         message(FATAL_ERROR "pangu_test_context requires OWNER engine|project and ENABLED <bool>")
     endif()
     if(DEFINED arg_PLUGIN_ID AND NOT arg_PLUGIN_ID MATCHES "^[a-z0-9][a-z0-9_.-]*$")
@@ -47,8 +56,16 @@ function(_pangu_test_metadata prefix)
     if(NOT ${prefix}_TIER MATCHES "^(fast|precommit|full)$")
         message(FATAL_ERROR "Test TIER must be fast|precommit|full")
     endif()
-    set(labels "boundary.${${prefix}_BOUNDARY}" "area.${${prefix}_AREA}" "owner.${PANGU_TEST_OWNER}")
-    set(tiers fast precommit full)
+    set(labels
+        "boundary.${${prefix}_BOUNDARY}"
+        "area.${${prefix}_AREA}"
+        "owner.${PANGU_TEST_OWNER}"
+    )
+    set(tiers
+        fast
+        precommit
+        full
+    )
     list(FIND tiers "${${prefix}_TIER}" start)
     list(SUBLIST tiers ${start} -1 tiers)
     foreach(tier IN LISTS tiers)
@@ -91,14 +108,20 @@ function(_pangu_test_metadata prefix)
     else()
         set(timeout 300)
     endif()
-    set(_pangu_labels "${labels}" PARENT_SCOPE)
-    set(_pangu_timeout "${timeout}" PARENT_SCOPE)
+    set(testLabels "${labels}" PARENT_SCOPE)
+    set(testTimeout "${timeout}" PARENT_SCOPE)
 endfunction()
 
 function(pangu_test_build_dependencies)
     cmake_parse_arguments(PARSE_ARGV 0 arg "" "TIER" "TARGETS")
-    if(arg_UNPARSED_ARGUMENTS OR arg_KEYWORDS_MISSING_VALUES OR
-       NOT arg_TIER MATCHES "^(fast|precommit|full)$" OR NOT arg_TARGETS)
+    if(
+        arg_UNPARSED_ARGUMENTS
+        OR arg_KEYWORDS_MISSING_VALUES
+        OR NOT arg_TIER
+            MATCHES
+            "^(fast|precommit|full)$"
+        OR NOT arg_TARGETS
+    )
         message(FATAL_ERROR "pangu_test_build_dependencies requires TIER fast|precommit|full and TARGETS")
     endif()
     foreach(dependency IN LISTS arg_TARGETS)
@@ -106,7 +129,11 @@ function(pangu_test_build_dependencies)
             message(FATAL_ERROR "Test build dependency target missing: ${dependency}")
         endif()
     endforeach()
-    set(tiers fast precommit full)
+    set(tiers
+        fast
+        precommit
+        full
+    )
     list(FIND tiers "${arg_TIER}" start)
     list(SUBLIST tiers ${start} -1 tiers)
     foreach(tier IN LISTS tiers)
@@ -126,11 +153,17 @@ endfunction()
 
 function(_pangu_claim_test kind name)
     string(SHA256 key "${kind}:${name}")
+    string(TOUPPER "${key}" key)
     get_property(registered GLOBAL PROPERTY "PANGU_TEST_REGISTERED_${key}")
     if(registered)
         message(FATAL_ERROR "Test ${kind} '${name}' already registered")
     endif()
-    set_property(GLOBAL PROPERTY "PANGU_TEST_REGISTERED_${key}" ON)
+    set_property(
+        GLOBAL
+        PROPERTY
+            "PANGU_TEST_REGISTERED_${key}"
+                ON
+    )
 endfunction()
 
 function(pangu_register_gtest)
@@ -147,28 +180,52 @@ function(pangu_register_gtest)
     pangu_test_build_dependencies(TIER "${arg_TIER}" TARGETS "${arg_TARGET}")
     include(GoogleTest)
     string(SHA256 key "${arg_TARGET}")
-    set(testList "_pangu_discovered_${key}")
+    set(testList "panguDiscovered${key}")
     set(testRoot "${CMAKE_BINARY_DIR}/Tests")
     set(testTarget "${arg_TARGET}")
     set(discoveryArgs)
     if(DEFINED arg_DISCOVERY_TIMEOUT)
-        list(APPEND discoveryArgs DISCOVERY_TIMEOUT "${arg_DISCOVERY_TIMEOUT}")
+        list(
+            APPEND discoveryArgs
+            DISCOVERY_TIMEOUT
+            "${arg_DISCOVERY_TIMEOUT}"
+        )
     endif()
     file(MAKE_DIRECTORY "${testRoot}/Results/${testTarget}")
-    gtest_discover_tests("${arg_TARGET}" TEST_PREFIX "${arg_TARGET}."
-        NO_PRETTY_TYPES NO_PRETTY_VALUES DISCOVERY_MODE PRE_TEST
+    gtest_discover_tests(
+        "${arg_TARGET}"
+        TEST_PREFIX "${arg_TARGET}."
+        NO_PRETTY_TYPES
+        NO_PRETTY_VALUES
+        DISCOVERY_MODE PRE_TEST
         ${discoveryArgs}
-        TEST_LIST "${testList}" XML_OUTPUT_DIR "${testRoot}/Results/${testTarget}"
-        PROPERTIES LABELS "${_pangu_labels}" TIMEOUT "${_pangu_timeout}")
+        TEST_LIST "${testList}"
+        XML_OUTPUT_DIR "${testRoot}/Results/${testTarget}"
+        PROPERTIES
+            LABELS
+                "${testLabels}"
+            TIMEOUT
+                "${testTimeout}"
+    )
     set(configured "${CMAKE_CURRENT_BINARY_DIR}/${testTarget}_work.cmake")
-    configure_file("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/Testing/ConfigureDiscoveredTests.cmake.in"
-        "${configured}" @ONLY)
-    set_property(DIRECTORY APPEND PROPERTY TEST_INCLUDE_FILES "${configured}")
+    configure_file("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/Testing/ConfigureDiscoveredTests.cmake.in" "${configured}" @ONLY)
+    set_property(
+        DIRECTORY
+        APPEND
+        PROPERTY
+            TEST_INCLUDE_FILES
+                "${configured}"
+    )
 endfunction()
 
 function(pangu_register_test)
-    cmake_parse_arguments(PARSE_ARGV 0 arg "" "NAME;BOUNDARY;AREA;TIER;PROCESSORS;TIMEOUT"
-        "COMMAND;BUILD_TARGETS;TYPES;REQUIRES")
+    cmake_parse_arguments(
+        PARSE_ARGV 0
+        arg
+        ""
+        "NAME;BOUNDARY;AREA;TIER;PROCESSORS;TIMEOUT"
+        "COMMAND;BUILD_TARGETS;TYPES;REQUIRES"
+    )
     if(arg_UNPARSED_ARGUMENTS OR arg_KEYWORDS_MISSING_VALUES OR NOT arg_NAME OR NOT arg_COMMAND)
         message(FATAL_ERROR "pangu_register_test requires NAME, COMMAND and valid arguments")
     endif()
@@ -195,16 +252,35 @@ function(pangu_register_test)
     set(work "${CMAKE_BINARY_DIR}/Tests/Work/${hash}")
     file(MAKE_DIRECTORY "${work}")
     add_test(NAME "${arg_NAME}" COMMAND ${arg_COMMAND})
-    set_tests_properties("${arg_NAME}" PROPERTIES LABELS "${_pangu_labels}"
-        TIMEOUT "${_pangu_timeout}" WORKING_DIRECTORY "${work}")
+    set_tests_properties(
+        "${arg_NAME}"
+        PROPERTIES
+            LABELS
+                "${testLabels}"
+            TIMEOUT
+                "${testTimeout}"
+            WORKING_DIRECTORY
+                "${work}"
+    )
     if(DEFINED arg_PROCESSORS)
-        set_tests_properties("${arg_NAME}" PROPERTIES PROCESSORS "${arg_PROCESSORS}")
+        set_tests_properties(
+            "${arg_NAME}"
+            PROPERTIES
+                PROCESSORS
+                    "${arg_PROCESSORS}"
+        )
     endif()
     if("nested-build" IN_LIST arg_REQUIRES)
         include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/PanguTestBuildJobs.cmake")
-        set_property(TEST "${arg_NAME}" APPEND PROPERTY ENVIRONMENT
-            "PANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
-            "CMAKE_BUILD_PARALLEL_LEVEL=${PANGU_TEST_BUILD_JOBS}")
+        set_property(
+            TEST
+                "${arg_NAME}"
+            APPEND
+            PROPERTY
+                ENVIRONMENT
+                    "PANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
+                    "CMAKE_BUILD_PARALLEL_LEVEL=${PANGU_TEST_BUILD_JOBS}"
+        )
     endif()
 endfunction()
 
@@ -221,11 +297,17 @@ function(pangu_require_full_testing)
     endif()
     if(NOT TARGET PanguValidateEngineFullTesting)
         set(parameters "${CMAKE_CURRENT_BINARY_DIR}/PanguFullTestingParameters.cmake")
-        file(WRITE "${parameters}" "set(BUILD_TESTING [==[${BUILD_TESTING}]==])\nset(PANGU_BUILD_ENGINE_TESTS [==[${PANGU_BUILD_ENGINE_TESTS}]==])\n")
-        add_custom_target(PanguValidateEngineFullTesting
-            COMMAND "${CMAKE_COMMAND}" "-DPANGU_FULL_PARAMETERS=${parameters}"
-                -P "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/Testing/ValidateFullTesting.cmake"
-            VERBATIM)
+        file(
+            WRITE "${parameters}"
+            "set(BUILD_TESTING [==[${BUILD_TESTING}]==])\nset(PANGU_BUILD_ENGINE_TESTS [==[${PANGU_BUILD_ENGINE_TESTS}]==])\n"
+        )
+        add_custom_target(
+            PanguValidateEngineFullTesting
+            COMMAND
+                "${CMAKE_COMMAND}" "-DPANGU_FULL_PARAMETERS=${parameters}" -P
+                "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/Testing/ValidateFullTesting.cmake"
+            VERBATIM
+        )
     endif()
     add_dependencies(PanguTestsFull PanguValidateEngineFullTesting)
 endfunction()

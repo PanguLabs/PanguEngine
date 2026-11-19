@@ -24,7 +24,10 @@ set(identityFile "${PANGU_META_TOOL_BINARY_DIR}/PanguMetaTool.identity")
 if(EXISTS "${identityFile}")
     file(READ "${identityFile}" previous)
     if(NOT previous STREQUAL identity)
-        message(FATAL_ERROR "toolchain_error: shared host cache source/compiler/LLVM_ROOT changed; use a separate cache")
+        message(
+            FATAL_ERROR
+            "toolchain_error: shared host cache source/compiler/LLVM_ROOT changed; use a separate cache"
+        )
     endif()
 endif()
 
@@ -32,22 +35,36 @@ set(testing OFF)
 if(EXISTS "${PANGU_META_TOOL_BINARY_DIR}/CMakeCache.txt")
     file(STRINGS "${PANGU_META_TOOL_BINARY_DIR}/CMakeCache.txt" testingCache REGEX "^BUILD_TESTING:BOOL=")
     if(testingCache)
-        string(REPLACE "BUILD_TESTING:BOOL=" "" testing "${testingCache}")
+        string(
+            REPLACE "BUILD_TESTING:BOOL="
+            ""
+            testing
+            "${testingCache}"
+        )
     endif()
 endif()
-execute_process(COMMAND "${CMAKE_COMMAND}"
-    -S "${PANGU_META_TOOL_SOURCE_DIR}" -B "${PANGU_META_TOOL_BINARY_DIR}"
-    -G Ninja -DCMAKE_BUILD_TYPE=Release "-DBUILD_TESTING:BOOL=${testing}" -DCMAKE_TOOLCHAIN_FILE:FILEPATH=
-    "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PANGU_ENGINE_SOURCE_DIR}"
-    RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE error)
+execute_process(
+    COMMAND
+        "${CMAKE_COMMAND}" -S "${PANGU_META_TOOL_SOURCE_DIR}" -B "${PANGU_META_TOOL_BINARY_DIR}" -G Ninja
+        -DCMAKE_BUILD_TYPE=Release "-DBUILD_TESTING:BOOL=${testing}" -DCMAKE_TOOLCHAIN_FILE:FILEPATH=
+        "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PANGU_ENGINE_SOURCE_DIR}"
+    RESULT_VARIABLE status
+    OUTPUT_VARIABLE output
+    ERROR_VARIABLE error
+)
 if(NOT status EQUAL 0)
     message(FATAL_ERROR "PanguMetaTool host configure failed:\n${output}\n${error}")
 endif()
 file(CONFIGURE OUTPUT "${identityFile}" CONTENT "${identity}" @ONLY)
 file(TOUCH "${PANGU_META_TOOL_BINARY_DIR}/PanguMetaToolConfigure.stamp")
 if(NOT PANGU_META_CONFIGURE_ONLY)
-    execute_process(COMMAND "${CMAKE_COMMAND}" --build "${PANGU_META_TOOL_BINARY_DIR}" --target PanguMetaTool
-        RESULT_VARIABLE status OUTPUT_VARIABLE output ERROR_VARIABLE error)
+    execute_process(
+        COMMAND
+            "${CMAKE_COMMAND}" --build "${PANGU_META_TOOL_BINARY_DIR}" --target PanguMetaTool
+        RESULT_VARIABLE status
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error
+    )
     if(NOT status EQUAL 0)
         message(FATAL_ERROR "PanguMetaTool host build failed:\n${output}\n${error}")
     endif()

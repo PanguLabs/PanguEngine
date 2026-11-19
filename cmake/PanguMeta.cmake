@@ -4,8 +4,18 @@ include("${CMAKE_CURRENT_LIST_DIR}/PanguBuildLayout.cmake")
 
 # JSON SET 的值必须是 JSON 原语；路径中的引号、反斜线和控制字符均不直接拼接。
 function(_pangu_meta_quote output value)
-    string(REPLACE "\\" "\\\\" value "${value}")
-    string(REPLACE "\"" "\\\"" value "${value}")
+    string(
+        REPLACE "\\"
+        "\\\\"
+        value
+        "${value}"
+    )
+    string(
+        REPLACE "\""
+        "\\\""
+        value
+        "${value}"
+    )
     set(hex 0123456789abcdef)
     foreach(code RANGE 1 31)
         string(ASCII ${code} character)
@@ -13,7 +23,12 @@ function(_pangu_meta_quote output value)
         math(EXPR lo "${code}%16")
         string(SUBSTRING "${hex}" ${hi} 1 hi)
         string(SUBSTRING "${hex}" ${lo} 1 lo)
-        string(REPLACE "${character}" "\\u00${hi}${lo}" value "${value}")
+        string(
+            REPLACE "${character}"
+            "\\u00${hi}${lo}"
+            value
+            "${value}"
+        )
     endforeach()
     set(${output} "\"${value}\"" PARENT_SCOPE)
 endfunction()
@@ -34,12 +49,24 @@ function(_pangu_meta_target target)
         else()
             set(owner project)
         endif()
-        set_property(TARGET "${target}" PROPERTY PANGU_SOURCE_OWNER "${owner}")
+        set_property(
+            TARGET
+                "${target}"
+            PROPERTY
+                PANGU_SOURCE_OWNER
+                    "${owner}"
+        )
     endif()
     pangu_owned_build_root(root "${owner}")
     get_property(targets GLOBAL PROPERTY PANGU_META_TARGETS)
     if(NOT target IN_LIST targets)
-        set_property(GLOBAL APPEND PROPERTY PANGU_META_TARGETS "${target}")
+        set_property(
+            GLOBAL
+            APPEND
+            PROPERTY
+                PANGU_META_TARGETS
+                    "${target}"
+        )
     endif()
 endfunction()
 
@@ -61,8 +88,15 @@ endfunction()
 
 function(pangu_meta_headers)
     cmake_parse_arguments(PARSE_ARGV 0 arg "" "TARGET;ROOT;PREFIX;VISIBILITY;EMIT" "HEADERS")
-    if(arg_UNPARSED_ARGUMENTS OR arg_KEYWORDS_MISSING_VALUES OR NOT arg_ROOT OR NOT arg_HEADERS OR
-       NOT arg_VISIBILITY MATCHES "^(public|private)$")
+    if(
+        arg_UNPARSED_ARGUMENTS
+        OR arg_KEYWORDS_MISSING_VALUES
+        OR NOT arg_ROOT
+        OR NOT arg_HEADERS
+        OR NOT arg_VISIBILITY
+            MATCHES
+            "^(public|private)$"
+    )
         message(FATAL_ERROR "invalid_request: pangu_meta_headers requires TARGET ROOT VISIBILITY EMIT HEADERS")
     endif()
     _pangu_meta_target("${arg_TARGET}")
@@ -77,7 +111,13 @@ function(pangu_meta_headers)
     endif()
     foreach(header IN LISTS arg_HEADERS)
         file(REAL_PATH "${header}" path BASE_DIRECTORY "${root}")
-        cmake_path(IS_PREFIX root "${path}" NORMALIZE within)
+        cmake_path(
+            IS_PREFIX
+            root
+            "${path}"
+            NORMALIZE
+            within
+        )
         if(NOT within OR NOT EXISTS "${path}" OR IS_DIRECTORY "${path}")
             message(FATAL_ERROR "invalid_request: Meta header must exist beneath ROOT: ${header}")
         endif()
@@ -91,20 +131,54 @@ function(pangu_meta_headers)
                 set(value "${${key}}")
             endif()
             _pangu_meta_quote(value "${value}")
-            string(JSON entry SET "${entry}" "${key}" "${value}")
+            string(
+                JSON entry
+                SET "${entry}"
+                "${key}"
+                "${value}"
+            )
         endforeach()
-        string(JSON entry SET "${entry}" typed_access "${typed}")
-        string(JSON entry SET "${entry}" description "${description}")
+        string(
+            JSON entry
+            SET "${entry}"
+            typed_access
+            "${typed}"
+        )
+        string(
+            JSON entry
+            SET "${entry}"
+            description
+            "${description}"
+        )
         string(JSON count LENGTH "${inputs}")
-        string(JSON inputs SET "${inputs}" ${count} "${entry}")
+        string(
+            JSON inputs
+            SET "${inputs}"
+            ${count}
+            "${entry}"
+        )
         target_sources("${arg_TARGET}" PRIVATE "${path}")
     endforeach()
-    set_property(TARGET "${arg_TARGET}" PROPERTY PANGU_META_INPUTS "${inputs}")
+    set_property(
+        TARGET
+            "${arg_TARGET}"
+        PROPERTY
+            PANGU_META_INPUTS
+                "${inputs}"
+    )
 endfunction()
 
 function(pangu_meta_consume)
     cmake_parse_arguments(PARSE_ARGV 0 arg "" "TARGET;MODULE;EMIT;SCOPE" "HEADERS")
-    if(arg_UNPARSED_ARGUMENTS OR arg_KEYWORDS_MISSING_VALUES OR NOT arg_MODULE OR NOT arg_HEADERS OR arg_EMIT STREQUAL "check")
+    if(
+        arg_UNPARSED_ARGUMENTS
+        OR arg_KEYWORDS_MISSING_VALUES
+        OR NOT arg_MODULE
+        OR NOT arg_HEADERS
+        OR arg_EMIT
+            STREQUAL
+            "check"
+    )
         message(FATAL_ERROR "invalid_request: pangu_meta_consume requires TARGET MODULE EMIT HEADERS")
     endif()
     _pangu_meta_target("${arg_TARGET}")
@@ -119,16 +193,42 @@ function(pangu_meta_consume)
     if(NOT count)
         set(count 0)
     endif()
-    foreach(key IN ITEMS TARGET MODULE HEADERS EMIT SCOPE)
-        set_property(GLOBAL PROPERTY "PANGU_META_CONSUMPTION_${count}_${key}" "${arg_${key}}")
+    foreach(
+        key
+        IN
+        ITEMS
+            TARGET
+            MODULE
+            HEADERS
+            EMIT
+            SCOPE
+    )
+        set_property(
+            GLOBAL
+            PROPERTY
+                "PANGU_META_CONSUMPTION_${count}_${key}"
+                    "${arg_${key}}"
+        )
     endforeach()
     math(EXPR count "${count}+1")
-    set_property(GLOBAL PROPERTY PANGU_META_CONSUMPTION_COUNT "${count}")
+    set_property(
+        GLOBAL
+        PROPERTY
+            PANGU_META_CONSUMPTION_COUNT
+                "${count}"
+    )
 endfunction()
 
 function(pangu_meta_module)
     cmake_parse_arguments(PARSE_ARGV 0 arg "" "TARGET;ID;ID_HEADER;QUERY;HEADER" "")
-    if(arg_UNPARSED_ARGUMENTS OR arg_KEYWORDS_MISSING_VALUES OR NOT arg_ID OR NOT arg_ID_HEADER OR NOT arg_QUERY OR NOT arg_HEADER)
+    if(
+        arg_UNPARSED_ARGUMENTS
+        OR arg_KEYWORDS_MISSING_VALUES
+        OR NOT arg_ID
+        OR NOT arg_ID_HEADER
+        OR NOT arg_QUERY
+        OR NOT arg_HEADER
+    )
         message(FATAL_ERROR "invalid_request: pangu_meta_module requires TARGET ID ID_HEADER QUERY HEADER")
     endif()
     _pangu_meta_target("${arg_TARGET}")
@@ -149,11 +249,27 @@ function(pangu_meta_module)
         list(GET pair 0 key)
         list(GET pair 1 argument)
         _pangu_meta_quote(value "${arg_${argument}}")
-        string(JSON binding SET "${binding}" "${key}" "${value}")
+        string(
+            JSON binding
+            SET "${binding}"
+            "${key}"
+            "${value}"
+        )
     endforeach()
     _pangu_meta_quote(value "${export}")
-    string(JSON binding SET "${binding}" export_macro "${value}")
-    set_property(TARGET "${arg_TARGET}" PROPERTY PANGU_META_MODULE_BINDING "${binding}")
+    string(
+        JSON binding
+        SET "${binding}"
+        export_macro
+        "${value}"
+    )
+    set_property(
+        TARGET
+            "${arg_TARGET}"
+        PROPERTY
+            PANGU_META_MODULE_BINDING
+                "${binding}"
+    )
 endfunction()
 
 function(pangu_meta_host_catalog)
@@ -167,8 +283,20 @@ function(pangu_meta_host_catalog)
     if(existing OR NOT kind MATCHES "^(EXECUTABLE|SHARED_LIBRARY)$")
         message(FATAL_ERROR "invalid_request: Catalog requires one actual Host and one registration")
     endif()
-    set_property(TARGET "${arg_TARGET}" PROPERTY PANGU_META_CATALOG "${arg_MODULES}")
-    set_property(TARGET "${arg_TARGET}" PROPERTY PANGU_META_HAS_CATALOG ON)
+    set_property(
+        TARGET
+            "${arg_TARGET}"
+        PROPERTY
+            PANGU_META_CATALOG
+                "${arg_MODULES}"
+    )
+    set_property(
+        TARGET
+            "${arg_TARGET}"
+        PROPERTY
+            PANGU_META_HAS_CATALOG
+                ON
+    )
 endfunction()
 
 function(_pangu_meta_finalize)
@@ -209,10 +337,20 @@ function(_pangu_meta_finalize)
                     foreach(key IN ITEMS typed_access description)
                         string(JSON enabled GET "${old}" ${key})
                         if(enabled)
-                            string(JSON entry SET "${entry}" ${key} true)
+                            string(
+                                JSON entry
+                                SET "${entry}"
+                                ${key}
+                                true
+                            )
                         endif()
                     endforeach()
-                    string(JSON merged SET "${merged}" ${previous} "${entry}")
+                    string(
+                        JSON merged
+                        SET "${merged}"
+                        ${previous}
+                        "${entry}"
+                    )
                 else()
                     if(identity IN_LIST ownedPaths)
                         message(FATAL_ERROR "duplicate_owner: ${path}")
@@ -220,64 +358,114 @@ function(_pangu_meta_finalize)
                     list(APPEND paths "${identity}")
                     list(APPEND ownedPaths "${identity}")
                     string(JSON count LENGTH "${merged}")
-                    string(JSON merged SET "${merged}" ${count} "${entry}")
+                    string(
+                        JSON merged
+                        SET "${merged}"
+                        ${count}
+                        "${entry}"
+                    )
                     _pangu_meta_quote(pathValue "${path}")
                     _pangu_meta_quote(targetValue "${target}")
                     string(JSON count LENGTH "${ownership}")
-                    string(JSON ownership SET "${ownership}" ${count} "{\"path\":${pathValue},\"target\":${targetValue}}")
+                    string(
+                        JSON ownership
+                        SET "${ownership}"
+                        ${count}
+                        "{\"path\":${pathValue},\"target\":${targetValue}}"
+                    )
                 endif()
             endforeach()
         endif()
-        set_property(TARGET "${target}" PROPERTY PANGU_META_INPUTS "${merged}")
+        set_property(
+            TARGET
+                "${target}"
+            PROPERTY
+                PANGU_META_INPUTS
+                    "${merged}"
+        )
     endforeach()
     get_property(count GLOBAL PROPERTY PANGU_META_CONSUMPTION_COUNT)
     if(count)
         math(EXPR last "${count}-1")
         foreach(i RANGE 0 ${last})
-            foreach(key IN ITEMS TARGET MODULE HEADERS EMIT SCOPE)
-                get_property(${key} GLOBAL PROPERTY "PANGU_META_CONSUMPTION_${i}_${key}")
-            endforeach()
-            if(NOT TARGET "${MODULE}")
-                message(FATAL_ERROR "unregistered_input: unknown owner '${MODULE}'")
+            get_property(consumerTarget GLOBAL PROPERTY "PANGU_META_CONSUMPTION_${i}_TARGET")
+            get_property(ownerModule GLOBAL PROPERTY "PANGU_META_CONSUMPTION_${i}_MODULE")
+            get_property(consumerHeaders GLOBAL PROPERTY "PANGU_META_CONSUMPTION_${i}_HEADERS")
+            get_property(consumerEmit GLOBAL PROPERTY "PANGU_META_CONSUMPTION_${i}_EMIT")
+            get_property(consumerScope GLOBAL PROPERTY "PANGU_META_CONSUMPTION_${i}_SCOPE")
+            if(NOT TARGET "${ownerModule}")
+                message(FATAL_ERROR "unregistered_input: unknown owner '${ownerModule}'")
             endif()
-            get_target_property(inputs "${MODULE}" PANGU_META_INPUTS)
-            get_target_property(source "${MODULE}" SOURCE_DIR)
+            get_target_property(inputs "${ownerModule}" PANGU_META_INPUTS)
+            get_target_property(source "${ownerModule}" SOURCE_DIR)
             if(NOT inputs)
-                message(FATAL_ERROR "unregistered_input: owner has no registered headers '${MODULE}'")
+                message(FATAL_ERROR "unregistered_input: owner has no registered headers '${ownerModule}'")
             endif()
-            _pangu_meta_emit("${EMIT}")
-            foreach(header IN LISTS HEADERS)
+            _pangu_meta_emit("${consumerEmit}")
+            foreach(header IN LISTS consumerHeaders)
                 file(REAL_PATH "${header}" path BASE_DIRECTORY "${source}")
                 string(JSON length LENGTH "${inputs}")
                 set(found OFF)
                 if(length GREATER 0)
                     math(EXPR end "${length}-1")
                     foreach(j RANGE 0 ${end})
-                        string(JSON registered GET "${inputs}" ${j} path)
+                        string(
+                            JSON registered
+                            GET "${inputs}"
+                            ${j}
+                            path
+                        )
                         if(registered STREQUAL path)
-                            string(JSON visibility GET "${inputs}" ${j} visibility)
+                            string(
+                                JSON visibility
+                                GET "${inputs}"
+                                ${j}
+                                visibility
+                            )
                             if(NOT visibility STREQUAL "public")
                                 message(FATAL_ERROR "unregistered_input: cannot consume private header '${path}'")
                             endif()
                             if(typed)
-                                string(JSON inputs SET "${inputs}" ${j} typed_access true)
+                                string(
+                                    JSON inputs
+                                    SET "${inputs}"
+                                    ${j}
+                                    typed_access
+                                    true
+                                )
                             endif()
                             if(description)
-                                string(JSON inputs SET "${inputs}" ${j} description true)
+                                string(
+                                    JSON inputs
+                                    SET "${inputs}"
+                                    ${j}
+                                    description
+                                    true
+                                )
                             endif()
                             set(found ON)
                         endif()
                     endforeach()
                 endif()
                 if(NOT found)
-                    message(FATAL_ERROR "unregistered_input: header not registered by ${MODULE}: ${path}")
+                    message(FATAL_ERROR "unregistered_input: header not registered by ${ownerModule}: ${path}")
                 endif()
             endforeach()
-            set_property(TARGET "${MODULE}" PROPERTY PANGU_META_INPUTS "${inputs}")
-            if(NOT TARGET "PanguMetaUsage_${MODULE}")
-                add_library("PanguMetaUsage_${MODULE}" INTERFACE)
+            set_property(
+                TARGET
+                    "${ownerModule}"
+                PROPERTY
+                    PANGU_META_INPUTS
+                        "${inputs}"
+            )
+            if(NOT TARGET "PanguMetaUsage_${ownerModule}")
+                add_library("PanguMetaUsage_${ownerModule}" INTERFACE)
             endif()
-            target_link_libraries("${TARGET}" ${SCOPE} "PanguMetaUsage_${MODULE}")
+            target_link_libraries(
+                "${consumerTarget}"
+                ${consumerScope}
+                "PanguMetaUsage_${ownerModule}"
+            )
         endforeach()
     endif()
     foreach(target IN LISTS targets)
@@ -319,32 +507,75 @@ function(_pangu_meta_generate_target target ownership)
     if(count GREATER 0)
         math(EXPR last "${count}-1")
         foreach(i RANGE 0 ${last})
-            foreach(key IN ITEMS path root prefix visibility typed_access description)
-                string(JSON input_${key} GET "${inputs}" ${i} ${key})
-            endforeach()
-            list(APPEND headers "${input_path}")
-            list(APPEND inputRoots "${input_root}")
-            if(input_visibility STREQUAL "public")
-                list(APPEND publicRoots "${input_root}")
-                list(APPEND publicHeaders "${input_path}")
+            string(
+                JSON inputPath
+                GET "${inputs}"
+                ${i}
+                path
+            )
+            string(
+                JSON inputRoot
+                GET "${inputs}"
+                ${i}
+                root
+            )
+            string(
+                JSON inputPrefix
+                GET "${inputs}"
+                ${i}
+                prefix
+            )
+            string(
+                JSON inputVisibility
+                GET "${inputs}"
+                ${i}
+                visibility
+            )
+            string(
+                JSON inputTypedAccess
+                GET "${inputs}"
+                ${i}
+                typed_access
+            )
+            string(
+                JSON inputDescription
+                GET "${inputs}"
+                ${i}
+                description
+            )
+            list(APPEND headers "${inputPath}")
+            list(APPEND inputRoots "${inputRoot}")
+            if(inputVisibility STREQUAL "public")
+                list(APPEND publicRoots "${inputRoot}")
+                list(APPEND publicHeaders "${inputPath}")
             endif()
-            if(NOT input_typed_access AND NOT input_description)
+            if(NOT inputTypedAccess AND NOT inputDescription)
                 continue()
             endif()
-            file(RELATIVE_PATH relative "${input_root}" "${input_path}")
-            string(REGEX REPLACE "\\.[^. /]+$" "" relative "${relative}")
-            if(input_prefix)
-                set(relative "${input_prefix}/${relative}")
+            file(
+                RELATIVE_PATH
+                relative
+                "${inputRoot}"
+                "${inputPath}"
+            )
+            string(
+                REGEX REPLACE "\\.[^. /]+$"
+                ""
+                relative
+                "${relative}"
+            )
+            if(inputPrefix)
+                set(relative "${inputPrefix}/${relative}")
             endif()
             if(relative MATCHES "^(ModuleMeta|ModuleQuery|StaticModuleCatalog|MetaContext)$")
                 message(FATAL_ERROR "output_collision: header occupies reserved Meta slot: ${relative}")
             endif()
             set(visibility Private)
-            if(input_visibility STREQUAL "public")
+            if(inputVisibility STREQUAL "public")
                 set(visibility Public)
             endif()
             list(APPEND files "${visibility}/${relative}.gen.h")
-            if(input_description)
+            if(inputDescription)
                 list(APPEND files "Private/${relative}.gen.cpp")
                 set(hasDescription 1)
             endif()
@@ -355,7 +586,11 @@ function(_pangu_meta_generate_target target ownership)
         target_compile_definitions("${target}" PRIVATE "PG_META_HAS_DESCRIPTION=${hasDescription}")
     endif()
     if(hasDescription)
-        list(APPEND files Private/ModuleMeta.gen.h Private/ModuleMeta.gen.cpp)
+        list(
+            APPEND files
+            Private/ModuleMeta.gen.h
+            Private/ModuleMeta.gen.cpp
+        )
     endif()
     get_target_property(binding "${target}" PANGU_META_MODULE_BINDING)
     get_target_property(hasCatalog "${target}" PANGU_META_HAS_CATALOG)
@@ -383,14 +618,29 @@ function(_pangu_meta_generate_target target ownership)
             get_target_property(moduleBinding "${module}" PANGU_META_MODULE_BINDING)
             set(entry "{}")
             _pangu_meta_quote(value "${module}")
-            string(JSON entry SET "${entry}" target "${value}")
+            string(
+                JSON entry
+                SET "${entry}"
+                target
+                "${value}"
+            )
             foreach(key IN ITEMS query_symbol query_header)
                 string(JSON value GET "${moduleBinding}" "${key}")
                 _pangu_meta_quote(value "${value}")
-                string(JSON entry SET "${entry}" "${key}" "${value}")
+                string(
+                    JSON entry
+                    SET "${entry}"
+                    "${key}"
+                    "${value}"
+                )
             endforeach()
             string(JSON length LENGTH "${catalog}")
-            string(JSON catalog SET "${catalog}" ${length} "${entry}")
+            string(
+                JSON catalog
+                SET "${catalog}"
+                ${length}
+                "${entry}"
+            )
             target_link_libraries("${target}" PRIVATE "${module}")
         endforeach()
     endif()
@@ -420,20 +670,45 @@ function(_pangu_meta_generate_target target ownership)
         list(APPEND seen "${identity}")
         _pangu_meta_quote(value "${relative}")
         string(JSON length LENGTH "${outputs}")
-        string(JSON outputs SET "${outputs}" ${length} "${value}")
+        string(
+            JSON outputs
+            SET "${outputs}"
+            ${length}
+            "${value}"
+        )
         list(APPEND absoluteFiles "${root}/${relative}")
     endforeach()
     set(contextSource "${root}/Private/MetaContext.cpp")
     if(taskKind STREQUAL "scan")
         file(CONFIGURE OUTPUT "${contextSource}" CONTENT "// 独立编译上下文；不包含生成头。\n" @ONLY)
-        set_source_files_properties("${contextSource}" TARGET_DIRECTORY "${target}" PROPERTIES
-            CXX_SCAN_FOR_MODULES OFF SKIP_PRECOMPILE_HEADERS ON)
-        set_property(TARGET "${target}" PROPERTY EXPORT_COMPILE_COMMANDS ON)
+        set_source_files_properties(
+            "${contextSource}"
+            TARGET_DIRECTORY
+                "${target}"
+            PROPERTIES
+                CXX_SCAN_FOR_MODULES
+                    OFF
+                SKIP_PRECOMPILE_HEADERS
+                    ON
+        )
+        set_property(
+            TARGET
+                "${target}"
+            PROPERTY
+                EXPORT_COMPILE_COMMANDS
+                    ON
+        )
         target_sources("${target}" PRIVATE "${contextSource}")
     endif()
     target_sources("${target}" PRIVATE ${absoluteFiles})
     list(REMOVE_DUPLICATES inputRoots)
-    target_include_directories("${target}" PRIVATE ${inputRoots} "${root}/Public" "${root}/Private")
+    target_include_directories(
+        "${target}"
+        PRIVATE
+            ${inputRoots}
+            "${root}/Public"
+            "${root}/Private"
+    )
     if(taskKind STREQUAL "scan")
         target_compile_options("${target}" PRIVATE -Wno-unknown-attributes)
     endif()
@@ -442,12 +717,19 @@ function(_pangu_meta_generate_target target ownership)
     endif()
     list(REMOVE_DUPLICATES publicRoots)
     target_sources("PanguMetaUsage_${target}" INTERFACE ${publicHeaders})
-    target_include_directories("PanguMetaUsage_${target}" INTERFACE ${publicRoots} "${root}/Public" "${build}/Generated/Export")
+    target_include_directories(
+        "PanguMetaUsage_${target}"
+        INTERFACE
+            ${publicRoots}
+            "${root}/Public"
+            "${build}/Generated/Export"
+    )
     target_compile_options("PanguMetaUsage_${target}" INTERFACE -Wno-unknown-attributes)
     set(request "{\"version\":1,\"kind\":\"${taskKind}\",\"catalog\":${catalog}}")
     get_filename_component(engineSource "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/.." ABSOLUTE)
     foreach(key IN ITEMS engine_source engine_build project_source project_build)
-        get_property(value GLOBAL PROPERTY "PANGU_LAYOUT_${key}")
+        string(TOUPPER "${key}" propertyKey)
+        get_property(value GLOBAL PROPERTY "PANGU_LAYOUT_${propertyKey}")
         if(NOT value)
             if(key STREQUAL "engine_source")
                 set(value "${engineSource}")
@@ -458,40 +740,92 @@ function(_pangu_meta_generate_target target ownership)
             endif()
         endif()
         _pangu_meta_quote(value "${value}")
-        string(JSON request SET "${request}" "${key}" "${value}")
+        string(
+            JSON request
+            SET "${request}"
+            "${key}"
+            "${value}"
+        )
     endforeach()
     foreach(pair IN ITEMS "target;${target}" "owner;${owner}" "config;${CMAKE_BUILD_TYPE}" "output_root;${root}")
         list(GET pair 0 key)
         list(GET pair 1 value)
         _pangu_meta_quote(value "${value}")
-        string(JSON request SET "${request}" "${key}" "${value}")
+        string(
+            JSON request
+            SET "${request}"
+            "${key}"
+            "${value}"
+        )
     endforeach()
     get_property(resource GLOBAL PROPERTY PANGU_META_RESOURCE_DIR)
     set(context "{}")
     set(contextDependency)
     if(taskKind STREQUAL "scan")
         set(contextDependency "${CMAKE_BINARY_DIR}/compile_commands.json")
-        foreach(pair IN ITEMS "database;${CMAKE_BINARY_DIR}/compile_commands.json" "source;${contextSource}" "resource_dir;${resource}")
+        foreach(
+            pair
+            IN
+            ITEMS
+                "database;${CMAKE_BINARY_DIR}/compile_commands.json"
+                "source;${contextSource}"
+                "resource_dir;${resource}"
+        )
             list(GET pair 0 key)
             list(GET pair 1 value)
             _pangu_meta_quote(value "${value}")
-            string(JSON context SET "${context}" "${key}" "${value}")
+            string(
+                JSON context
+                SET "${context}"
+                "${key}"
+                "${value}"
+            )
         endforeach()
-        string(JSON context SET "${context}" object "\"\"")
+        string(
+            JSON context
+            SET "${context}"
+            object
+            "\"\""
+        )
     endif()
-    foreach(pair IN ITEMS "headers;inputs" "outputs;outputs" "ownership;ownership" "module;binding" "context;context")
+    foreach(
+        pair
+        IN
+        ITEMS
+            "headers;inputs"
+            "outputs;outputs"
+            "ownership;ownership"
+            "module;binding"
+            "context;context"
+    )
         list(GET pair 0 key)
         list(GET pair 1 variable)
-        string(JSON request SET "${request}" "${key}" "${${variable}}")
+        string(
+            JSON request
+            SET "${request}"
+            "${key}"
+            "${${variable}}"
+        )
     endforeach()
     set(requestFile "${root}/Meta.request.json")
     file(CONFIGURE OUTPUT "${requestFile}" CONTENT "${request}\n" @ONLY)
-    add_custom_command(OUTPUT "${root}/Meta.stamp"
-        BYPRODUCTS ${absoluteFiles} "${root}/Meta.outputs.json"
-        COMMAND "${tool}" generate --request "${requestFile}"
-        DEPENDS "${tool}" "${requestFile}" ${headers} ${contextDependency}
+    add_custom_command(
+        OUTPUT
+            "${root}/Meta.stamp"
+        BYPRODUCTS
+            ${absoluteFiles}
+            "${root}/Meta.outputs.json"
+        COMMAND
+            "${tool}" generate --request "${requestFile}"
+        DEPENDS
+            "${tool}"
+            "${requestFile}"
+            ${headers}
+            ${contextDependency}
         DEPFILE "${root}/Meta.d"
-        COMMENT "PanguMetaTool generate ${target}" VERBATIM)
+        COMMENT "PanguMetaTool generate ${target}"
+        VERBATIM
+    )
     add_custom_target("PanguMetaGenerate_${target}" DEPENDS "${root}/Meta.stamp")
     add_dependencies("PanguMetaGenerate_${target}" PanguMetaToolHost)
     add_dependencies("${target}" "PanguMetaGenerate_${target}")

@@ -2,8 +2,14 @@ cmake_minimum_required(VERSION 4.0)
 file(MAKE_DIRECTORY "${MARKER_ROOT}")
 set(marker "${MARKER_ROOT}/metadata.txt")
 file(REMOVE "${marker}")
-execute_process(COMMAND "${FIXTURE}" "${marker}" lifetime RESULT_VARIABLE result
-    OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 20)
+execute_process(
+    COMMAND
+        "${FIXTURE}" "${marker}" lifetime
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE output
+    ERROR_VARIABLE error
+    TIMEOUT 20
+)
 if(NOT "${result}" STREQUAL "0")
     message(FATAL_ERROR "MetaLifetime: exit=${result}; ${output}${error}")
 endif()
@@ -17,9 +23,15 @@ if(NOT evidence STREQUAL expected)
 endif()
 message(STATUS "MetaLifetime: ${evidence}")
 foreach(mode IN ITEMS invalid-provider no-provider)
-    execute_process(COMMAND "${CMAKE_COMMAND}" -E env "PANGU_META_FIXTURE_MODE=${mode}"
-        "${FIXTURE}" "${MARKER_ROOT}/${mode}.txt" "${mode}"
-        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 20)
+    execute_process(
+        COMMAND
+            "${CMAKE_COMMAND}" -E env "PANGU_META_FIXTURE_MODE=${mode}" "${FIXTURE}" "${MARKER_ROOT}/${mode}.txt"
+            "${mode}"
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error
+        TIMEOUT 20
+    )
     if(NOT "${result}" STREQUAL "0")
         message(FATAL_ERROR "MetaLifetime ${mode}: exit=${result}; ${output}${error}")
     endif()

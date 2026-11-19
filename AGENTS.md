@@ -48,7 +48,7 @@
 - 共享 Agent Skills 的唯一规范目录为 `.agents/skills/`。
 - 新工作区可从仓库根目录执行 `python Scripts/setup-agent-links.py`，为 Claude Code 生成本地 Skills 映射：Windows 使用 Junction，Linux/macOS 使用 Symlink。
 - `.claude/skills` 是本地生成的目录映射，不应提交到 Git；Codex 可以直接使用 `.agents/skills/`。
-- 新建或修改的 `CMakeLists.txt` 使用 `cmake_minimum_required(VERSION 4.0)`，并按目标平台校验编译器；具体规则以 [`wiki/foundation/toolchain.md`](wiki/foundation/toolchain.md) 和 [`wiki/foundation/build-system.md`](wiki/foundation/build-system.md) 为准。
+- 新建或修改的 `CMakeLists.txt` 使用 `cmake_minimum_required(VERSION 4.0)`，并按目标平台校验编译器；具体规则以 [`wiki/foundation/toolchain.md`](wiki/foundation/toolchain.md) 和 [`wiki/foundation/build-system.md`](wiki/foundation/build-system.md) 为准。新增及修改的 CMake 标识符遵守 [`wiki/foundation/cmake-naming.md`](wiki/foundation/cmake-naming.md)，不为统一命名擅自破坏现有接口。
 - 修改完成后尽可能执行针对性的构建、测试或静态检查，并明确说明未验证的部分。
 
 ## 目录维护与生命周期

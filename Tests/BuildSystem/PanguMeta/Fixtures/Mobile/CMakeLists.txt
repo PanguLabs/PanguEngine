@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 4.0)
 project(PanguMetaMobile LANGUAGES CXX)
-if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR
-   NOT CMAKE_SYSTEM_NAME MATCHES "^(Android|iOS)$")
+if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR NOT CMAKE_SYSTEM_NAME MATCHES "^(Android|iOS)$")
     message(FATAL_ERROR "Mobile fixture requires Android/iOS Clang")
 endif()
 set(CMAKE_CXX_STANDARD 23)
@@ -13,12 +12,19 @@ include("${PANGU_ENGINE_SOURCE_DIR}/cmake/Platform/Common/Module.cmake")
 pangu_initialize_link_mode()
 add_subdirectory("${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Foundation" Foundation)
 pangu_module_library_type(kind)
-add_library(MobileMeta ${kind} Consume.cpp)
+add_library(
+    MobileMeta
+    ${kind}
+    Consume.cpp
+)
 pangu_configure_module(MobileMeta)
 target_link_libraries(MobileMeta PRIVATE PanguFoundation)
-target_include_directories(MobileMeta PUBLIC
-    "${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Foundation/Public"
-    "${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Module/Public")
+target_include_directories(
+    MobileMeta
+    PUBLIC
+        "${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Foundation/Public"
+        "${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Module/Public"
+)
 target_compile_definitions(MobileMeta PRIVATE PANGU_MOBILE_LIBRARY=1)
 if(ANDROID)
     set(version "${ANDROID_PLATFORM_LEVEL}")
@@ -26,17 +32,30 @@ if(ANDROID)
         message(FATAL_ERROR "NDK must expose the selected ANDROID_PLATFORM_LEVEL")
     endif()
 else()
-    string(REPLACE "." ";" parts "${CMAKE_OSX_DEPLOYMENT_TARGET}")
+    string(
+        REPLACE "."
+        ";"
+        parts
+        "${CMAKE_OSX_DEPLOYMENT_TARGET}"
+    )
     list(GET parts 0 major)
     list(GET parts 1 minor)
     math(EXPR version "${major} * 10000 + ${minor} * 100")
 endif()
-message(STATUS "Mobile target: ${CMAKE_SYSTEM_NAME}; version=${version}; compiler=${CMAKE_CXX_COMPILER}; sysroot=${CMAKE_SYSROOT}${CMAKE_OSX_SYSROOT}")
+message(
+    STATUS
+    "Mobile target: ${CMAKE_SYSTEM_NAME}; version=${version}; compiler=${CMAKE_CXX_COMPILER}; sysroot=${CMAKE_SYSROOT}${CMAKE_OSX_SYSROOT}"
+)
 target_compile_definitions(MobileMeta PUBLIC "PANGU_EXPECTED_VERSION=${version}")
 pangu_meta_module(TARGET MobileMeta ID fixture::kModuleId ID_HEADER Context.h QUERY fixture::Query HEADER Context.h)
 pangu_meta_headers(TARGET MobileMeta ROOT . VISIBILITY public EMIT both HEADERS Context.h)
 add_executable(MobileConsume Consume.cpp)
-target_link_libraries(MobileConsume PRIVATE MobileMeta PanguBuildOptions)
+target_link_libraries(
+    MobileConsume
+    PRIVATE
+        MobileMeta
+        PanguBuildOptions
+)
 pangu_meta_consume(TARGET MobileConsume MODULE MobileMeta HEADERS Context.h EMIT both)
 pangu_meta_host_catalog(TARGET MobileConsume MODULES MobileMeta)
 pangu_prepare_meta_tool(actualHost)
@@ -45,5 +64,7 @@ file(REAL_PATH "${actualHost}" actualHost)
 if(NOT expectedHost STREQUAL actualHost)
     message(FATAL_ERROR "Mobile fixture must reuse the verified native host executable")
 endif()
-file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/Artifacts.txt" CONTENT
-    "$<TARGET_FILE:MobileConsume>\n$<TARGET_FILE:MobileMeta>\n")
+file(
+    GENERATE OUTPUT "${CMAKE_BINARY_DIR}/Artifacts.txt"
+    CONTENT "$<TARGET_FILE:MobileConsume>\n$<TARGET_FILE:MobileMeta>\n"
+)

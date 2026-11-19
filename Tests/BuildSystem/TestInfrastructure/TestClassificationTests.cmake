@@ -6,7 +6,7 @@ include("${CMAKE_CURRENT_LIST_DIR}/TestInfrastructureHelpers.cmake")
 if(NOT DEFINED PANGU_TEST_ENGINE_BINARY_DIR OR NOT IS_DIRECTORY "${PANGU_TEST_ENGINE_BINARY_DIR}")
     message(FATAL_ERROR "Engine classification requires PANGU_TEST_ENGINE_BINARY_DIR")
 endif()
-TestingListTests(BINARY "${PANGU_TEST_ENGINE_BINARY_DIR}" OUTPUT tests)
+_pangu_list_fixture_tests(BINARY "${PANGU_TEST_ENGINE_BINARY_DIR}" OUTPUT tests)
 string(JSON count LENGTH "${tests}" tests)
 if(count EQUAL 0)
     message(FATAL_ERROR "Engine testing graph is empty")
@@ -15,8 +15,20 @@ math(EXPR last "${count} - 1")
 set(seen)
 set(mutableRoots)
 foreach(index RANGE 0 ${last})
-    string(JSON name GET "${tests}" tests ${index} name)
-    string(JSON properties GET "${tests}" tests ${index} properties)
+    string(
+        JSON name
+        GET "${tests}"
+        tests
+        ${index}
+        name
+    )
+    string(
+        JSON properties
+        GET "${tests}"
+        tests
+        ${index}
+        properties
+    )
     string(JSON propertyCount LENGTH "${properties}")
     math(EXPR lastProperty "${propertyCount} - 1")
     set(labels)
@@ -24,8 +36,18 @@ foreach(index RANGE 0 ${last})
     set(work)
     set(processors 1)
     foreach(property RANGE 0 ${lastProperty})
-        string(JSON key GET "${properties}" ${property} name)
-        string(JSON value GET "${properties}" ${property} value)
+        string(
+            JSON key
+            GET "${properties}"
+            ${property}
+            name
+        )
+        string(
+            JSON value
+            GET "${properties}"
+            ${property}
+            value
+        )
         if(key STREQUAL "LABELS")
             string(JSON labelCount LENGTH "${value}")
             math(EXPR lastLabel "${labelCount} - 1")
@@ -46,23 +68,70 @@ foreach(index RANGE 0 ${last})
             endforeach()
         endif()
     endforeach()
-    if(NOT "run.full" IN_LIST labels OR NOT "owner.engine" IN_LIST labels OR
-       NOT "${labels}" MATCHES "boundary[.](unit|integration|system)" OR
-       NOT "${labels}" MATCHES "area[.][a-z0-9-]+")
-        message(FATAL_ERROR "${name}: an existing Engine regression is missing classification/full ownership: ${labels}")
+    if(
+        NOT "run.full"
+            IN_LIST
+            labels
+        OR NOT "owner.engine"
+            IN_LIST
+            labels
+        OR NOT "${labels}"
+            MATCHES
+            "boundary[.](unit|integration|system)"
+        OR NOT "${labels}"
+            MATCHES
+            "area[.][a-z0-9-]+"
+    )
+        message(
+            FATAL_ERROR
+            "${name}: an existing Engine regression is missing classification/full ownership: ${labels}"
+        )
     endif()
-    if(name MATCHES "^(BuildEnvironment|ToolchainLibraryLink)$" AND
-       (NOT "run.precommit" IN_LIST labels OR "run.fast" IN_LIST labels))
+    if(
+        name
+            MATCHES
+            "^(BuildEnvironment|ToolchainLibraryLink)$"
+        AND (
+            NOT "run.precommit"
+                IN_LIST
+                labels
+            OR "run.fast"
+                IN_LIST
+                labels
+        )
+    )
         message(FATAL_ERROR "${name} must enter precommit")
     endif()
-    if(name MATCHES "^(PluginIntegration|ProjectIntegration)[.]" AND ("run.fast" IN_LIST labels OR "run.precommit" IN_LIST labels))
+    if(
+        name
+            MATCHES
+            "^(PluginIntegration|ProjectIntegration)[.]"
+        AND (
+            "run.fast"
+                IN_LIST
+                labels
+            OR "run.precommit"
+                IN_LIST
+                labels
+        )
+    )
         message(FATAL_ERROR "${name} must remain full")
     endif()
-    string(FIND "${work}/" "${PANGU_TEST_BUILD_ROOT}/Tests/Work/" inWorkRoot)
+    string(
+        FIND "${work}/"
+        "${PANGU_TEST_BUILD_ROOT}/Tests/Work/"
+        inWorkRoot
+    )
     if(NOT inWorkRoot EQUAL 0)
         message(FATAL_ERROR "${name} has no isolated Tests/Work working directory: ${work}")
     endif()
-    string(JSON command GET "${tests}" tests ${index} command)
+    string(
+        JSON command
+        GET "${tests}"
+        tests
+        ${index}
+        command
+    )
     string(JSON argumentCount LENGTH "${command}")
     math(EXPR lastArgument "${argumentCount} - 1")
     set(arguments)
@@ -71,24 +140,56 @@ foreach(index RANGE 0 ${last})
         list(APPEND arguments "${value}")
         if(value MATCHES "^-DPANGU_TEST_ROOT=(.*)$")
             set(root "${CMAKE_MATCH_1}")
-            string(FIND "${root}/" "${PANGU_TEST_BUILD_ROOT}/Tests/Work/" inWorkRoot)
+            string(
+                FIND "${root}/"
+                "${PANGU_TEST_BUILD_ROOT}/Tests/Work/"
+                inWorkRoot
+            )
             if(NOT inWorkRoot EQUAL 0 OR root IN_LIST mutableRoots)
                 message(FATAL_ERROR "${name}: parallel scripts must not share mutable fixture roots: ${root}")
             endif()
             list(APPEND mutableRoots "${root}")
         endif()
     endforeach()
-    if(name MATCHES "^(PluginIntegration[.]|ProjectIntegration[.]|BuildTools[.]|TestInfrastructure[.])" AND NOT processors EQUAL PANGU_TEST_BUILD_JOBS)
-        message(FATAL_ERROR "${name} PROCESSORS=${processors} differs from nested-build budget ${PANGU_TEST_BUILD_JOBS}")
+    if(
+        name
+            MATCHES
+            "^(PluginIntegration[.]|ProjectIntegration[.]|BuildTools[.]|TestInfrastructure[.])"
+        AND NOT processors
+            EQUAL
+            PANGU_TEST_BUILD_JOBS
+    )
+        message(
+            FATAL_ERROR
+            "${name} PROCESSORS=${processors} differs from nested-build budget ${PANGU_TEST_BUILD_JOBS}"
+        )
     endif()
-    if(name MATCHES "^(PluginIntegration[.]|ProjectIntegration[.]|BuildTools[.]|TestInfrastructure[.])" AND
-       NOT "CMAKE_BUILD_PARALLEL_LEVEL=${PANGU_TEST_BUILD_JOBS}" IN_LIST arguments)
+    if(
+        name
+            MATCHES
+            "^(PluginIntegration[.]|ProjectIntegration[.]|BuildTools[.]|TestInfrastructure[.])"
+        AND NOT "CMAKE_BUILD_PARALLEL_LEVEL=${PANGU_TEST_BUILD_JOBS}"
+            IN_LIST
+            arguments
+    )
         message(FATAL_ERROR "${name} does not propagate the nested-build environment budget")
     endif()
-    if("requires.nested-build" IN_LIST labels AND
-       (NOT processors EQUAL PANGU_TEST_BUILD_JOBS OR
-        NOT "PANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}" IN_LIST environment OR
-        NOT "CMAKE_BUILD_PARALLEL_LEVEL=${PANGU_TEST_BUILD_JOBS}" IN_LIST environment))
+    if(
+        "requires.nested-build"
+            IN_LIST
+            labels
+        AND (
+            NOT processors
+                EQUAL
+                PANGU_TEST_BUILD_JOBS
+            OR NOT "PANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
+                IN_LIST
+                environment
+            OR NOT "CMAKE_BUILD_PARALLEL_LEVEL=${PANGU_TEST_BUILD_JOBS}"
+                IN_LIST
+                environment
+        )
+    )
         message(FATAL_ERROR "${name} reserved processors and inherited nested-build budget differ")
     endif()
     list(APPEND seen "${name}")
@@ -99,13 +200,31 @@ if(PANGU_TEST_LINK_MODE STREQUAL "Modular")
 else()
     set(moduleLifecycleRegression ScopeDestructor)
 endif()
-foreach(required IN ITEMS BuildEnvironment ToolchainLibraryLink MinimalHostSmoke
-        PluginIntegration.BuildToolConfigure PluginIntegration.DiscoveryFileLinks
-        PluginIntegration.DiscoveryDirectoryLinks ProjectIntegration.EngineRevision ProjectIntegration.Base ProjectIntegration.EmbeddedEngine
-        ProjectIntegration.PluginEnable ProjectIntegration.HostModuleConsumption ProjectIntegration.EcsWorld
-        ProjectIntegration.SharedDeploy ProjectIntegration.IncrementalBuild
-        TestInfrastructure.Registration TestInfrastructure.DependencyIsolation TestInfrastructure.BuildToolsTestIntegration
-        TestInfrastructure.BuildToolsFailurePropagation TestInfrastructure.TestClassification ${moduleLifecycleRegression})
+foreach(
+    required
+    IN
+    ITEMS
+        BuildEnvironment
+        ToolchainLibraryLink
+        MinimalHostSmoke
+        PluginIntegration.BuildToolConfigure
+        PluginIntegration.DiscoveryFileLinks
+        PluginIntegration.DiscoveryDirectoryLinks
+        ProjectIntegration.EngineRevision
+        ProjectIntegration.Base
+        ProjectIntegration.EmbeddedEngine
+        ProjectIntegration.PluginEnable
+        ProjectIntegration.HostModuleConsumption
+        ProjectIntegration.EcsWorld
+        ProjectIntegration.SharedDeploy
+        ProjectIntegration.IncrementalBuild
+        TestInfrastructure.Registration
+        TestInfrastructure.DependencyIsolation
+        TestInfrastructure.BuildToolsTestIntegration
+        TestInfrastructure.BuildToolsFailurePropagation
+        TestInfrastructure.TestClassification
+        ${moduleLifecycleRegression}
+)
     if(NOT required IN_LIST seen)
         message(FATAL_ERROR "Missing original regression or explicit capability scenario: ${required}")
     endif()
@@ -121,11 +240,24 @@ endif()
 # 首轮生成错误输入并失败，同一工作根重跑必须重建输入，不能依赖上次残留。
 set(retryRoot "${PANGU_TEST_ROOT}/retry")
 set(script "${PANGU_ENGINE_ROOT}/Tests/BuildSystem/PluginIntegration/BuildToolConfigureTests.cmake")
-TestingRun(EXPECT fail DIAGNOSTIC "Empty-root configure failed" COMMAND "${CMAKE_COMMAND}"
-    "-DPANGU_ENGINE_SOURCE_DIR=${retryRoot}/missing-engine" "-DPANGU_TEST_ROOT=${retryRoot}"
-    "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
-    -P "${script}")
-TestingRun(EXPECT pass COMMAND "${CMAKE_COMMAND}"
-    "-DPANGU_ENGINE_SOURCE_DIR=${PANGU_ENGINE_ROOT}" "-DPANGU_TEST_ROOT=${retryRoot}"
-    "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
-    -P "${script}")
+_pangu_run_test_infrastructure_command(
+    EXPECT fail
+    DIAGNOSTIC "Empty-root configure failed"
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-DPANGU_ENGINE_SOURCE_DIR=${retryRoot}/missing-engine"
+        "-DPANGU_TEST_ROOT=${retryRoot}"
+        "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
+        -P
+        "${script}"
+)
+_pangu_run_test_infrastructure_command(
+    EXPECT pass
+    COMMAND
+        "${CMAKE_COMMAND}"
+        "-DPANGU_ENGINE_SOURCE_DIR=${PANGU_ENGINE_ROOT}"
+        "-DPANGU_TEST_ROOT=${retryRoot}"
+        "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
+        -P
+        "${script}"
+)

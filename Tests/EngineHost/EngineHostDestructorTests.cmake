@@ -1,15 +1,31 @@
 cmake_minimum_required(VERSION 4.0)
 
 file(MAKE_DIRECTORY "${MARKER_ROOT}")
-set(modes clean log-clean busy operating log-busy control-exit42 control-crash control-hang control-unprepared)
+set(modes
+    clean
+    log-clean
+    busy
+    operating
+    log-busy
+    control-exit42
+    control-crash
+    control-hang
+    control-unprepared
+)
 if(MODULAR)
     list(APPEND modes once)
 endif()
 foreach(mode IN LISTS modes)
     set(marker "${MARKER_ROOT}/${mode}.txt")
     file(REMOVE "${marker}")
-    execute_process(COMMAND "${FIXTURE}" "${mode}" "${marker}"
-        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 3)
+    execute_process(
+        COMMAND
+            "${FIXTURE}" "${mode}" "${marker}"
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error
+        TIMEOUT 3
+    )
     if(CMAKE_HOST_WIN32)
         set(fatalResult "Exit code 0xc0000409")
     else()

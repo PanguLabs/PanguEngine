@@ -14,11 +14,26 @@ function(pangu_initialize_link_mode)
     endif()
     get_property(initialMode GLOBAL PROPERTY PANGU_INITIAL_LINK_MODE)
     if(initialMode AND NOT initialMode STREQUAL PANGU_LINK_MODE)
-        message(FATAL_ERROR "Invalid PANGU_LINK_MODE: changed from '${initialMode}' to '${PANGU_LINK_MODE}' in one target graph.")
+        message(
+            FATAL_ERROR
+            "Invalid PANGU_LINK_MODE: changed from '${initialMode}' to '${PANGU_LINK_MODE}' in one target graph."
+        )
     endif()
-    set_property(GLOBAL PROPERTY PANGU_INITIAL_LINK_MODE "${PANGU_LINK_MODE}")
+    set_property(
+        GLOBAL
+        PROPERTY
+            PANGU_INITIAL_LINK_MODE
+                "${PANGU_LINK_MODE}"
+    )
     if(DEFINED CACHE{PANGU_LINK_MODE})
-        set_property(CACHE PANGU_LINK_MODE PROPERTY STRINGS Monolithic Modular)
+        set_property(
+            CACHE
+                PANGU_LINK_MODE
+            PROPERTY
+                STRINGS
+                    Monolithic
+                    Modular
+        )
     endif()
 endfunction()
 

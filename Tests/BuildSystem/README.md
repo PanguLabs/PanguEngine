@@ -93,7 +93,7 @@ Physics 自身测试目标为 `FixtureEnginePhysicsPluginTests`，对应 CTest �
 Provider 场景同时检查开启 Engine 测试时单独构建 MyGameProbe 不会构建 Physics。
 Base、EmbeddedEngine 及手动 All 每次使用新的夹具运行目录，防止覆盖复制遗留已删除或迁移的头文件。
 
-`ProjectIntegration.FindPackage` 遵循 ProjectIntegration 的 full 分层，使用无编译器的临时 CMake 工程验证发现、重复查找无副作用、QUIET/REQUIRED 失败语义及相对 BuildRoot 拒绝；真实初始化、链接与宿主运行继续由 MyGame、ModuleLinkModes、LogConfig 和 PanguMeta 夹具覆盖。完整 Engine 消费者使用 `find_package(PanguEngine REQUIRED MODULE)` 后调用 `pangu_initialize()`；单模块隔离夹具保留直接消费模块的边界。
+`ProjectIntegration.FindPackage` 遵循 ProjectIntegration 的 full 分层。临时 CMake 工程以 `LANGUAGES NONE` 验证发现、重复查找无副作用、QUIET/REQUIRED 失败语义及相对 BuildRoot 拒绝，另用 CXX-only 场景验证初始化时缺少 C 的诊断。MyGame、ModuleLinkModes、LogConfig 和 PanguMeta 夹具覆盖真实初始化、链接与宿主运行。完整 Engine 消费者在顶层 `project()` 启用 C 与 CXX，使用 `find_package(PanguEngine REQUIRED MODULE)` 后调用 `pangu_initialize()`。单模块隔离夹具保留直接消费模块的边界。
 
 Shared 模块的独立配置入口为 `Tests/Module/Fixtures/SharedProject/`，Engine 内部目标仍定义在 `Tests/Module/Fixtures/Shared/`。`ModuleSharedProject` 验证独立配置、原生模块测试构建和运行；入口与内部目标分目录，避免同一源码目录被顶层和 Engine 子图重复加入而形成目录属性遍历环。
 

@@ -1,20 +1,46 @@
 cmake_minimum_required(VERSION 4.0)
 
 pangu_module_library_type(moduleType)
-add_library(PanguMinimalServices ${moduleType} MinimalService.cpp)
+add_library(
+    PanguMinimalServices
+    ${moduleType}
+    MinimalService.cpp
+)
 pangu_configure_module(PanguMinimalServices EXPORT_MACRO PG_MINIMAL_SERVICES_API)
 target_include_directories(PanguMinimalServices PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(PanguMinimalServices PUBLIC Pangu::EngineHost)
-pangu_export_module_query(TARGET PanguMinimalServices ID pg::sample::kModuleId ID_HEADER MinimalService.h QUERY pg::sample::QueryMinimalServices HEADER MinimalService.h)
-pangu_meta_headers(TARGET PanguMinimalServices ROOT "${CMAKE_CURRENT_SOURCE_DIR}"
-    VISIBILITY public EMIT both HEADERS MinimalService.h)
+pangu_export_module_query(
+    TARGET PanguMinimalServices
+    ID pg::sample::kModuleId
+    ID_HEADER MinimalService.h
+    QUERY pg::sample::QueryMinimalServices
+    HEADER MinimalService.h
+)
+pangu_meta_headers(
+    TARGET PanguMinimalServices
+    ROOT "${CMAKE_CURRENT_SOURCE_DIR}"
+    VISIBILITY public
+    EMIT both
+    HEADERS
+        MinimalService.h
+)
 
 add_executable(PanguMinimalHost Main.cpp)
-target_link_libraries(PanguMinimalHost PRIVATE PanguBuildOptions Pangu::EngineHost)
+target_link_libraries(
+    PanguMinimalHost
+    PRIVATE
+        PanguBuildOptions
+        Pangu::EngineHost
+)
 pangu_meta_consume(TARGET PanguMinimalHost MODULE PanguMinimalServices HEADERS MinimalService.h EMIT both)
 target_include_directories(PanguMinimalHost PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 pangu_owned_build_root(fixtureBuildRoot "${PANGU_SOURCE_OWNER}")
-set_target_properties(PanguMinimalHost PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${fixtureBuildRoot}/Bin")
+set_target_properties(
+    PanguMinimalHost
+    PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY
+            "${fixtureBuildRoot}/Bin"
+)
 pangu_meta_host_catalog(TARGET PanguMinimalHost MODULES PanguMinimalServices)
 if(PANGU_LINK_MODE STREQUAL "Monolithic")
     target_link_libraries(PanguMinimalHost PRIVATE PanguMinimalServices)
@@ -22,7 +48,12 @@ else()
     target_compile_definitions(PanguMinimalHost PRIVATE PG_SAMPLE_MODULAR=1)
     add_dependencies(PanguMinimalHost PanguMinimalServices)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        set_target_properties(PanguMinimalHost PROPERTIES ENABLE_EXPORTS ON)
+        set_target_properties(
+            PanguMinimalHost
+            PROPERTIES
+                ENABLE_EXPORTS
+                    ON
+        )
     endif()
 endif()
 
@@ -30,5 +61,15 @@ set(minimalHostArguments)
 if(PANGU_LINK_MODE STREQUAL "Modular")
     list(APPEND minimalHostArguments "$<TARGET_FILE:PanguMinimalServices>")
 endif()
-pangu_register_test(NAME MinimalHostSmoke COMMAND PanguMinimalHost ${minimalHostArguments}
-    BOUNDARY system AREA engine-host TIER precommit BUILD_TARGETS PanguMinimalHost PanguMinimalServices)
+pangu_register_test(
+    NAME MinimalHostSmoke
+    COMMAND
+        PanguMinimalHost
+        ${minimalHostArguments}
+    BOUNDARY system
+    AREA engine-host
+    TIER precommit
+    BUILD_TARGETS
+        PanguMinimalHost
+        PanguMinimalServices
+)

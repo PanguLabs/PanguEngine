@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 4.0)
 foreach(probe IN ITEMS throwing-new nothrow-new aligned-new)
-    execute_process(COMMAND "${FIXTURE}" "${probe}" RESULT_VARIABLE result TIMEOUT 5)
+    execute_process(
+        COMMAND
+            "${FIXTURE}" "${probe}"
+        RESULT_VARIABLE result
+        TIMEOUT 5
+    )
     if(NOT result STREQUAL "91")
         message(FATAL_ERROR "Runtime 分配探针 ${probe} 自验证失败：exit=${result}")
     endif()
@@ -10,7 +15,14 @@ foreach(mode IN ITEMS success first-drop)
     if(mode STREQUAL "first-drop")
         list(APPEND arguments first-drop)
     endif()
-    execute_process(COMMAND "${FIXTURE}" ${arguments} RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 15)
+    execute_process(
+        COMMAND
+            "${FIXTURE}" ${arguments}
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error
+        TIMEOUT 15
+    )
     if(NOT result STREQUAL "0" OR NOT output MATCHES "RuntimeAllocationRequests=0 FailureStages=9 PublicGate=1")
         message(FATAL_ERROR "Runtime 公有日志路径 ${mode} 失败：exit=${result}\n${output}\n${error}")
     endif()
@@ -21,7 +33,11 @@ foreach(mode IN ITEMS success first-drop)
         set(expected 0)
         set(outcome "RuntimeOutcome H=1 accepted=1 dropped=0 console=1 file=1 resources=1 complete=1")
     endif()
-    string(FIND "${output}" "${outcome}" found)
+    string(
+        FIND "${output}"
+        "${outcome}"
+        found
+    )
     if(found LESS 0)
         message(FATAL_ERROR "Runtime 交错结果不一致：${mode}; ${output}")
     endif()

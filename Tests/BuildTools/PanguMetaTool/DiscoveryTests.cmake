@@ -18,15 +18,30 @@ set(expected "")
 if(PG_CASE STREQUAL "RejectsLegacyIdentity")
     set(host "${PG_BINARY}/Host")
     file(MAKE_DIRECTORY "${host}")
-    file(WRITE "${host}/PanguMetaTool.identity"
-        "${PG_SOURCE}\n${PG_LLVM_ROOT}/bin/clang++${suffix}\n${PG_BINARY}/RetiredConfiguration.cmake\n")
-    execute_process(COMMAND "${CMAKE_COMMAND}" -E env "LLVM_ROOT=${PG_LLVM_ROOT}" "${CMAKE_COMMAND}"
-        "-DPANGU_META_TOOL_SOURCE_DIR=${PG_SOURCE}" "-DPANGU_META_TOOL_BINARY_DIR=${host}"
-        "-DPANGU_ENGINE_SOURCE_DIR=${PG_ENGINE}" -DPANGU_META_CONFIGURE_ONLY=ON
-        -P "${PG_ENGINE}/cmake/BuildMetaTool.cmake"
-        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
-    if(result EQUAL 0 OR NOT "${output}\n${error}" MATCHES "source/compiler/LLVM_ROOT changed" OR
-       EXISTS "${host}/CMakeCache.txt")
+    file(
+        WRITE "${host}/PanguMetaTool.identity"
+        "${PG_SOURCE}\n${PG_LLVM_ROOT}/bin/clang++${suffix}\n${PG_BINARY}/RetiredConfiguration.cmake\n"
+    )
+    execute_process(
+        COMMAND
+            "${CMAKE_COMMAND}" -E env "LLVM_ROOT=${PG_LLVM_ROOT}" "${CMAKE_COMMAND}"
+            "-DPANGU_META_TOOL_SOURCE_DIR=${PG_SOURCE}" "-DPANGU_META_TOOL_BINARY_DIR=${host}"
+            "-DPANGU_ENGINE_SOURCE_DIR=${PG_ENGINE}" -DPANGU_META_CONFIGURE_ONLY=ON -P
+            "${PG_ENGINE}/cmake/BuildMetaTool.cmake"
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error
+    )
+    if(
+        result
+            EQUAL
+            0
+        OR NOT "${output}\n${error}"
+            MATCHES
+            "source/compiler/LLVM_ROOT changed"
+        OR EXISTS
+            "${host}/CMakeCache.txt"
+    )
         message(FATAL_ERROR "Retired cache identity must be rejected without automatic migration:\n${output}\n${error}")
     endif()
     return()
@@ -40,7 +55,13 @@ elseif(PG_CASE MATCHES "^(RejectsMissingDevelopmentPackage|RejectsMissingResourc
     foreach(name IN ITEMS clang clang++)
         set(link "${selectedRoot}/bin/${name}${suffix}")
         if(NOT EXISTS "${link}")
-            file(CREATE_LINK "${PG_LLVM_ROOT}/bin/${name}${suffix}" "${link}" SYMBOLIC RESULT linked)
+            file(
+                CREATE_LINK
+                    "${PG_LLVM_ROOT}/bin/${name}${suffix}"
+                    "${link}"
+                SYMBOLIC
+                RESULT linked
+            )
             if(NOT linked STREQUAL "0")
                 message(FATAL_ERROR "Compiler alias fixture failed: ${linked}")
             endif()
@@ -54,8 +75,10 @@ elseif(PG_CASE MATCHES "^(RejectsMissingDevelopmentPackage|RejectsMissingResourc
                 set(config ClangConfig.cmake)
             endif()
             file(MAKE_DIRECTORY "${selectedRoot}/lib/cmake/${package}")
-            file(WRITE "${selectedRoot}/lib/cmake/${package}/${config}"
-                "include([==[${PG_LLVM_ROOT}/lib/cmake/${package}/${config}]==])\n")
+            file(
+                WRITE "${selectedRoot}/lib/cmake/${package}/${config}"
+                "include([==[${PG_LLVM_ROOT}/lib/cmake/${package}/${config}]==])\n"
+            )
         endforeach()
     endif()
     if(PG_CASE STREQUAL "ValidationFailureRetries")
@@ -83,22 +106,41 @@ elseif(PG_CASE MATCHES "^Rejects(MissingSources|WrongRevision)$")
         file(MAKE_DIRECTORY "${adapter}/Repo")
         file(WRITE "${adapter}/Repo/zlib.h" "/* 版本校验夹具 */\n")
         find_package(Git REQUIRED)
-        execute_process(COMMAND "${GIT_EXECUTABLE}" init "${adapter}/Repo" COMMAND_ERROR_IS_FATAL ANY OUTPUT_QUIET ERROR_QUIET)
-        execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${adapter}/Repo" add zlib.h COMMAND_ERROR_IS_FATAL ANY)
-        execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${adapter}/Repo" -c user.name=DependencyFixture
-            -c user.email=dependency-fixture@example.invalid -c commit.gpgsign=false
-            "-c" "core.hooksPath=${PG_BINARY}/NoHooks" commit --allow-empty -m "测试：固定依赖版本"
-            COMMAND_ERROR_IS_FATAL ANY OUTPUT_QUIET ERROR_QUIET)
+        execute_process(
+            COMMAND
+                "${GIT_EXECUTABLE}" init "${adapter}/Repo"
+            COMMAND_ERROR_IS_FATAL ANY
+            OUTPUT_QUIET
+            ERROR_QUIET
+        )
+        execute_process(
+            COMMAND
+                "${GIT_EXECUTABLE}" -C "${adapter}/Repo" add zlib.h
+            COMMAND_ERROR_IS_FATAL ANY
+        )
+        execute_process(
+            COMMAND
+                "${GIT_EXECUTABLE}" -C "${adapter}/Repo" -c user.name=DependencyFixture -c
+                user.email=dependency-fixture@example.invalid -c commit.gpgsign=false "-c"
+                "core.hooksPath=${PG_BINARY}/NoHooks" commit --allow-empty -m "测试：固定依赖版本"
+            COMMAND_ERROR_IS_FATAL ANY
+            OUTPUT_QUIET
+            ERROR_QUIET
+        )
         set(expected "revision mismatch")
     endif()
 elseif(NOT PG_CASE STREQUAL "Automatic")
     message(FATAL_ERROR "Unknown discovery case: ${PG_CASE}")
 endif()
-execute_process(COMMAND "${CMAKE_COMMAND}" -E env "LLVM_ROOT=${selectedRoot}" --unset=VCPKG_ROOT
-    --unset=CMAKE_TOOLCHAIN_FILE --unset=CMAKE_PREFIX_PATH "${CMAKE_COMMAND}" --fresh
-    -S "${PG_SOURCE}" -B "${PG_BINARY}" -G Ninja -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
-    "-DPANGU_ENGINE_SOURCE_DIR=${engine}" ${args}
-    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+execute_process(
+    COMMAND
+        "${CMAKE_COMMAND}" -E env "LLVM_ROOT=${selectedRoot}" --unset=VCPKG_ROOT --unset=CMAKE_TOOLCHAIN_FILE
+        --unset=CMAKE_PREFIX_PATH "${CMAKE_COMMAND}" --fresh -S "${PG_SOURCE}" -B "${PG_BINARY}" -G Ninja
+        -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release "-DPANGU_ENGINE_SOURCE_DIR=${engine}" ${args}
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE output
+    ERROR_VARIABLE error
+)
 if(expected)
     if(result EQUAL 0 OR NOT "${output}\n${error}" MATCHES "${expected}")
         message(FATAL_ERROR "Expected ${expected}:\n${output}\n${error}")
@@ -111,16 +153,26 @@ endif()
 set(tool "${PG_BINARY}/PanguMetaTool${suffix}")
 if(PG_CASE STREQUAL "ValidationFailureRetries")
     file(WRITE "${selectedRoot}/lib/clang/23/include/stddef.h" "#error invalid_resource_fixture\n")
-    execute_process(COMMAND "${CMAKE_COMMAND}" --build "${PG_BINARY}" --target PanguMetaTool --parallel 2
-        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+    execute_process(
+        COMMAND
+            "${CMAKE_COMMAND}" --build "${PG_BINARY}" --target PanguMetaTool --parallel 2
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error
+    )
     if(result EQUAL 0 OR NOT "${output}\n${error}" MATCHES "built tool validation failed" OR EXISTS "${tool}")
         message(FATAL_ERROR "Failed validation must fail the build and remove the executable:\n${output}\n${error}")
     endif()
     file(WRITE "${selectedRoot}/lib/clang/23/include/stddef.h" "")
 endif()
 foreach(pass RANGE 1 2)
-    execute_process(COMMAND "${CMAKE_COMMAND}" --build "${PG_BINARY}" --target PanguMetaTool --parallel 2
-        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+    execute_process(
+        COMMAND
+            "${CMAKE_COMMAND}" --build "${PG_BINARY}" --target PanguMetaTool --parallel 2
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error
+    )
     if(NOT result EQUAL 0)
         message(FATAL_ERROR "Ordinary tool build failed:\n${output}\n${error}")
     endif()
@@ -128,8 +180,13 @@ foreach(pass RANGE 1 2)
         message(FATAL_ERROR "Unchanged ordinary tool build did work:\n${output}\n${error}")
     endif()
 endforeach()
-execute_process(COMMAND "${tool}" --check-clang
-    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+execute_process(
+    COMMAND
+        "${tool}" --check-clang
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE output
+    ERROR_VARIABLE error
+)
 if(NOT result EQUAL 0)
     message(FATAL_ERROR "Automatically discovered Clang check failed:\n${output}\n${error}")
 endif()

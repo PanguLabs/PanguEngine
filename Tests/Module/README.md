@@ -44,7 +44,7 @@ Android/iOS 正式 Preset 默认不构建这些可运行测试，交叉编译验
 
 ## ModuleManager 双模式覆盖（2026-11-06）
 
-现行测试按模式明确分层：旧同二进制 Query 的元数据、注册、Scope、真实归档与终止回归保留在 Monolithic；Modular 的 `ModuleRegression` 从 precommit/full 自动配置独立 Monolithic 子图，构建并执行 `area.module` 的 precommit 集合。`PANGU_TEST_MODULE_MATRIX_CHILD` 只禁止再次登记 `ModuleRegression`，不关闭其它有效测试。`Fixtures/ManagerFixture.h` 是测试装配函数，依次创建常驻根和 Load 业务批次；生产接口只保留 `ModuleManager`。
+现行测试按模式明确分层：旧同二进制 Query 的元数据、注册、Scope、真实归档与终止回归保留在 Monolithic。Modular 的 `ModuleRegression` 由根 full 集合调度，在独立 Monolithic 子图构建并运行 `area.module` 与 `area.engine-host` 的 precommit 测试。`PANGU_TEST_MODULE_MATRIX_CHILD` 只禁止再次登记 `ModuleRegression`，不关闭其它有效测试。`Fixtures/ManagerFixture.h` 是测试装配函数，依次创建常驻根和 Load 业务批次；生产接口只保留 `ModuleManager`。
 
 新增 `ModuleManager` 场景验证域隔离、代际和常驻占用预算；`ResidentModule` 验证显式启动、前置拒绝、执行失败请求整体关闭、Busy 时原错与句柄保留，以及最终统一失效；`BatchLoad` 验证空批次与模式来源限制，Modular 还执行真实 DLL 的依赖顺序、失败无部分句柄及快照跨卸载。
 

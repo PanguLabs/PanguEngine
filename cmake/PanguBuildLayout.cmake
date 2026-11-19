@@ -10,29 +10,75 @@ function(pangu_initialize_build_layout)
     endif()
     pangu_prepare_build_tool(tool)
     get_property(toolRoot GLOBAL PROPERTY PANGU_BUILD_TOOL_SOURCE)
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-        "${toolRoot}/Private/BuildLayout.h" "${toolRoot}/Private/BuildLayout.cpp"
-        "${toolRoot}/Private/Main.cpp" "${toolRoot}/CMakeLists.txt")
-    execute_process(COMMAND "${tool}" layout
-        --engine-source "${CMAKE_CURRENT_SOURCE_DIR}" --engine-build "${PANGU_ENGINE_BUILD_ROOT}"
-        --project-source "${CMAKE_SOURCE_DIR}" --project-build "${CMAKE_BINARY_DIR}"
-        --mode "${PANGU_LINK_MODE}" --config "${CMAKE_BUILD_TYPE}"
-        RESULT_VARIABLE status OUTPUT_VARIABLE layout ERROR_VARIABLE error OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set_property(
+        DIRECTORY
+        APPEND
+        PROPERTY
+            CMAKE_CONFIGURE_DEPENDS
+                "${toolRoot}/Private/BuildLayout.h"
+                "${toolRoot}/Private/BuildLayout.cpp"
+                "${toolRoot}/Private/Main.cpp"
+                "${toolRoot}/CMakeLists.txt"
+    )
+    execute_process(
+        COMMAND
+            "${tool}" layout --engine-source "${CMAKE_CURRENT_SOURCE_DIR}" --engine-build "${PANGU_ENGINE_BUILD_ROOT}"
+            --project-source "${CMAKE_SOURCE_DIR}" --project-build "${CMAKE_BINARY_DIR}" --mode "${PANGU_LINK_MODE}"
+            --config "${CMAKE_BUILD_TYPE}"
+        RESULT_VARIABLE status
+        OUTPUT_VARIABLE layout
+        ERROR_VARIABLE error
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
     if(NOT status EQUAL 0)
         message(FATAL_ERROR "Pangu build layout failed: ${error}")
     endif()
-    foreach(field IN ITEMS engine_source engine_build project_source project_build current_project current_context)
+    foreach(
+        field
+        IN
+        ITEMS
+            engine_source
+            engine_build
+            project_source
+            project_build
+            current_project
+            current_context
+    )
         string(JSON value GET "${layout}" "${field}")
-        set_property(GLOBAL PROPERTY "PANGU_LAYOUT_${field}" "${value}")
+        string(TOUPPER "${field}" fieldKey)
+        set_property(
+            GLOBAL
+            PROPERTY
+                "PANGU_LAYOUT_${fieldKey}"
+                    "${value}"
+        )
     endforeach()
     string(JSON state GET "${layout}" current_project)
     string(JSON header GET "${layout}" current_context)
-    set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${state}" "${header}")
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${state}" "${header}")
+    set_property(
+        DIRECTORY
+            "${CMAKE_SOURCE_DIR}"
+        APPEND
+        PROPERTY
+            CMAKE_CONFIGURE_DEPENDS
+                "${state}"
+                "${header}"
+    )
+    set_property(
+        DIRECTORY
+        APPEND
+        PROPERTY
+            CMAKE_CONFIGURE_DEPENDS
+                "${state}"
+                "${header}"
+    )
     set(PANGU_SOURCE_OWNER engine PARENT_SCOPE)
     # 接线定点迁移到新目录；保留旧产物，不清理其他任务或平台缓存。
     if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/Source/Runtime/Foundation/CMakeFiles")
-        message(STATUS "Pangu build layout migration: legacy object directories are replaced by ${PANGU_ENGINE_BUILD_ROOT}/Targets; old artifacts retained")
+        message(
+            STATUS
+            "Pangu build layout migration: legacy object directories are replaced by ${PANGU_ENGINE_BUILD_ROOT}/Targets; old artifacts retained"
+        )
     endif()
 endfunction()
 
@@ -40,7 +86,8 @@ function(pangu_owned_build_root output owner)
     if(NOT owner MATCHES "^(engine|project)$")
         message(FATAL_ERROR "Pangu source owner must be engine|project, got '${owner}'")
     endif()
-    get_property(root GLOBAL PROPERTY "PANGU_LAYOUT_${owner}_build")
+    string(TOUPPER "${owner}" ownerKey)
+    get_property(root GLOBAL PROPERTY "PANGU_LAYOUT_${ownerKey}_BUILD")
     if(NOT root)
         # 仅使用 Module 策略的独立契约夹具仍使用其原生顶层根。
         set(root "${CMAKE_BINARY_DIR}")
@@ -63,16 +110,22 @@ function(pangu_add_owned_subdirectory)
         set(exclude EXCLUDE_FROM_ALL)
     endif()
     add_subdirectory("${arg_SOURCE_DIR}" "${root}/Targets/${arg_RELATIVE_BINARY_DIR}" ${exclude})
-    pangu_configure_owned_targets("${root}/Targets/${arg_RELATIVE_BINARY_DIR}" "${arg_OWNER}")
+    _pangu_configure_owned_targets("${root}/Targets/${arg_RELATIVE_BINARY_DIR}" "${arg_OWNER}")
 endfunction()
 
-function(pangu_configure_owned_targets directory owner)
+function(_pangu_configure_owned_targets directory owner)
     get_property(targets DIRECTORY "${directory}" PROPERTY BUILDSYSTEM_TARGETS)
     foreach(target IN LISTS targets)
         get_target_property(targetOwner "${target}" PANGU_SOURCE_OWNER)
         if(NOT targetOwner)
             set(targetOwner "${owner}")
-            set_property(TARGET "${target}" PROPERTY PANGU_SOURCE_OWNER "${owner}")
+            set_property(
+                TARGET
+                    "${target}"
+                PROPERTY
+                    PANGU_SOURCE_OWNER
+                        "${owner}"
+            )
         endif()
         get_target_property(kind "${target}" TYPE)
         get_target_property(imported "${target}" IMPORTED)
@@ -80,30 +133,47 @@ function(pangu_configure_owned_targets directory owner)
             continue()
         endif()
         if(targetOwner STREQUAL "engine")
-            pangu_relocate_engine_outputs("${target}")
+            _pangu_relocate_engine_outputs("${target}")
         endif()
         get_target_property(source "${target}" SOURCE_DIR)
         get_target_property(included "${target}" PANGU_CONTEXT_INCLUDED)
         if(targetOwner STREQUAL "engine" AND NOT source MATCHES "/Source/ThirdParty/" AND NOT included)
-            get_property(header GLOBAL PROPERTY PANGU_LAYOUT_current_context)
-            target_compile_options("${target}" PRIVATE -include "${header}")
-            set_property(TARGET "${target}" PROPERTY PANGU_CONTEXT_INCLUDED ON)
+            get_property(header GLOBAL PROPERTY PANGU_LAYOUT_CURRENT_CONTEXT)
+            target_compile_options(
+                "${target}"
+                PRIVATE
+                    -include
+                    "${header}"
+            )
+            set_property(
+                TARGET
+                    "${target}"
+                PROPERTY
+                    PANGU_CONTEXT_INCLUDED
+                        ON
+            )
         endif()
     endforeach()
     get_property(children DIRECTORY "${directory}" PROPERTY SUBDIRECTORIES)
     foreach(child IN LISTS children)
-        pangu_configure_owned_targets("${child}" "${owner}")
+        _pangu_configure_owned_targets("${child}" "${owner}")
     endforeach()
 endfunction()
 
-function(pangu_relocate_engine_outputs target)
-    get_property(projectBuild GLOBAL PROPERTY PANGU_LAYOUT_project_build)
-    get_property(engineBuild GLOBAL PROPERTY PANGU_LAYOUT_engine_build)
+function(_pangu_relocate_engine_outputs target)
+    get_property(projectBuild GLOBAL PROPERTY PANGU_LAYOUT_PROJECT_BUILD)
+    get_property(engineBuild GLOBAL PROPERTY PANGU_LAYOUT_ENGINE_BUILD)
     if(NOT projectBuild OR NOT engineBuild)
         return()
     endif()
     get_target_property(binary "${target}" BINARY_DIR)
-    set(configurations Debug Release RelWithDebInfo MinSizeRel "${CMAKE_BUILD_TYPE}")
+    set(configurations
+        Debug
+        Release
+        RelWithDebInfo
+        MinSizeRel
+        "${CMAKE_BUILD_TYPE}"
+    )
     list(REMOVE_DUPLICATES configurations)
     foreach(kind IN ITEMS ARCHIVE LIBRARY RUNTIME)
         set(properties "${kind}_OUTPUT_DIRECTORY")
@@ -117,14 +187,37 @@ function(pangu_relocate_engine_outputs target)
                 continue()
             endif()
             cmake_path(ABSOLUTE_PATH output BASE_DIRECTORY "${binary}" NORMALIZE)
-            cmake_path(IS_PREFIX engineBuild "${output}" NORMALIZE withinEngine)
+            cmake_path(
+                IS_PREFIX
+                engineBuild
+                "${output}"
+                NORMALIZE
+                withinEngine
+            )
             if(withinEngine)
                 continue()
             endif()
-            cmake_path(IS_PREFIX projectBuild "${output}" NORMALIZE withinProject)
+            cmake_path(
+                IS_PREFIX
+                projectBuild
+                "${output}"
+                NORMALIZE
+                withinProject
+            )
             if(withinProject)
-                file(RELATIVE_PATH relative "${projectBuild}" "${output}")
-                set_property(TARGET "${target}" PROPERTY "${property}" "${engineBuild}/${relative}")
+                file(
+                    RELATIVE_PATH
+                    relative
+                    "${projectBuild}"
+                    "${output}"
+                )
+                set_property(
+                    TARGET
+                        "${target}"
+                    PROPERTY
+                        "${property}"
+                            "${engineBuild}/${relative}"
+                )
             endif()
         endforeach()
     endforeach()

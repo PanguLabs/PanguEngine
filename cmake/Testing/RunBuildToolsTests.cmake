@@ -11,11 +11,14 @@ file(MAKE_DIRECTORY "${PANGU_BUILD_TOOLS_TEST_RESULT_DIR}")
 string(TIMESTAMP stamp "%Y%m%dT%H%M%S" UTC)
 string(RANDOM LENGTH 12 ALPHABET 0123456789abcdef nonce)
 set(prefix "${PANGU_BUILD_TOOLS_TEST_RESULT_DIR}/${stamp}-${nonce}")
-execute_process(COMMAND "${CMAKE_CTEST_COMMAND}"
-    --test-dir "${PANGU_BUILD_TOOLS_TEST_BINARY_DIR}"
-    -R "${PANGU_BUILD_TOOLS_TEST_REGEX}" --no-tests=error --output-on-failure
-    --parallel "${PANGU_BUILD_TOOLS_TEST_JOBS}" --output-junit "${prefix}.xml"
-    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+execute_process(
+    COMMAND
+        "${CMAKE_CTEST_COMMAND}" --test-dir "${PANGU_BUILD_TOOLS_TEST_BINARY_DIR}" -R "${PANGU_BUILD_TOOLS_TEST_REGEX}"
+        --no-tests=error --output-on-failure --parallel "${PANGU_BUILD_TOOLS_TEST_JOBS}" --output-junit "${prefix}.xml"
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE output
+    ERROR_VARIABLE error
+)
 file(WRITE "${prefix}.log" "${output}\n${error}")
 message("${output}\n${error}")
 if(NOT result STREQUAL "0")

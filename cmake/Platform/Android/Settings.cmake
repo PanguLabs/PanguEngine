@@ -10,17 +10,21 @@ if("$ENV{ANDROID_NDK_HOME}" STREQUAL "" OR NOT IS_DIRECTORY "$ENV{ANDROID_NDK_HO
     message(FATAL_ERROR "Set ANDROID_NDK_HOME to the Android NDK installation directory.")
 endif()
 
-get_filename_component(_pangu_ndk_root "${CMAKE_ANDROID_NDK}" REALPATH)
-get_filename_component(_pangu_ndk_env "$ENV{ANDROID_NDK_HOME}" REALPATH)
-if(NOT _pangu_ndk_root STREQUAL _pangu_ndk_env)
-    message(FATAL_ERROR "Android must use the NDK selected by ANDROID_NDK_HOME.")
-endif()
-get_filename_component(_pangu_android_compiler "${CMAKE_CXX_COMPILER}" REALPATH)
-cmake_path(IS_PREFIX _pangu_ndk_root "${_pangu_android_compiler}" NORMALIZE _pangu_is_ndk_clang)
-if(NOT _pangu_is_ndk_clang)
-    message(FATAL_ERROR "Android Clang must come from the selected NDK.")
-endif()
-unset(_pangu_ndk_root)
-unset(_pangu_ndk_env)
-unset(_pangu_android_compiler)
-unset(_pangu_is_ndk_clang)
+block(SCOPE_FOR VARIABLES)
+    get_filename_component(ndkRoot "${CMAKE_ANDROID_NDK}" REALPATH)
+    get_filename_component(ndkEnvRoot "$ENV{ANDROID_NDK_HOME}" REALPATH)
+    if(NOT ndkRoot STREQUAL ndkEnvRoot)
+        message(FATAL_ERROR "Android must use the NDK selected by ANDROID_NDK_HOME.")
+    endif()
+    get_filename_component(compilerPath "${CMAKE_CXX_COMPILER}" REALPATH)
+    cmake_path(
+        IS_PREFIX
+        ndkRoot
+        "${compilerPath}"
+        NORMALIZE
+        isNdkClang
+    )
+    if(NOT isNdkClang)
+        message(FATAL_ERROR "Android Clang must come from the selected NDK.")
+    endif()
+endblock()

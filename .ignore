@@ -1,0 +1,2 @@
+# gersemi 递归扫描时跳过第三方依赖子模块的源码。
+/Source/ThirdParty/*/Repo/

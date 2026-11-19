@@ -2,8 +2,14 @@ cmake_minimum_required(VERSION 4.0)
 file(MAKE_DIRECTORY "${MARKER_ROOT}")
 set(marker "${MARKER_ROOT}/queried-access.txt")
 file(REMOVE "${marker}")
-execute_process(COMMAND "${FIXTURE}" "${marker}"
-    RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 20)
+execute_process(
+    COMMAND
+        "${FIXTURE}" "${marker}"
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE output
+    ERROR_VARIABLE error
+    TIMEOUT 20
+)
 if(NOT "${result}" STREQUAL "0")
     message(FATAL_ERROR "QueriedAccessSurvivesPhysicalUnload: exit=${result}; ${output}${error}")
 endif()

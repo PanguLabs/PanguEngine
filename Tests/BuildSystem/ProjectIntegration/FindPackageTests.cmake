@@ -6,9 +6,14 @@ endif()
 string(RANDOM LENGTH 12 ALPHABET 0123456789abcdef runId)
 set(root "${PANGU_TEST_ROOT}/${runId}/Package Discovery")
 file(MAKE_DIRECTORY "${root}")
-set(project [=[
+set(project
+    [=[
 cmake_minimum_required(VERSION 4.0)
-project(PackageDiscovery LANGUAGES NONE)
+if(SCENARIO STREQUAL "MissingC")
+    project(PackageDiscovery LANGUAGES CXX)
+else()
+    project(PackageDiscovery LANGUAGES NONE)
+endif()
 get_property(initialLanguages GLOBAL PROPERTY ENABLED_LANGUAGES)
 set(BUILD_TESTING OFF)
 list(PREPEND CMAKE_MODULE_PATH "@PANGU_SOURCE_ROOT@/cmake")
@@ -46,15 +51,44 @@ if(SCENARIO STREQUAL "RelativeBuildRoot")
     pangu_initialize()
 elseif(SCENARIO STREQUAL "UnexpectedArgument")
     pangu_initialize("")
+elseif(SCENARIO STREQUAL "MissingC")
+    pangu_initialize()
 endif()
-]=])
+]=]
+)
 string(CONFIGURE "${project}" project @ONLY)
 file(WRITE "${root}/CMakeLists.txt" "${project}")
 
-foreach(scenario IN ITEMS Implicit Explicit InvalidQuiet InvalidRequired RelativeBuildRoot UnexpectedArgument)
-    execute_process(COMMAND "${CMAKE_COMMAND}" -S "${root}" -B "${root}/${scenario}" -G Ninja
-        "-DSCENARIO=${scenario}"
-        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+foreach(
+    scenario
+    IN
+    ITEMS
+        Implicit
+        Explicit
+        InvalidQuiet
+        InvalidRequired
+        RelativeBuildRoot
+        UnexpectedArgument
+        MissingC
+)
+    set(compilerArgs)
+    if(scenario STREQUAL "MissingC")
+        set(compilerSuffix "")
+        if(CMAKE_HOST_WIN32)
+            set(compilerSuffix ".exe")
+        endif()
+        set(compilerArgs
+            "-DCMAKE_CXX_COMPILER:FILEPATH=$ENV{LLVM_ROOT}/bin/clang++${compilerSuffix}"
+            -DCMAKE_BUILD_TYPE=Release
+        )
+    endif()
+    execute_process(
+        COMMAND
+            "${CMAKE_COMMAND}" -S "${root}" -B "${root}/${scenario}" -G Ninja "-DSCENARIO=${scenario}" ${compilerArgs}
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error
+    )
     file(WRITE "${root}/${scenario}.log" "exit=${result}\n${output}\n${error}")
     set(expectedDiagnostic "")
     if(scenario STREQUAL "InvalidRequired")
@@ -63,9 +97,15 @@ foreach(scenario IN ITEMS Implicit Explicit InvalidQuiet InvalidRequired Relativ
         set(expectedDiagnostic "Pangu Engine build root must be absolute")
     elseif(scenario STREQUAL "UnexpectedArgument")
         set(expectedDiagnostic "pangu_initialize takes no arguments")
+    elseif(scenario STREQUAL "MissingC")
+        set(expectedDiagnostic "pangu_initialize requires Project languages C and CXX")
     endif()
     if(expectedDiagnostic)
-        string(FIND "${output}\n${error}" "${expectedDiagnostic}" found)
+        string(
+            FIND "${output}\n${error}"
+            "${expectedDiagnostic}"
+            found
+        )
         if(result EQUAL 0 OR found LESS 0)
             message(FATAL_ERROR "${scenario}: expected failure '${expectedDiagnostic}':\n${output}\n${error}")
         endif()

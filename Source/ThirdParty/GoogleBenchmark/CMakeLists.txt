@@ -10,7 +10,13 @@ set(BENCHMARK_ENABLE_ASSEMBLY_TESTS OFF)
 add_subdirectory(Repo EXCLUDE_FROM_ALL)
 foreach(name IN ITEMS benchmark benchmark_main)
     target_compile_features(${name} PUBLIC cxx_std_23)
-    set_property(TARGET ${name} PROPERTY PANGU_BENCHMARK_REVISION "a6b4a9f00b36c19af9997d68a1cf6e0b5b3d032c")
+    set_property(
+        TARGET
+            ${name}
+        PROPERTY
+            PANGU_BENCHMARK_REVISION
+                "a6b4a9f00b36c19af9997d68a1cf6e0b5b3d032c"
+    )
 endforeach()
 add_library(ThirdParty::GoogleBenchmark ALIAS benchmark)
 add_library(ThirdParty::GoogleBenchmarkMain ALIAS benchmark_main)

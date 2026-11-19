@@ -41,7 +41,7 @@ Data/Control/worker 的取得与释放；构造/Emit/Flush/析构关卡保持。
 Initialize 的 Data/Control 两次 Try 分配。恢复原 hook 后检查 kOutOfMemory、Closed、
 资源计数归零；生产目标没有这个 hook。Linux 保留直接 malloc 引用的 --wrap OOM 用例。
 
-`LogAssertConfig` 在四个隔离 Release/Debug × Assert ON/OFF 子图构建并执行同一
+根 full 集合中的 `LogAssertConfig` 在四个隔离 Release/Debug × Assert ON/OFF 子图构建并执行同一
 NoAllocationFixture；Windows 严格核对真实 `_ITERATOR_DEBUG_LEVEL=0/2`，Debug 必须
 交付 malloc 自验证及两例初始化恢复计数。分配门不将单个 DLL 改为 iterator ABI=0。
 编译等级为 Error 的子图通过真实 Error 提交执行同一正式夹具，不依赖被裁剪的 Info。

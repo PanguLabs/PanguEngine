@@ -3,119 +3,209 @@ include("${CMAKE_CURRENT_LIST_DIR}/ProjectTestHelpers.cmake")
 
 # 仅复制待变更的构建工具及其头依赖；Engine Runtime 始终使用真实共享源码。
 set(mirror "${PANGU_TEST_ROOT}/ToolMirror")
-file(MAKE_DIRECTORY "${mirror}/cmake" "${mirror}/BuildTools" "${mirror}/Source/ThirdParty/TomlPlusPlus/Repo")
-file(COPY "${PANGU_ENGINE_SOURCE_DIR}/cmake/PanguPlugins.cmake"
-    "${PANGU_ENGINE_SOURCE_DIR}/cmake/PanguBuildTool.cmake" DESTINATION "${mirror}/cmake")
+file(
+    MAKE_DIRECTORY
+        "${mirror}/cmake"
+        "${mirror}/BuildTools"
+        "${mirror}/Source/ThirdParty/TomlPlusPlus/Repo"
+)
+file(
+    COPY
+        "${PANGU_ENGINE_SOURCE_DIR}/cmake/PanguPlugins.cmake"
+        "${PANGU_ENGINE_SOURCE_DIR}/cmake/PanguBuildTool.cmake"
+    DESTINATION "${mirror}/cmake"
+)
 file(COPY "${PANGU_ENGINE_SOURCE_DIR}/BuildTools/PanguBuildTool" DESTINATION "${mirror}/BuildTools")
-file(COPY "${PANGU_ENGINE_SOURCE_DIR}/Source/ThirdParty/TomlPlusPlus/CMakeLists.txt"
-    DESTINATION "${mirror}/Source/ThirdParty/TomlPlusPlus")
-file(COPY "${PANGU_ENGINE_SOURCE_DIR}/Source/ThirdParty/TomlPlusPlus/Repo/include"
-    DESTINATION "${mirror}/Source/ThirdParty/TomlPlusPlus/Repo")
+file(
+    COPY
+        "${PANGU_ENGINE_SOURCE_DIR}/Source/ThirdParty/TomlPlusPlus/CMakeLists.txt"
+    DESTINATION "${mirror}/Source/ThirdParty/TomlPlusPlus"
+)
+file(
+    COPY
+        "${PANGU_ENGINE_SOURCE_DIR}/Source/ThirdParty/TomlPlusPlus/Repo/include"
+    DESTINATION "${mirror}/Source/ThirdParty/TomlPlusPlus/Repo"
+)
 file(MAKE_DIRECTORY "${mirror}/cmake/Platform/Linux")
-file(COPY "${PANGU_ENGINE_SOURCE_DIR}/cmake/Platform/Linux/Toolchain.cmake"
-    DESTINATION "${mirror}/cmake/Platform/Linux")
+file(
+    COPY
+        "${PANGU_ENGINE_SOURCE_DIR}/cmake/Platform/Linux/Toolchain.cmake"
+    DESTINATION "${mirror}/cmake/Platform/Linux"
+)
 set(enabled "fixture.physics;mygame.gameplay;mygame.editor-extras")
-ConfigureFixture(Incremental "${enabled}" PASS "" -DPANGU_FIXTURE_BUILD_HOSTS=ON
+_pangu_configure_project_fixture(
+    Incremental
+    "${enabled}"
+    PASS
+    ""
+    -DPANGU_FIXTURE_BUILD_HOSTS=ON
     -DPANGU_LINK_MODE=Modular
-    "-DPANGU_FIXTURE_PLUGIN_CMAKE_DIR:PATH=${mirror}/cmake")
-BuildFixture(MyGame)
-CheckConsumer(MyGame Modular Gameplay EditorExtras)
-BuildFixture(MyGame)
-RequireText("${commandOutput}" "no work to do")
+    "-DPANGU_FIXTURE_PLUGIN_CMAKE_DIR:PATH=${mirror}/cmake"
+)
+_pangu_build_project_fixture(MyGame)
+_pangu_check_project_consumer(MyGame Modular Gameplay EditorExtras)
+_pangu_build_project_fixture(MyGame)
+_pangu_require_test_text("${commandOutput}" "no work to do")
 file(APPEND "${source}/Plugins/EditorExtras/Private/EditorExtras.cpp" "\n// 已启用但未消费的 Plugin 变化不触发构建\n")
-BuildFixture(MyGame)
-RequireText("${commandOutput}" "no work to do")
+_pangu_build_project_fixture(MyGame)
+_pangu_require_test_text("${commandOutput}" "no work to do")
 
 set(unused "${source}/Plugins/SharedProbe")
 file(APPEND "${unused}/Private/SharedProbe.cpp" "\n// 未启用的源码变化不触发构建\n")
-BuildFixture(MyGame)
-RequireText("${commandOutput}" "no work to do")
+_pangu_build_project_fixture(MyGame)
+_pangu_require_test_text("${commandOutput}" "no work to do")
 file(APPEND "${source}/Plugins/Gameplay/Private/Gameplay.cpp" "\n// 只重编被消费的私有 TU\n")
-BuildFixture(MyGame)
-RequireText("${commandOutput}" "Gameplay.cpp")
-RejectText("${commandStdout}" "Physics.cpp")
-RejectText("${commandStdout}" "PanguFoundation.dir")
-RejectText("${commandStdout}" "EditorExtras.cpp")
-RejectText("${commandOutput}" "Re-running CMake")
+_pangu_build_project_fixture(MyGame)
+_pangu_require_test_text("${commandOutput}" "Gameplay.cpp")
+_pangu_reject_test_text("${commandStdout}" "Physics.cpp")
+_pangu_reject_test_text("${commandStdout}" "PanguFoundation.dir")
+_pangu_reject_test_text("${commandStdout}" "EditorExtras.cpp")
+_pangu_reject_test_text("${commandOutput}" "Re-running CMake")
 
 file(READ "${unused}/Plugin.toml" manifest)
 file(READ "${unused}/CMakeLists.txt" cmakeSource)
 file(WRITE "${unused}/Plugin.toml" "[plugin]\nid = 'INVALID'\n")
-ProjectCommand(FAIL "[plugin].id" "${CMAKE_COMMAND}" --build "${binary}" --target MyGame)
+_pangu_run_project_command(
+    FAIL
+    "[plugin].id"
+    "${CMAKE_COMMAND}"
+    --build
+    "${binary}"
+    --target
+    MyGame
+)
 file(WRITE "${unused}/Plugin.toml" "${manifest}")
-BuildFixture(MyGame)
-RequireText("${commandOutput}" "Re-running CMake")
-RejectText("${commandStdout}" "PanguFoundation.dir")
+_pangu_build_project_fixture(MyGame)
+_pangu_require_test_text("${commandOutput}" "Re-running CMake")
+_pangu_reject_test_text("${commandStdout}" "PanguFoundation.dir")
 foreach(name IN ITEMS Plugin.toml CMakeLists.txt)
     file(REMOVE "${unused}/${name}")
-    ProjectCommand(FAIL "both Plugin.toml and CMakeLists.txt" "${CMAKE_COMMAND}" --build "${binary}" --target MyGame)
+    _pangu_run_project_command(
+        FAIL
+        "both Plugin.toml and CMakeLists.txt"
+        "${CMAKE_COMMAND}"
+        --build
+        "${binary}"
+        --target
+        MyGame
+    )
     file(WRITE "${unused}/Plugin.toml" "${manifest}")
     file(WRITE "${unused}/CMakeLists.txt" "${cmakeSource}")
-    BuildFixture(MyGame)
+    _pangu_build_project_fixture(MyGame)
 endforeach()
 file(APPEND "${unused}/CMakeLists.txt" "\nmessage(FATAL_ERROR \"Disabled plugin must never execute\")\n")
-BuildFixture(MyGame)
-RequireText("${commandOutput}" "Re-running CMake")
+_pangu_build_project_fixture(MyGame)
+_pangu_require_test_text("${commandOutput}" "Re-running CMake")
 
 set(newPlugin "${source}/Plugins/NewPlugin")
 file(MAKE_DIRECTORY "${newPlugin}")
 file(WRITE "${newPlugin}/Plugin.toml" "[plugin]\nid = 'INVALID'\n")
 file(WRITE "${newPlugin}/CMakeLists.txt" "message(FATAL_ERROR \"not enabled\")\n")
-BuildFixture(MyGame)
-RequireText("${commandOutput}" "no work to do")
-ConfigureFixture(Incremental "${enabled}" FAIL "[plugin].id")
+_pangu_build_project_fixture(MyGame)
+_pangu_require_test_text("${commandOutput}" "no work to do")
+_pangu_configure_project_fixture(Incremental "${enabled}" FAIL "[plugin].id")
 file(WRITE "${newPlugin}/Plugin.toml" "[plugin]\nid = 'mygame.new-plugin'\n")
-ConfigureFixture(Incremental "fixture.physics;mygame.gameplay" PASS ""
-    -DPANGU_FIXTURE_BUILD_HOSTS=OFF "-DPANGU_FIXTURE_PROBE_DEPENDENCIES:STRING=MyGameGameplay")
-BuildFixture(MyGameProbe)
-ProjectCommand(PASS "" ninja -C "${binary}" -t targets all)
-RejectText("${commandOutput}" "MyGameEditorExtras")
+_pangu_configure_project_fixture(
+    Incremental
+    "fixture.physics;mygame.gameplay"
+    PASS
+    ""
+    -DPANGU_FIXTURE_BUILD_HOSTS=OFF
+    "-DPANGU_FIXTURE_PROBE_DEPENDENCIES:STRING=MyGameGameplay"
+)
+_pangu_build_project_fixture(MyGameProbe)
+_pangu_run_project_command(
+    PASS
+    ""
+    ninja
+    -C
+    "${binary}"
+    -t
+    targets
+    all
+)
+_pangu_reject_test_text("${commandOutput}" "MyGameEditorExtras")
 
 if(CMAKE_HOST_WIN32)
     set(executableSuffix .exe)
 endif()
 set(tool "${binary}/BuildTools/PanguBuildTool/PanguBuildTool${executableSuffix}")
-file(TIMESTAMP "${tool}" before "%s")
-execute_process(COMMAND "${CMAKE_COMMAND}" -E sleep 1)
+file(
+    TIMESTAMP "${tool}"
+    before
+    "%s"
+)
+execute_process(
+    COMMAND
+        "${CMAKE_COMMAND}" -E sleep 1
+)
 file(APPEND "${mirror}/BuildTools/PanguBuildTool/Private/PluginJson.cpp" "\n// 工具源码失效不应重编 Runtime\n")
-BuildFixture(MyGameProbe)
-RequireText("${commandOutput}" "Re-running CMake")
-RejectText("${commandStdout}" "PanguFoundation.dir")
-RejectText("${commandStdout}" "Physics.cpp")
-RejectText("${commandStdout}" "Gameplay.cpp")
-file(TIMESTAMP "${tool}" after "%s")
+_pangu_build_project_fixture(MyGameProbe)
+_pangu_require_test_text("${commandOutput}" "Re-running CMake")
+_pangu_reject_test_text("${commandStdout}" "PanguFoundation.dir")
+_pangu_reject_test_text("${commandStdout}" "Physics.cpp")
+_pangu_reject_test_text("${commandStdout}" "Gameplay.cpp")
+file(
+    TIMESTAMP "${tool}"
+    after
+    "%s"
+)
 if(NOT after GREATER before)
     message(FATAL_ERROR "Changed tool was not rebuilt")
 endif()
-BuildFixture(MyGameProbe)
-RequireText("${commandOutput}" "no work to do")
+_pangu_build_project_fixture(MyGameProbe)
+_pangu_require_test_text("${commandOutput}" "no work to do")
 if(CMAKE_HOST_WIN32)
     # 复用已准备的工具镜像，承接原 BuildToolSourceChange 的失败阻断与修复恢复回归。
     set(toolSource "${mirror}/BuildTools/PanguBuildTool/Private/PluginJson.cpp")
     file(READ "${toolSource}" validToolSource)
     file(APPEND "${toolSource}" "\n#error intentional_host_tool_build_failure\n")
-    ProjectCommand(FAIL "PanguBuildTool host build failed" "${CMAKE_COMMAND}" --build "${binary}"
-        --parallel "${PANGU_TEST_BUILD_JOBS}" --target MyGameProbe)
+    _pangu_run_project_command(
+        FAIL
+        "PanguBuildTool host build failed"
+        "${CMAKE_COMMAND}"
+        --build
+        "${binary}"
+        --parallel
+        "${PANGU_TEST_BUILD_JOBS}"
+        --target
+        MyGameProbe
+    )
     file(WRITE "${toolSource}" "${validToolSource}")
-    BuildFixture(MyGameProbe)
-    RequireText("${commandOutput}" "Re-running CMake")
-    BuildFixture(MyGameProbe)
-    RequireText("${commandOutput}" "no work to do")
+    _pangu_build_project_fixture(MyGameProbe)
+    _pangu_require_test_text("${commandOutput}" "Re-running CMake")
+    _pangu_build_project_fixture(MyGameProbe)
+    _pangu_require_test_text("${commandOutput}" "no work to do")
 endif()
 # 同一 Project 构建树往返；旧部署可以保留，但当前 Mono 消费命令不能引用它。
 foreach(mode IN ITEMS Modular Monolithic Modular)
-    ConfigureFixture(ModeSwitch "${enabled}" PASS "" -DPANGU_FIXTURE_BUILD_HOSTS=ON
-        "-DPANGU_LINK_MODE=${mode}")
-    BuildFixture(MyGame)
-    CheckConsumer(MyGame "${mode}" Gameplay EditorExtras)
-    ProjectCommand(PASS "" ninja -C "${binary}" -t commands MyGame)
+    _pangu_configure_project_fixture(
+        ModeSwitch
+        "${enabled}"
+        PASS
+        ""
+        -DPANGU_FIXTURE_BUILD_HOSTS=ON
+        "-DPANGU_LINK_MODE=${mode}"
+    )
+    _pangu_build_project_fixture(MyGame)
+    _pangu_check_project_consumer(MyGame "${mode}" Gameplay EditorExtras)
+    _pangu_run_project_command(
+        PASS
+        ""
+        ninja
+        -C
+        "${binary}"
+        -t
+        commands
+        MyGame
+    )
     if(mode STREQUAL "Monolithic")
-        RejectText("${commandOutput}" "Deploy/Modular")
-        RejectText("${commandOutput}" "ModuleQuery.cpp")
-        RejectText("${commandOutput}" "ModuleQuery.gen.cpp")
+        _pangu_reject_test_text("${commandOutput}" "Deploy/Modular")
+        _pangu_reject_test_text("${commandOutput}" "ModuleQuery.cpp")
+        _pangu_reject_test_text("${commandOutput}" "ModuleQuery.gen.cpp")
     endif()
-    BuildFixture(MyGame)
-    RequireText("${commandOutput}" "no work to do")
+    _pangu_build_project_fixture(MyGame)
+    _pangu_require_test_text("${commandOutput}" "no work to do")
 endforeach()
 include("${CMAKE_CURRENT_LIST_DIR}/PluginScaleTests.cmake")
 message(STATUS "Native TU/tool invalidation and recovery, disabled input validation and 0/10/100 plugin scale passed")

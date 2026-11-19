@@ -20,9 +20,17 @@ else()
     add_executable(FlecsCompileProbe CompileProbe.cpp)
 endif()
 target_compile_features(FlecsCompileProbe PRIVATE cxx_std_23)
-target_compile_definitions(FlecsCompileProbe PRIVATE
-    PANGU_PROBE_FLECS_STATIC=$<STREQUAL:${expectedType},STATIC_LIBRARY>)
+target_compile_definitions(
+    FlecsCompileProbe
+    PRIVATE
+        PANGU_PROBE_FLECS_STATIC=$<STREQUAL:${expectedType},STATIC_LIBRARY>
+)
 target_link_libraries(FlecsCompileProbe PRIVATE ThirdParty::Flecs)
-set_target_properties(FlecsCompileProbe PROPERTIES
-    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Tests/Toolchain"
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Tests/Toolchain")
+set_target_properties(
+    FlecsCompileProbe
+    PROPERTIES
+        ARCHIVE_OUTPUT_DIRECTORY
+            "${CMAKE_BINARY_DIR}/Tests/Toolchain"
+        RUNTIME_OUTPUT_DIRECTORY
+            "${CMAKE_BINARY_DIR}/Tests/Toolchain"
+)

@@ -9,7 +9,18 @@ include("${PANGU_ENGINE_ROOT}/cmake/PanguTestDependencies.cmake")
 include("${PANGU_ENGINE_ROOT}/cmake/PanguTesting.cmake")
 set(BUILD_SHARED_LIBS ON)
 if(MODE STREQUAL "include-only")
-    foreach(name IN ITEMS gtest gtest_main gmock gmock_main PanguTestsFast PanguTestsPrecommit PanguTestsFull)
+    foreach(
+        name
+        IN
+        ITEMS
+            gtest
+            gtest_main
+            gmock
+            gmock_main
+            PanguTestsFast
+            PanguTestsPrecommit
+            PanguTestsFull
+    )
         if(TARGET "${name}")
             message(FATAL_ERROR "include created target ${name}")
         endif()
@@ -26,14 +37,45 @@ if(MODE STREQUAL "disabled")
 endif()
 if(MODE STREQUAL "plain")
     pangu_test_context(OWNER project ENABLED ON PLUGIN_ID fixture.tests)
-    add_custom_target(FixtureDependency
-        COMMAND "${CMAKE_COMMAND}" -E touch "${CMAKE_CURRENT_BINARY_DIR}/dependency-built")
-    pangu_register_test(NAME PlainFast COMMAND "${CMAKE_COMMAND}" -E true
-        BOUNDARY unit AREA build TIER fast)
-    pangu_register_test(NAME PlainPrecommit COMMAND "${CMAKE_COMMAND}" -E true
-        BOUNDARY integration AREA build TIER precommit BUILD_TARGETS FixtureDependency PROCESSORS 2)
-    pangu_register_test(NAME PlainFull COMMAND "${CMAKE_COMMAND}" -E true
-        BOUNDARY system AREA build TIER full TIMEOUT 900)
+    add_custom_target(
+        FixtureDependency
+        COMMAND
+            "${CMAKE_COMMAND}" -E touch "${CMAKE_CURRENT_BINARY_DIR}/dependency-built"
+    )
+    pangu_register_test(
+        NAME PlainFast
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E
+            true
+        BOUNDARY unit
+        AREA build
+        TIER fast
+    )
+    pangu_register_test(
+        NAME PlainPrecommit
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E
+            true
+        BOUNDARY integration
+        AREA build
+        TIER precommit
+        BUILD_TARGETS
+            FixtureDependency
+        PROCESSORS 2
+    )
+    pangu_register_test(
+        NAME PlainFull
+        COMMAND
+            "${CMAKE_COMMAND}"
+            -E
+            true
+        BOUNDARY system
+        AREA build
+        TIER full
+        TIMEOUT 900
+    )
     return()
 endif()
 if(MODE STREQUAL "foreign")
@@ -51,7 +93,13 @@ if(MODE STREQUAL "repeat")
     pangu_require_googletest(RTTI ON)
     return()
 elseif(MODE STREQUAL "conflict")
-    set_property(TARGET gtest PROPERTY PANGU_TEST_RTTI OFF)
+    set_property(
+        TARGET
+            gtest
+        PROPERTY
+            PANGU_TEST_RTTI
+                OFF
+    )
     pangu_require_googletest(RTTI ON)
     return()
 elseif(MODE STREQUAL "contract-conflict")
@@ -59,11 +107,23 @@ elseif(MODE STREQUAL "contract-conflict")
     pangu_require_googletest(RTTI ON)
     return()
 elseif(MODE STREQUAL "definitions-conflict")
-    set_property(TARGET gtest PROPERTY COMPILE_DEFINITIONS "GTEST_HAS_EXCEPTIONS=1;GTEST_HAS_RTTI=1")
+    set_property(
+        TARGET
+            gtest
+        PROPERTY
+            COMPILE_DEFINITIONS
+                "GTEST_HAS_EXCEPTIONS=1;GTEST_HAS_RTTI=1"
+    )
     pangu_require_googletest(RTTI ON)
     return()
 elseif(MODE STREQUAL "rtti-definitions-conflict")
-    set_property(TARGET gtest PROPERTY INTERFACE_COMPILE_DEFINITIONS "GTEST_HAS_EXCEPTIONS=0;GTEST_HAS_RTTI=0")
+    set_property(
+        TARGET
+            gtest
+        PROPERTY
+            INTERFACE_COMPILE_DEFINITIONS
+                "GTEST_HAS_EXCEPTIONS=0;GTEST_HAS_RTTI=0"
+    )
     pangu_require_googletest(RTTI ON)
     return()
 endif()
@@ -89,8 +149,17 @@ set(tier fast)
 if(MODE STREQUAL "invalid-tier")
     set(tier immediate)
 endif()
-pangu_register_gtest(TARGET Registration BOUNDARY unit AREA foundation TIER "${tier}"
-    TYPES contract regression REQUIRES subprocess)
+pangu_register_gtest(
+    TARGET Registration
+    BOUNDARY unit
+    AREA foundation
+    TIER "${tier}"
+    TYPES
+        contract
+        regression
+    REQUIRES
+        subprocess
+)
 if(MODE STREQUAL "duplicate")
     pangu_register_gtest(TARGET Registration BOUNDARY unit AREA foundation TIER fast)
 endif()

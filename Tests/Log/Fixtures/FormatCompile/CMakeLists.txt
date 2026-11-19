@@ -6,7 +6,18 @@ endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
-foreach(name IN ITEMS Positive UnsupportedFormatter RuntimeFormat RuntimeFormatObject RuntimeText RawPointer LongDouble)
+foreach(
+    name
+    IN
+    ITEMS
+        Positive
+        UnsupportedFormatter
+        RuntimeFormat
+        RuntimeFormatObject
+        RuntimeText
+        RawPointer
+        LongDouble
+)
     add_library(${name} OBJECT "${name}.cpp")
     target_include_directories(${name} PRIVATE ${PANGU_FORMAT_INCLUDES})
     target_compile_definitions(${name} PRIVATE FMT_EXCEPTIONS=0)

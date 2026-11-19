@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 4.0)
-project(PanguModuleRegression LANGUAGES CXX)
+project(
+    PanguModuleRegression
+    LANGUAGES
+        C
+        CXX
+)
 include(CTest)
 set(PANGU_LINK_MODE Monolithic CACHE STRING "Module regression linkage" FORCE)
 set(PANGU_BUILD_ENGINE_TESTS ON CACHE BOOL "Build Engine tests" FORCE)

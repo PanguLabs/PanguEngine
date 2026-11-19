@@ -2,14 +2,33 @@ include("${CMAKE_CURRENT_LIST_DIR}/Helpers.cmake")
 if(CMAKE_HOST_WIN32)
     set(CMAKE_EXECUTABLE_SUFFIX .exe)
 endif()
-Configure(Default PASS "" -DEXPECT_MODE=Modular)
-BuildAndRun(Default)
+_pangu_configure_link_mode_fixture(Default PASS "" -DEXPECT_MODE=Modular)
+_pangu_build_and_run_link_mode_fixture(Default)
 foreach(mode IN ITEMS Monolithic Modular)
-    Configure("NormalParent${mode}" PASS "" "-DFIXTURE_PARENT_MODE=${mode}" "-DEXPECT_MODE=${mode}")
-    BuildAndRun("NormalParent${mode}")
-    Configure("Parent${mode}" PASS "" "-DPANGU_LINK_MODE=${mode}" "-DEXPECT_MODE=${mode}")
-    BuildAndRun("Parent${mode}")
-    Run(PASS "ModeConsumerSmoke" "${CMAKE_CTEST_COMMAND}" --test-dir "${PANGU_TEST_ROOT}/Parent${mode}" -N)
+    _pangu_configure_link_mode_fixture(
+        "NormalParent${mode}"
+        PASS
+        ""
+        "-DFIXTURE_PARENT_MODE=${mode}"
+        "-DEXPECT_MODE=${mode}"
+    )
+    _pangu_build_and_run_link_mode_fixture("NormalParent${mode}")
+    _pangu_configure_link_mode_fixture(
+        "Parent${mode}"
+        PASS
+        ""
+        "-DPANGU_LINK_MODE=${mode}"
+        "-DEXPECT_MODE=${mode}"
+    )
+    _pangu_build_and_run_link_mode_fixture("Parent${mode}")
+    _pangu_run_link_mode_command(
+        PASS
+        "ModeConsumerSmoke"
+        "${CMAKE_CTEST_COMMAND}"
+        --test-dir
+        "${PANGU_TEST_ROOT}/Parent${mode}"
+        -N
+    )
     if(mode STREQUAL "Modular" AND NOT commandOutput MATCHES "QueryEngineHostSmoke")
         message(FATAL_ERROR "Modular EngineHost Query smoke test is missing")
     elseif(mode STREQUAL "Monolithic" AND commandOutput MATCHES "QueryEngineHostSmoke")
@@ -20,22 +39,78 @@ foreach(mode IN ITEMS Monolithic Modular)
     else()
         set(wrong SHARED)
     endif()
-    Configure("Wrong${mode}" FAIL "does not match PANGU_LINK_MODE" "-DPANGU_LINK_MODE=${mode}"
-        "-DFIXTURE_WRONG_TYPE=${wrong}" "-DEXPECT_MODE=${mode}")
+    _pangu_configure_link_mode_fixture(
+        "Wrong${mode}"
+        FAIL
+        "does not match PANGU_LINK_MODE"
+        "-DPANGU_LINK_MODE=${mode}"
+        "-DFIXTURE_WRONG_TYPE=${wrong}"
+        "-DEXPECT_MODE=${mode}"
+    )
 endforeach()
-Configure(Lowercase FAIL "Invalid PANGU_LINK_MODE" -DPANGU_LINK_MODE=modular -DEXPECT_MODE=Modular)
-Configure(Empty FAIL "Invalid PANGU_LINK_MODE" -DPANGU_LINK_MODE:STRING= -DEXPECT_MODE=Modular)
-Configure(MidGraph FAIL "Invalid PANGU_LINK_MODE" -DPANGU_LINK_MODE=Modular -DFIXTURE_CHANGE_MODE=ON
-    -DEXPECT_MODE=Modular)
-foreach(system IN ITEMS Windows Linux Darwin Android iOS)
-    Run(PASS "" "${CMAKE_COMMAND}" "-DPANGU_SOURCE_ROOT=${PANGU_SOURCE_ROOT}"
-        "-DCMAKE_SYSTEM_NAME=${system}" -P "${CMAKE_CURRENT_LIST_DIR}/DefaultModeTests.cmake")
+_pangu_configure_link_mode_fixture(
+    Lowercase
+    FAIL
+    "Invalid PANGU_LINK_MODE"
+    -DPANGU_LINK_MODE=modular
+    -DEXPECT_MODE=Modular
+)
+_pangu_configure_link_mode_fixture(
+    Empty
+    FAIL
+    "Invalid PANGU_LINK_MODE"
+    -DPANGU_LINK_MODE:STRING=
+    -DEXPECT_MODE=Modular
+)
+_pangu_configure_link_mode_fixture(
+    MidGraph
+    FAIL
+    "Invalid PANGU_LINK_MODE"
+    -DPANGU_LINK_MODE=Modular
+    -DFIXTURE_CHANGE_MODE=ON
+    -DEXPECT_MODE=Modular
+)
+foreach(
+    system
+    IN
+    ITEMS
+        Windows
+        Linux
+        Darwin
+        Android
+        iOS
+)
+    _pangu_run_link_mode_command(
+        PASS
+        ""
+        "${CMAKE_COMMAND}"
+        "-DPANGU_SOURCE_ROOT=${PANGU_SOURCE_ROOT}"
+        "-DCMAKE_SYSTEM_NAME=${system}"
+        -P
+        "${CMAKE_CURRENT_LIST_DIR}/DefaultModeTests.cmake"
+    )
 endforeach()
 
 # 正式五平台 preset 明确记录默认模式；命令行和父 Project 仍可覆盖。
-foreach(platform IN ITEMS Windows Linux macOS Android iOS)
+foreach(
+    platform
+    IN
+    ITEMS
+        Windows
+        Linux
+        macOS
+        Android
+        iOS
+)
     file(READ "${PANGU_SOURCE_ROOT}/cmake/Platform/${platform}/CMakePresets.json" presets)
-    string(JSON presetMode GET "${presets}" configurePresets 0 cacheVariables PANGU_LINK_MODE)
+    string(
+        JSON presetMode
+        GET "${presets}"
+        configurePresets
+        0
+        cacheVariables
+        PANGU_LINK_MODE
+    )
     if(platform STREQUAL "Android" OR platform STREQUAL "iOS")
         set(expected Monolithic)
     else()

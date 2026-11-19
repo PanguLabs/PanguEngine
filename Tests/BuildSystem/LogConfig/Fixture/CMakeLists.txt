@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 4.0)
-project(AssertConfig LANGUAGES CXX)
+project(
+    AssertConfig
+    LANGUAGES
+        C
+        CXX
+)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
     message(FATAL_ERROR "AssertConfig requires Clang")
@@ -14,19 +19,56 @@ if(CMAKE_CROSSCOMPILING)
     return()
 endif()
 add_library(AssertOtherConsumer STATIC OtherConsumer.cpp)
-target_link_libraries(AssertOtherConsumer PRIVATE PanguBuildOptions Pangu::Foundation)
-target_compile_definitions(AssertOtherConsumer PRIVATE EXPECT_ASSERTS=${EXPECT_ASSERTS} EXPECT_LEVEL=3)
+target_link_libraries(
+    AssertOtherConsumer
+    PRIVATE
+        PanguBuildOptions
+        Pangu::Foundation
+)
+target_compile_definitions(
+    AssertOtherConsumer
+    PRIVATE
+        EXPECT_ASSERTS=${EXPECT_ASSERTS}
+        EXPECT_LEVEL=3
+)
 add_library(AssertThirdParty STATIC ThirdParty.cpp)
 target_compile_features(AssertThirdParty PRIVATE cxx_std_23)
 target_compile_definitions(AssertThirdParty PRIVATE EXPECT_NDEBUG=$<NOT:$<CONFIG:Debug>>)
 add_executable(AssertConfigConsumer Consumer.cpp)
-target_link_libraries(AssertConfigConsumer PRIVATE PanguBuildOptions Pangu::Foundation AssertOtherConsumer AssertThirdParty)
-target_compile_definitions(AssertConfigConsumer PRIVATE EXPECT_ASSERTS=${EXPECT_ASSERTS} EXPECT_LEVEL=3)
+target_link_libraries(
+    AssertConfigConsumer
+    PRIVATE
+        PanguBuildOptions
+        Pangu::Foundation
+        AssertOtherConsumer
+        AssertThirdParty
+)
+target_compile_definitions(
+    AssertConfigConsumer
+    PRIVATE
+        EXPECT_ASSERTS=${EXPECT_ASSERTS}
+        EXPECT_LEVEL=3
+)
 add_executable(PanguFoundationFatalFixture "${PANGU_SOURCE_ROOT}/Tests/Foundation/FatalFixture.cpp")
-target_link_libraries(PanguFoundationFatalFixture PRIVATE PanguBuildOptions Pangu::Foundation)
-set_target_properties(AssertConfigConsumer PanguFoundationFatalFixture PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${PANGU_ENGINE_BUILD_ROOT}/Bin")
-add_custom_target(AssertConfigFixtures DEPENDS AssertConfigConsumer PanguFoundationFatalFixture)
+target_link_libraries(
+    PanguFoundationFatalFixture
+    PRIVATE
+        PanguBuildOptions
+        Pangu::Foundation
+)
+set_target_properties(
+    AssertConfigConsumer
+    PanguFoundationFatalFixture
+    PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY
+            "${PANGU_ENGINE_BUILD_ROOT}/Bin"
+)
+add_custom_target(
+    AssertConfigFixtures
+    DEPENDS
+        AssertConfigConsumer
+        PanguFoundationFatalFixture
+)
 include("${PANGU_SOURCE_ROOT}/Tests/Log/NoAllocationFixture.cmake")
-pangu_add_log_allocation_fixture("${PANGU_SOURCE_ROOT}" "${PANGU_ENGINE_BUILD_ROOT}")
+_pangu_add_log_allocation_fixture("${PANGU_SOURCE_ROOT}" "${PANGU_ENGINE_BUILD_ROOT}")
 add_dependencies(AssertConfigFixtures PanguLogNoAllocationFixture)

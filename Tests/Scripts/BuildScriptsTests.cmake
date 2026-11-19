@@ -7,7 +7,13 @@ endif()
 if(CMAKE_HOST_WIN32)
     find_program(shell NAMES powershell REQUIRED)
     set(script "${PANGU_SOURCE_ROOT}/Scripts/build.ps1")
-    set(launcher "${shell}" -NoProfile -ExecutionPolicy Bypass -File)
+    set(launcher
+        "${shell}"
+        -NoProfile
+        -ExecutionPolicy
+        Bypass
+        -File
+    )
     set(platform windows)
     set(mobile android)
     set(foreign macos)
@@ -48,32 +54,50 @@ endif()
 set(fixture "${PANGU_TEST_ROOT}/repository with spaces")
 set(stubs "${PANGU_TEST_ROOT}/stub tools")
 set(log "${PANGU_TEST_ROOT}/calls.log")
-file(MAKE_DIRECTORY "${fixture}/Scripts" "${stubs}" "${PANGU_TEST_ROOT}/caller")
+file(
+    MAKE_DIRECTORY
+        "${fixture}/Scripts"
+        "${stubs}"
+        "${PANGU_TEST_ROOT}/caller"
+)
 file(COPY "${script}" DESTINATION "${fixture}/Scripts")
 file(WRITE "${fixture}/CMakePresets.json" "{}\n")
 get_filename_component(scriptName "${script}" NAME)
 set(script "${fixture}/Scripts/${scriptName}")
 
-function(run expected)
-    execute_process(COMMAND ${launcher} "${script}" ${ARGN}
+function(_pangu_run_build_script expected)
+    execute_process(
+        COMMAND
+            ${launcher} "${script}" ${ARGN}
         WORKING_DIRECTORY "${PANGU_TEST_ROOT}/caller"
-        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error
-        TIMEOUT 30)
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error
+        TIMEOUT 30
+    )
     if(NOT "${result}" STREQUAL "${expected}")
         message(FATAL_ERROR "Unexpected exit ${result}, expected ${expected}: ${ARGN}\n${output}\n${error}")
     endif()
     set(output "${output}\n${error}" PARENT_SCOPE)
 endfunction()
 
-function(contains needle)
-    string(FIND "${output}" "${needle}" index)
+function(_pangu_require_build_output needle)
+    string(
+        FIND "${output}"
+        "${needle}"
+        index
+    )
     if(index LESS 0)
         message(FATAL_ERROR "Missing '${needle}':\n${output}")
     endif()
 endfunction()
 
-function(excludes needle)
-    string(FIND "${output}" "${needle}" index)
+function(_pangu_reject_build_output needle)
+    string(
+        FIND "${output}"
+        "${needle}"
+        index
+    )
     if(NOT index LESS 0)
         message(FATAL_ERROR "Unexpected '${needle}':\n${output}")
     endif()
@@ -84,120 +108,273 @@ set(ENV{PANGU_STUB_LOG} "${log}")
 set(ENV{PANGU_STUB_FAIL} "")
 if(CMAKE_HOST_WIN32)
     set(ENV{PATH} "${stubs};$ENV{PATH}")
-    file(WRITE "${stubs}/cmake.cmd" [=[@echo off
+    file(
+        WRITE "${stubs}/cmake.cmd"
+        [=[@echo off
 set stage=configure
 if "%~1"=="--build" set stage=build
 echo %stage%>>"%PANGU_STUB_LOG%"
 echo %CD%>>"%PANGU_STUB_LOG%"
 if "%PANGU_STUB_FAIL%"=="%stage%" exit /b 37
 exit /b 0
-]=])
-    file(WRITE "${stubs}/ctest.cmd" [=[@echo off
+]=]
+    )
+    file(
+        WRITE "${stubs}/ctest.cmd"
+        [=[@echo off
 echo test>>"%PANGU_STUB_LOG%"
 if "%PANGU_STUB_FAIL%"=="test" exit /b 37
 exit /b 0
-]=])
+]=]
+    )
 else()
     set(ENV{PATH} "${stubs}:$ENV{PATH}")
-    file(WRITE "${stubs}/cmake" [=[#!/bin/sh
+    file(
+        WRITE "${stubs}/cmake"
+        [=[#!/bin/sh
 stage=configure
 if [ "$1" = --build ]; then stage=build; fi
 printf '%s\n%s\n' "$stage" "$PWD" >> "$PANGU_STUB_LOG"
 if [ "$PANGU_STUB_FAIL" = "$stage" ]; then exit 37; fi
-]=])
-    file(WRITE "${stubs}/ctest" [=[#!/bin/sh
+]=]
+    )
+    file(
+        WRITE "${stubs}/ctest"
+        [=[#!/bin/sh
 printf 'test\n' >> "$PANGU_STUB_LOG"
 if [ "$PANGU_STUB_FAIL" = test ]; then exit 37; fi
 exit 0
-]=])
-    file(CHMOD "${stubs}/cmake" "${stubs}/ctest"
-        PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+]=]
+    )
+    file(
+        CHMOD
+            "${stubs}/cmake"
+            "${stubs}/ctest"
+        PERMISSIONS
+            OWNER_READ
+            OWNER_WRITE
+            OWNER_EXECUTE
+            GROUP_READ
+            GROUP_EXECUTE
+            WORLD_READ
+            WORLD_EXECUTE
+    )
 endif()
 file(WRITE "${log}" "")
 
-run(0)
-foreach(action IN ITEMS configure build runtime fast precommit full benchmarks mobile-link)
-    contains("${action}")
+_pangu_run_build_script(0)
+foreach(
+    action
+    IN
+    ITEMS
+        configure
+        build
+        runtime
+        fast
+        precommit
+        full
+        benchmarks
+        mobile-link
+)
+    _pangu_require_build_output("${action}")
 endforeach()
-run(0 help)
-foreach(action IN ITEMS configure build runtime fast precommit full benchmarks)
-    run(0 "${action}" "${dry}")
-    contains("--preset")
-    contains("${platform}")
-    contains("-DCMAKE_BUILD_TYPE=Release")
-    contains("-DPANGU_LINK_MODE=Modular")
+_pangu_run_build_script(0 help)
+foreach(
+    action
+    IN
+    ITEMS
+        configure
+        build
+        runtime
+        fast
+        precommit
+        full
+        benchmarks
+)
+    _pangu_run_build_script(
+        0
+        "${action}"
+        "${dry}"
+    )
+    _pangu_require_build_output("--preset")
+    _pangu_require_build_output("${platform}")
+    _pangu_require_build_output("-DCMAKE_BUILD_TYPE=Release")
+    _pangu_require_build_output("-DPANGU_LINK_MODE=Modular")
     if(action STREQUAL "runtime")
-        contains("-DBUILD_TESTING=OFF")
-        contains("-DPANGU_BUILD_ENGINE_TESTS=OFF")
+        _pangu_require_build_output("-DBUILD_TESTING=OFF")
+        _pangu_require_build_output("-DPANGU_BUILD_ENGINE_TESTS=OFF")
     else()
-        contains("-DBUILD_TESTING=ON")
-        contains("-DPANGU_BUILD_ENGINE_TESTS=ON")
+        _pangu_require_build_output("-DBUILD_TESTING=ON")
+        _pangu_require_build_output("-DPANGU_BUILD_ENGINE_TESTS=ON")
     endif()
-    excludes("PANGU_BUILD_SAMPLES")
+    _pangu_reject_build_output("PANGU_BUILD_SAMPLES")
     if(action STREQUAL "benchmarks")
-        contains("-DPANGU_BUILD_BENCHMARKS=ON")
-        contains("-DPANGU_BUILD_META_BENCHMARKS=ON")
-        contains("PanguModuleBenchmarks")
-        contains("PanguLogBenchmarks")
-        contains("PanguMetaAccessBenchmarks")
+        _pangu_require_build_output("-DPANGU_BUILD_BENCHMARKS=ON")
+        _pangu_require_build_output("-DPANGU_BUILD_META_BENCHMARKS=ON")
+        _pangu_require_build_output("PanguModuleBenchmarks")
+        _pangu_require_build_output("PanguLogBenchmarks")
+        _pangu_require_build_output("PanguMetaAccessBenchmarks")
     else()
-        contains("-DPANGU_BUILD_BENCHMARKS=OFF")
-        contains("-DPANGU_BUILD_META_BENCHMARKS=OFF")
+        _pangu_require_build_output("-DPANGU_BUILD_BENCHMARKS=OFF")
+        _pangu_require_build_output("-DPANGU_BUILD_META_BENCHMARKS=OFF")
     endif()
     if(action MATCHES "^(fast|precommit|full)$")
-        contains("${platform}-${action}")
-        contains("ctest")
+        _pangu_require_build_output("${platform}-${action}")
+        _pangu_require_build_output("ctest")
     else()
-        excludes("ctest --preset")
+        _pangu_reject_build_output("ctest --preset")
     endif()
     if(action STREQUAL "configure")
-        excludes("--build")
+        _pangu_reject_build_output("--build")
     else()
-        contains("--build")
+        _pangu_require_build_output("--build")
     endif()
 endforeach()
-run(2 samples "${dry}")
-run(0 build "${dry}" "${targetFlag}" PanguMinimalHost)
-contains("PanguMinimalHost")
-contains("-DPANGU_BUILD_ENGINE_TESTS=ON")
-excludes("PANGU_BUILD_SAMPLES")
-run(0 build "${dry}" "${configFlag}" Debug "${modeFlag}" Monolithic
-    "${freshFlag}" "${jobsFlag}" 2 "${targetFlag}" "Target With Spaces")
-contains("-DCMAKE_BUILD_TYPE=Debug")
-contains("-DPANGU_LINK_MODE=Monolithic")
-contains("--fresh")
-contains("--parallel")
+_pangu_run_build_script(
+    2
+    samples
+    "${dry}"
+)
+_pangu_run_build_script(
+    0
+    build
+    "${dry}"
+    "${targetFlag}"
+    PanguMinimalHost
+)
+_pangu_require_build_output("PanguMinimalHost")
+_pangu_require_build_output("-DPANGU_BUILD_ENGINE_TESTS=ON")
+_pangu_reject_build_output("PANGU_BUILD_SAMPLES")
+_pangu_run_build_script(
+    0
+    build
+    "${dry}"
+    "${configFlag}"
+    Debug
+    "${modeFlag}"
+    Monolithic
+    "${freshFlag}"
+    "${jobsFlag}"
+    2
+    "${targetFlag}"
+    "Target With Spaces"
+)
+_pangu_require_build_output("-DCMAKE_BUILD_TYPE=Debug")
+_pangu_require_build_output("-DPANGU_LINK_MODE=Monolithic")
+_pangu_require_build_output("--fresh")
+_pangu_require_build_output("--parallel")
 if(CMAKE_HOST_WIN32)
-    contains("'Target With Spaces'")
+    _pangu_require_build_output("'Target With Spaces'")
 else()
-    contains("Target\\ With\\ Spaces")
+    _pangu_require_build_output("Target\\ With\\ Spaces")
 endif()
 
 if(CMAKE_HOST_WIN32 OR CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
-    run(0 build "${dry}" "${platformFlag}" "${mobile}")
-    contains("${mobile}-arm64")
-    contains("-DPANGU_LINK_MODE=Monolithic")
-    contains("-DBUILD_TESTING=OFF")
-    run(0 mobile-link "${dry}" "${platformFlag}" "${mobile}" "${modeFlag}" Modular)
-    contains("CrossCompileTests.cmake")
-    contains("-DPANGU_LINK_MODE=Modular")
-    contains("-DBUILD_TESTING=ON")
-    run(2 mobile-link "${dry}" "${platformFlag}" "${mobile}" "${configFlag}" Debug)
-    foreach(action IN ITEMS fast precommit full samples benchmarks)
-        run(2 "${action}" "${dry}" "${platformFlag}" "${mobile}")
+    _pangu_run_build_script(
+        0
+        build
+        "${dry}"
+        "${platformFlag}"
+        "${mobile}"
+    )
+    _pangu_require_build_output("${mobile}-arm64")
+    _pangu_require_build_output("-DPANGU_LINK_MODE=Monolithic")
+    _pangu_require_build_output("-DBUILD_TESTING=OFF")
+    _pangu_run_build_script(
+        0
+        mobile-link
+        "${dry}"
+        "${platformFlag}"
+        "${mobile}"
+        "${modeFlag}"
+        Modular
+    )
+    _pangu_require_build_output("CrossCompileTests.cmake")
+    _pangu_require_build_output("-DPANGU_LINK_MODE=Modular")
+    _pangu_require_build_output("-DBUILD_TESTING=ON")
+    _pangu_run_build_script(
+        2
+        mobile-link
+        "${dry}"
+        "${platformFlag}"
+        "${mobile}"
+        "${configFlag}"
+        Debug
+    )
+    foreach(
+        action
+        IN
+        ITEMS
+            fast
+            precommit
+            full
+            samples
+            benchmarks
+    )
+        _pangu_run_build_script(
+            2
+            "${action}"
+            "${dry}"
+            "${platformFlag}"
+            "${mobile}"
+        )
     endforeach()
 endif()
-run(2 build "${dry}" "${platformFlag}" "${foreign}")
-run(2 mobile-link "${dry}")
-run(2 full "${dry}" "${targetFlag}" PanguFoundation)
-run(2 configure "${dry}" "${targetFlag}" PanguFoundation)
-run(2 build "${dry}" "${jobsFlag}" 0)
-run(2 build "${dry}" "${configFlag}" Unsupported)
-run(2 build "${dry}" "${modeFlag}" Unsupported)
-run(2 unknown-action)
-run(2 --unknown-option)
+_pangu_run_build_script(
+    2
+    build
+    "${dry}"
+    "${platformFlag}"
+    "${foreign}"
+)
+_pangu_run_build_script(
+    2
+    mobile-link
+    "${dry}"
+)
+_pangu_run_build_script(
+    2
+    full
+    "${dry}"
+    "${targetFlag}"
+    PanguFoundation
+)
+_pangu_run_build_script(
+    2
+    configure
+    "${dry}"
+    "${targetFlag}"
+    PanguFoundation
+)
+_pangu_run_build_script(
+    2
+    build
+    "${dry}"
+    "${jobsFlag}"
+    0
+)
+_pangu_run_build_script(
+    2
+    build
+    "${dry}"
+    "${configFlag}"
+    Unsupported
+)
+_pangu_run_build_script(
+    2
+    build
+    "${dry}"
+    "${modeFlag}"
+    Unsupported
+)
+_pangu_run_build_script(2 unknown-action)
+_pangu_run_build_script(2 --unknown-option)
 if(NOT CMAKE_HOST_WIN32)
-    run(2 build --platform)
+    _pangu_run_build_script(
+        2
+        build
+        --platform
+    )
 endif()
 file(READ "${log}" calls)
 if(NOT calls STREQUAL "")
@@ -208,19 +385,31 @@ foreach(failure IN ITEMS configure build test none)
     file(WRITE "${log}" "")
     set(ENV{PANGU_STUB_FAIL} "${failure}")
     if(failure STREQUAL "none")
-        run(0 fast)
+        _pangu_run_build_script(0 fast)
     else()
-        run(37 fast)
+        _pangu_run_build_script(37 fast)
     endif()
     file(STRINGS "${log}" calls)
     if(CMAKE_HOST_WIN32)
-        string(REPLACE "/" "\\" expectedRoot "${fixture}")
+        string(
+            REPLACE "/"
+            "\\"
+            expectedRoot
+            "${fixture}"
+        )
     else()
         set(expectedRoot "${fixture}")
     endif()
-    set(expected configure "${expectedRoot}")
+    set(expected
+        configure
+        "${expectedRoot}"
+    )
     if(NOT failure STREQUAL "configure")
-        list(APPEND expected build "${expectedRoot}")
+        list(
+            APPEND expected
+            build
+            "${expectedRoot}"
+        )
     endif()
     if(failure STREQUAL "test" OR failure STREQUAL "none")
         list(APPEND expected test)

@@ -7,8 +7,14 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Repo/zlib.h")
     message(FATAL_ERROR "zlib source missing; run git submodule update --init --recursive")
 endif()
 find_package(Git REQUIRED)
-execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${CMAKE_CURRENT_SOURCE_DIR}/Repo" rev-parse HEAD
-    RESULT_VARIABLE result OUTPUT_VARIABLE revision OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_VARIABLE error)
+execute_process(
+    COMMAND
+        "${GIT_EXECUTABLE}" -C "${CMAKE_CURRENT_SOURCE_DIR}/Repo" rev-parse HEAD
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE revision
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_VARIABLE error
+)
 if(NOT result EQUAL 0 OR NOT revision STREQUAL "da607da739fa6047df13e66a2af6b8bec7c2a498")
     message(FATAL_ERROR "zlib revision mismatch: ${revision}: ${error}")
 endif()
@@ -18,4 +24,9 @@ set(ZLIB_BUILD_STATIC ON CACHE BOOL "" FORCE)
 set(ZLIB_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(Repo)
 add_library(ThirdParty::Zlib ALIAS zlibstatic)
-set_target_properties(zlibstatic PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(
+    zlibstatic
+    PROPERTIES
+        POSITION_INDEPENDENT_CODE
+            ON
+)

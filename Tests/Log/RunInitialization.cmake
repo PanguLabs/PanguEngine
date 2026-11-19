@@ -1,36 +1,69 @@
 cmake_minimum_required(VERSION 4.0)
 set(failures "")
-function(AcceptsInitializationFatal terminated output accepted)
+function(_pangu_accepts_initialization_fatal terminated output accepted)
     # 与 FoundationFatal 使用相同的原生终止结果，不能把其他异常退出当作 Fatal。
     if(CMAKE_HOST_WIN32)
         set(expectedExit "Exit code 0xc0000409")
     else()
         set(expectedExit "Subprocess killed")
     endif()
-    string(REPLACE "\r\n" "\n" normalizedOutput "${output}")
+    string(
+        REPLACE "\r\n"
+        "\n"
+        normalizedOutput
+        "${output}"
+    )
     if(terminated STREQUAL expectedExit AND normalizedOutput STREQUAL "FATAL_READY\n")
         set(${accepted} TRUE PARENT_SCOPE)
     else()
         set(${accepted} FALSE PARENT_SCOPE)
     endif()
 endfunction()
-foreach(mode IN ITEMS active blocked native-exit native-owner-exit snapshot-deadline closing-state minimum-stack)
-    execute_process(COMMAND "${FIXTURE}" "${mode}" RESULT_VARIABLE result TIMEOUT 8)
+foreach(
+    mode
+    IN
+    ITEMS
+        active
+        blocked
+        native-exit
+        native-owner-exit
+        snapshot-deadline
+        closing-state
+        minimum-stack
+)
+    execute_process(
+        COMMAND
+            "${FIXTURE}" "${mode}"
+        RESULT_VARIABLE result
+        TIMEOUT 8
+    )
     if(NOT result STREQUAL "0")
         list(APPEND failures "${mode}=${result}")
     endif()
 endforeach()
 foreach(mode IN ITEMS fatal fatal-lock)
-    execute_process(COMMAND "${FIXTURE}" "${mode}" RESULT_VARIABLE terminated OUTPUT_VARIABLE fatalOutput TIMEOUT 3)
-    AcceptsInitializationFatal("${terminated}" "${fatalOutput}" accepted)
+    execute_process(
+        COMMAND
+            "${FIXTURE}" "${mode}"
+        RESULT_VARIABLE terminated
+        OUTPUT_VARIABLE fatalOutput
+        TIMEOUT 3
+    )
+    _pangu_accepts_initialization_fatal("${terminated}" "${fatalOutput}" accepted)
     if(NOT accepted)
         list(APPEND failures "${mode}=${terminated}")
     endif()
     message(STATUS "${mode}: exit=${terminated}; accepted=${accepted}")
 endforeach()
 foreach(mode IN ITEMS control-exit42 control-crash control-hang)
-    execute_process(COMMAND "${FIXTURE}" "${mode}" RESULT_VARIABLE terminated OUTPUT_VARIABLE output TIMEOUT 1)
-    AcceptsInitializationFatal("${terminated}" "${output}" accepted)
+    execute_process(
+        COMMAND
+            "${FIXTURE}" "${mode}"
+        RESULT_VARIABLE terminated
+        OUTPUT_VARIABLE output
+        TIMEOUT 1
+    )
+    _pangu_accepts_initialization_fatal("${terminated}" "${output}" accepted)
     if(NOT output MATCHES "FATAL_READY")
         list(APPEND failures "${mode}未到达负对照握手=${terminated}")
     elseif(mode STREQUAL "control-exit42" AND NOT terminated STREQUAL "42")

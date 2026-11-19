@@ -1,25 +1,51 @@
 cmake_minimum_required(VERSION 4.0)
 foreach(mode IN ITEMS StopCallerReturnsWhileSinkBlocked queue-deadline)
-    execute_process(COMMAND "${FIXTURE}" "${mode}" RESULT_VARIABLE result TIMEOUT 8)
+    execute_process(
+        COMMAND
+            "${FIXTURE}" "${mode}"
+        RESULT_VARIABLE result
+        TIMEOUT 8
+    )
     if(NOT result STREQUAL "0")
         message(FATAL_ERROR "${mode}=${result}")
     endif()
 endforeach()
-execute_process(COMMAND "${FIXTURE}" OwnerDestroyedWithBlockedSinkTerminates
-    RESULT_VARIABLE terminated OUTPUT_VARIABLE output TIMEOUT 3)
+execute_process(
+    COMMAND
+        "${FIXTURE}" OwnerDestroyedWithBlockedSinkTerminates
+    RESULT_VARIABLE terminated
+    OUTPUT_VARIABLE output
+    TIMEOUT 3
+)
 if(CMAKE_HOST_WIN32)
     set(expected "Exit code 0xc0000409")
 else()
     set(expected "Subprocess killed")
 endif()
-string(REPLACE "\r\n" "\n" normalized "${output}")
+string(
+    REPLACE "\r\n"
+    "\n"
+    normalized
+    "${output}"
+)
 if(NOT terminated STREQUAL expected OR NOT normalized STREQUAL "FATAL_READY\n")
     message(FATAL_ERROR "OwnerDestroyedWithBlockedSinkTerminates=${terminated}; handshake=${normalized}")
 endif()
 message(STATUS "OwnerDestroyedWithBlockedSinkTerminates=${terminated}")
 foreach(mode IN ITEMS control-exit42 control-crash control-hang)
-    execute_process(COMMAND "${FIXTURE}" "${mode}" RESULT_VARIABLE result OUTPUT_VARIABLE output TIMEOUT 1)
-    string(REPLACE "\r\n" "\n" normalized "${output}")
+    execute_process(
+        COMMAND
+            "${FIXTURE}" "${mode}"
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE output
+        TIMEOUT 1
+    )
+    string(
+        REPLACE "\r\n"
+        "\n"
+        normalized
+        "${output}"
+    )
     if(NOT normalized STREQUAL "FATAL_READY\n")
         message(FATAL_ERROR "${mode}未到达负对照握手=${result}")
     elseif(result STREQUAL expected)

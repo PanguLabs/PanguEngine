@@ -1,7 +1,12 @@
 cmake_minimum_required(VERSION 4.0)
 
 include("${PANGU_ENGINE_SOURCE_DIR}/cmake/ValidateBuildEnvironment.cmake")
-project(PhysicsConsumer LANGUAGES CXX)
+project(
+    PhysicsConsumer
+    LANGUAGES
+        C
+        CXX
+)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 include(CTest)
 

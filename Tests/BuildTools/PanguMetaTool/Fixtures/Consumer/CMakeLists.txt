@@ -14,7 +14,13 @@ include("${PG_ENGINE}/cmake/Platform/Common/BuildOptions.cmake")
 include("${PG_ENGINE}/cmake/Platform/Common/Module.cmake")
 pangu_initialize_link_mode()
 if(NOT EXISTS "${CMAKE_BINARY_DIR}/SourceAlias")
-    file(CREATE_LINK "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/SourceAlias" SYMBOLIC RESULT linked)
+    file(
+        CREATE_LINK
+            "${CMAKE_CURRENT_SOURCE_DIR}"
+            "${CMAKE_BINARY_DIR}/SourceAlias"
+        SYMBOLIC
+        RESULT linked
+    )
     if(NOT linked STREQUAL "0")
         message(FATAL_ERROR "Real source alias prerequisite failed: ${linked}")
     endif()
@@ -38,29 +44,63 @@ foreach(mode IN ITEMS Typed Both Description Check)
     set(root "${CMAKE_BINARY_DIR}/Generated/PanguMeta/${CMAKE_BUILD_TYPE}/${target}")
     file(MAKE_DIRECTORY "${root}/Private")
     file(WRITE "${root}/Private/MetaContext.cpp" "")
-    add_library(${target} STATIC Module.cpp "${root}/Private/MetaContext.cpp")
+    add_library(
+        ${target}
+        STATIC
+        Module.cpp
+        "${root}/Private/MetaContext.cpp"
+    )
     target_link_libraries(${target} PUBLIC PanguEngineHost)
-    target_include_directories(${target} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${root}/Public" PRIVATE "${root}/Private")
+    target_include_directories(
+        ${target}
+        PUBLIC
+            "${CMAKE_CURRENT_SOURCE_DIR}"
+            "${root}/Public"
+        PRIVATE
+            "${root}/Private"
+    )
     file(WRITE "${CMAKE_BINARY_DIR}/options.rsp" "-DPG_TEST_RSP=61\n")
-    target_compile_options(${target} PUBLIC -Wno-unknown-attributes "@${CMAKE_BINARY_DIR}/options.rsp"
-        PRIVATE -Wall -Wextra -Wpedantic -Werror -fno-exceptions)
-    target_compile_definitions(${target} PRIVATE "PG_META_HAS_DESCRIPTION=$<BOOL:${description}>"
-        "PG_TEST_PROVIDER=::pg::meta::generated::T_${target}::kModuleMetadata")
+    target_compile_options(
+        ${target}
+        PUBLIC
+            -Wno-unknown-attributes
+            "@${CMAKE_BINARY_DIR}/options.rsp"
+        PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+            -Werror
+            -fno-exceptions
+    )
+    target_compile_definitions(
+        ${target}
+        PRIVATE
+            "PG_META_HAS_DESCRIPTION=$<BOOL:${description}>"
+            "PG_TEST_PROVIDER=::pg::meta::generated::T_${target}::kModuleMetadata"
+    )
     set(outputs "")
     if(typed OR description)
         set(outputs "\"Public/Actor.gen.h\",\"Public/Extras/Actor.gen.h\",\"Public/中文目录/角色.gen.h\"")
     endif()
     if(description)
-        string(APPEND outputs ",\"Private/Actor.gen.cpp\",\"Private/Extras/Actor.gen.cpp\",\"Private/中文目录/角色.gen.cpp\",\"Private/ModuleMeta.gen.h\",\"Private/ModuleMeta.gen.cpp\"")
-        foreach(source IN ITEMS Actor Extras/Actor 中文目录/角色 ModuleMeta)
+        string(
+            APPEND outputs
+            ",\"Private/Actor.gen.cpp\",\"Private/Extras/Actor.gen.cpp\",\"Private/中文目录/角色.gen.cpp\",\"Private/ModuleMeta.gen.h\",\"Private/ModuleMeta.gen.cpp\""
+        )
+        foreach(source IN ITEMS Actor Extras/Actor "中文目录/角色" ModuleMeta)
             set(path "${root}/Private/${source}.gen.cpp")
-            set_source_files_properties("${path}" PROPERTIES GENERATED TRUE)
+            set_source_files_properties(
+                "${path}"
+                PROPERTIES
+                    GENERATED
+                        TRUE
+            )
             target_sources(${target} PRIVATE "${path}")
         endforeach()
     endif()
     set(headers "")
     set(ownership "")
-    foreach(input IN ITEMS Actor.h Other/Actor.h 中文目录/角色.h)
+    foreach(input IN ITEMS Actor.h Other/Actor.h "中文目录/角色.h")
         set(inputRoot "${CMAKE_CURRENT_SOURCE_DIR}")
         set(inputPath "${CMAKE_CURRENT_SOURCE_DIR}/${input}")
         set(prefix "")
@@ -76,17 +116,35 @@ foreach(mode IN ITEMS Typed Both Description Check)
             string(APPEND headers ",")
             string(APPEND ownership ",")
         endif()
-        string(APPEND headers "{\"path\":\"${inputPath}\",\"root\":\"${inputRoot}\",\"prefix\":\"${prefix}\",\"visibility\":\"public\",\"typed_access\":${typed},\"description\":${description}}")
+        string(
+            APPEND headers
+            "{\"path\":\"${inputPath}\",\"root\":\"${inputRoot}\",\"prefix\":\"${prefix}\",\"visibility\":\"public\",\"typed_access\":${typed},\"description\":${description}}"
+        )
         string(APPEND ownership "{\"path\":\"${inputPath}\",\"target\":\"${target}\"}")
     endforeach()
-    set(request [=[{"version":1,"kind":"scan","target":"@target@","owner":"engine","config":"@CMAKE_BUILD_TYPE@","engine_source":"@PG_ENGINE@","engine_build":"@CMAKE_BINARY_DIR@","project_source":"","project_build":"","output_root":"@root@","module":{"id_symbol":"pg::test::kActorModule","identity_header":"Identity.h","query_symbol":"pg::test::QueryActor","query_header":"Identity.h","export_macro":""},"headers":[@headers@],"ownership":[@ownership@],"context":{"database":"@CMAKE_BINARY_DIR@/compile_commands.json","source":"@root@/Private/MetaContext.cpp","object":"","resource_dir":"@PG_RESOURCE@"},"catalog":[],"outputs":[@outputs@]}]=])
+    set(request
+        [=[{"version":1,"kind":"scan","target":"@target@","owner":"engine","config":"@CMAKE_BUILD_TYPE@","engine_source":"@PG_ENGINE@","engine_build":"@CMAKE_BINARY_DIR@","project_source":"","project_build":"","output_root":"@root@","module":{"id_symbol":"pg::test::kActorModule","identity_header":"Identity.h","query_symbol":"pg::test::QueryActor","query_header":"Identity.h","export_macro":""},"headers":[@headers@],"ownership":[@ownership@],"context":{"database":"@CMAKE_BINARY_DIR@/compile_commands.json","source":"@root@/Private/MetaContext.cpp","object":"","resource_dir":"@PG_RESOURCE@"},"catalog":[],"outputs":[@outputs@]}]=]
+    )
     string(CONFIGURE "${request}" request @ONLY)
     file(WRITE "${CMAKE_BINARY_DIR}/${mode}.json" "${request}")
     if(NOT mode STREQUAL "Check")
         add_executable(Consumer${mode} Main.cpp)
         target_link_libraries(Consumer${mode} PRIVATE ${target})
-        target_compile_options(Consumer${mode} PRIVATE -Wall -Wextra -Wpedantic -Werror -fno-exceptions)
-        target_compile_definitions(Consumer${mode} PRIVATE "PG_TEST_TYPED=$<BOOL:${typed}>" "PG_META_HAS_DESCRIPTION=$<BOOL:${description}>")
+        target_compile_options(
+            Consumer${mode}
+            PRIVATE
+                -Wall
+                -Wextra
+                -Wpedantic
+                -Werror
+                -fno-exceptions
+        )
+        target_compile_definitions(
+            Consumer${mode}
+            PRIVATE
+                "PG_TEST_TYPED=$<BOOL:${typed}>"
+                "PG_META_HAS_DESCRIPTION=$<BOOL:${description}>"
+        )
         file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/${mode}.exe.path" CONTENT "$<TARGET_FILE:Consumer${mode}>")
     endif()
 endforeach()
@@ -95,11 +153,26 @@ foreach(kind IN ITEMS query catalog)
     if(kind STREQUAL "catalog")
         set(slot StaticModuleCatalog)
     endif()
-    set(assemblySource "${CMAKE_BINARY_DIR}/Generated/PanguMeta/${CMAKE_BUILD_TYPE}/Assembly${kind}/Private/${slot}.gen.cpp")
-    set_source_files_properties("${assemblySource}" PROPERTIES GENERATED TRUE)
+    set(assemblySource
+        "${CMAKE_BINARY_DIR}/Generated/PanguMeta/${CMAKE_BUILD_TYPE}/Assembly${kind}/Private/${slot}.gen.cpp"
+    )
+    set_source_files_properties(
+        "${assemblySource}"
+        PROPERTIES
+            GENERATED
+                TRUE
+    )
     add_library(Assembly${kind} OBJECT EXCLUDE_FROM_ALL "${assemblySource}")
     target_link_libraries(Assembly${kind} PRIVATE ActorBoth)
-    target_compile_options(Assembly${kind} PRIVATE -Wall -Wextra -Wpedantic -Werror -fno-exceptions)
+    target_compile_options(
+        Assembly${kind}
+        PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+            -Werror
+            -fno-exceptions
+    )
 endforeach()
 foreach(kind IN ITEMS Const ReadOnly Private ConstOwner)
     if(kind STREQUAL "Const")

@@ -2,15 +2,26 @@ cmake_minimum_required(VERSION 4.0)
 include("${CMAKE_CURRENT_LIST_DIR}/ProjectTestHelpers.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/EcsArtifactChecks.cmake")
 
-function(CheckFlecsResolution path artifactKind hostPath flecsPath)
+function(_pangu_check_flecs_resolution path artifactKind hostPath flecsPath)
     # 各镜像独立解析已确认的直接依赖，避免把其他镜像的搜索路径或同名库当作证据。
-    file(GET_RUNTIME_DEPENDENCIES ${artifactKind} "${path}" BUNDLE_EXECUTABLE "${hostPath}"
-        RESOLVED_DEPENDENCIES_VAR resolved UNRESOLVED_DEPENDENCIES_VAR unresolved
-        PRE_INCLUDE_REGEXES "(^|/)libPanguThirdPartyFlecs[.](so|dylib)$"
-        PRE_EXCLUDE_REGEXES ".*")
+    file(
+        GET_RUNTIME_DEPENDENCIES
+        ${artifactKind}
+        "${path}"
+        BUNDLE_EXECUTABLE "${hostPath}"
+        RESOLVED_DEPENDENCIES_VAR resolved
+        UNRESOLVED_DEPENDENCIES_VAR unresolved
+        PRE_INCLUDE_REGEXES
+            "(^|/)libPanguThirdPartyFlecs[.](so|dylib)$"
+        PRE_EXCLUDE_REGEXES
+            ".*"
+    )
     list(LENGTH resolved count)
     if(unresolved OR NOT count EQUAL 1)
-        message(FATAL_ERROR "Expected one resolved flecs dependency of ${path}: resolved=${resolved}; unresolved=${unresolved}")
+        message(
+            FATAL_ERROR
+            "Expected one resolved flecs dependency of ${path}: resolved=${resolved}; unresolved=${unresolved}"
+        )
     endif()
     file(REAL_PATH "${resolved}" actual)
     file(REAL_PATH "${flecsPath}" expected)
@@ -20,19 +31,34 @@ function(CheckFlecsResolution path artifactKind hostPath flecsPath)
     message(STATUS "ECS resolved flecs dependency: ${path} -> ${actual}")
 endfunction()
 
-ConfigureFixture("EcsWorld-${PANGU_LINK_MODE}" "fixture.physics;mygame.gameplay" PASS ""
-    -DPANGU_FIXTURE_BUILD_ECS_HOST=ON "-DPANGU_LINK_MODE=${PANGU_LINK_MODE}")
-BuildFixture(MyGameEcsHost)
+_pangu_configure_project_fixture(
+    "EcsWorld-${PANGU_LINK_MODE}"
+    "fixture.physics;mygame.gameplay"
+    PASS
+    ""
+    -DPANGU_FIXTURE_BUILD_ECS_HOST=ON
+    "-DPANGU_LINK_MODE=${PANGU_LINK_MODE}"
+)
+_pangu_build_project_fixture(MyGameEcsHost)
 
 include("${binary}/EcsArtifacts.cmake")
-foreach(artifact IN ITEMS host gameplay consumer ecs flecs)
+foreach(
+    artifact
+    IN
+    ITEMS
+        host
+        gameplay
+        consumer
+        ecs
+        flecs
+)
     if(NOT IS_ABSOLUTE "${${artifact}}" OR NOT EXISTS "${${artifact}}")
         message(FATAL_ERROR "Missing ECS Project artifact ${artifact}: ${${artifact}}")
     endif()
     message(STATUS "ECS artifact ${artifact}=${${artifact}}")
 endforeach()
 
-InspectNativeDependencies("${host}")
+_pangu_inspect_native_dependencies("${host}")
 foreach(dependency IN LISTS dependencies)
     if(dependency MATCHES "^(lib)?MyGameEcs(Gameplay|Consumer)[.]")
         message(FATAL_ERROR "ECS Host imports a business library: ${dependency}")
@@ -46,13 +72,13 @@ if(PANGU_LINK_MODE STREQUAL "Modular")
             set(artifactKind EXECUTABLES)
         else()
             set(artifactKind LIBRARIES)
-            InspectNativeDependencies("${${artifact}}")
+            _pangu_inspect_native_dependencies("${${artifact}}")
         endif()
         if(NOT flecsName IN_LIST dependencies OR (NOT artifact STREQUAL "ecs" AND NOT ecsName IN_LIST dependencies))
             message(FATAL_ERROR "Missing direct ECS/flecs dependencies of ${${artifact}}: ${dependencies}")
         endif()
         if(NOT CMAKE_HOST_WIN32)
-            CheckFlecsResolution("${${artifact}}" "${artifactKind}" "${host}" "${flecs}")
+            _pangu_check_flecs_resolution("${${artifact}}" "${artifactKind}" "${host}" "${flecs}")
         endif()
     endforeach()
     if(CMAKE_HOST_WIN32)
@@ -72,28 +98,71 @@ else()
     if(CMAKE_HOST_WIN32)
         # llvm-nm 检查各库的符号归属；链接映射确认符号确实进入最终 PE。
         set(nm "$ENV{LLVM_ROOT}/bin/llvm-nm.exe")
-        ProjectCommand(PASS "QueryEcsGameplay" "${nm}" --defined-only --demangle "${gameplay}")
-        ProjectCommand(PASS "QueryEcsConsumer" "${nm}" --defined-only --demangle "${consumer}")
-        ProjectCommand(PASS "QueryEcsModule" "${nm}" --defined-only --demangle "${ecs}")
-        ProjectCommand(PASS "ecs_progress" "${nm}" --defined-only "${flecs}")
+        _pangu_run_project_command(
+            PASS
+            "QueryEcsGameplay"
+            "${nm}"
+            --defined-only
+            --demangle
+            "${gameplay}"
+        )
+        _pangu_run_project_command(
+            PASS
+            "QueryEcsConsumer"
+            "${nm}"
+            --defined-only
+            --demangle
+            "${consumer}"
+        )
+        _pangu_run_project_command(
+            PASS
+            "QueryEcsModule"
+            "${nm}"
+            --defined-only
+            --demangle
+            "${ecs}"
+        )
+        _pangu_run_project_command(
+            PASS
+            "ecs_progress"
+            "${nm}"
+            --defined-only
+            "${flecs}"
+        )
         file(READ "${binary}/MyGameEcsHost.map" symbols)
     else()
-        ProjectCommand(PASS "" "$ENV{LLVM_ROOT}/bin/llvm-nm" --defined-only --demangle "${host}")
+        _pangu_run_project_command(
+            PASS
+            ""
+            "$ENV{LLVM_ROOT}/bin/llvm-nm"
+            --defined-only
+            --demangle
+            "${host}"
+        )
         set(symbols "${commandStdout}")
     endif()
-    foreach(symbol IN ITEMS QueryEcsGameplay QueryEcsConsumer QueryEcsModule ecs_init ecs_progress)
-        RequireText("${symbols}" "${symbol}")
+    foreach(
+        symbol
+        IN
+        ITEMS
+            QueryEcsGameplay
+            QueryEcsConsumer
+            QueryEcsModule
+            ecs_init
+            ecs_progress
+    )
+        _pangu_require_test_text("${symbols}" "${symbol}")
     endforeach()
 endif()
 
-ProjectCommand(PASS "ECS Position binding and owner dtor preserved" "${host}")
-RequireText("${commandOutput}" "ECS Progress position=8 observer=1")
-RequireText("${commandOutput}" "ECS World A destroyed; World B usable")
-RequireText("${commandOutput}" "ECS Failed World rolled back; World B usable")
-RequireText("${commandOutput}" "ECS Second Host usable after World close and rollback")
-RequireText("${commandOutput}" "ECS First Host drained; second Host usable")
-RequireText("${commandOutput}" "ECS World callbacks cleaned after install resources")
+_pangu_run_project_command(PASS "ECS Position binding and owner dtor preserved" "${host}")
+_pangu_require_test_text("${commandOutput}" "ECS Progress position=8 observer=1")
+_pangu_require_test_text("${commandOutput}" "ECS World A destroyed; World B usable")
+_pangu_require_test_text("${commandOutput}" "ECS Failed World rolled back; World B usable")
+_pangu_require_test_text("${commandOutput}" "ECS Second Host usable after World close and rollback")
+_pangu_require_test_text("${commandOutput}" "ECS First Host drained; second Host usable")
+_pangu_require_test_text("${commandOutput}" "ECS World callbacks cleaned after install resources")
 if(PANGU_LINK_MODE STREQUAL "Modular")
-    RequireText("${commandOutput}" "ECS World cleanup preceded Gameplay NativeUnload")
+    _pangu_require_test_text("${commandOutput}" "ECS World cleanup preceded Gameplay NativeUnload")
 endif()
 message(STATUS "ECS Project results:\n${commandStdout}")

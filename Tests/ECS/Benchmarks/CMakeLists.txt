@@ -8,6 +8,17 @@ foreach(mode IN ITEMS On Off)
         set(flecs PanguThirdPartyFlecsAssertOff)
     endif()
     target_include_directories(PanguFlecsAssertBench${mode} PRIVATE "${PROJECT_SOURCE_DIR}/Source/Runtime/ECS/Public")
-    target_link_libraries(PanguFlecsAssertBench${mode} PRIVATE PanguBuildOptions ThirdParty::GoogleBenchmarkMain ${flecs})
-    set_target_properties(PanguFlecsAssertBench${mode} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")
+    target_link_libraries(
+        PanguFlecsAssertBench${mode}
+        PRIVATE
+            PanguBuildOptions
+            ThirdParty::GoogleBenchmarkMain
+            ${flecs}
+    )
+    set_target_properties(
+        PanguFlecsAssertBench${mode}
+        PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY
+                "${CMAKE_BINARY_DIR}/Bin"
+    )
 endforeach()

@@ -1,8 +1,14 @@
 cmake_minimum_required(VERSION 4.0)
 
 foreach(mode IN ITEMS registered missing)
-    execute_process(COMMAND "${FIXTURE}" "${mode}"
-        RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error TIMEOUT 10)
+    execute_process(
+        COMMAND
+            "${FIXTURE}" "${mode}"
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE output
+        ERROR_VARIABLE error
+        TIMEOUT 10
+    )
     if(NOT output MATCHES "FLECS_REGISTRATION_TRIGGER_READY" OR result MATCHES "[Tt]imeout")
         message(FATAL_ERROR "${mode}: 未到达登记检查或子进程超时 (${result})\n${output}${error}")
     endif()

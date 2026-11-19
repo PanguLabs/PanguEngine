@@ -1,26 +1,64 @@
-function(InspectNativeDependencies path)
+function(_pangu_inspect_native_dependencies path)
     if(PANGU_TARGET_PRESET STREQUAL "android-arm64")
-        ProjectCommand(PASS "" "${inspect}" --file-headers --needed-libs --notes --program-headers "${path}")
-        string(REGEX MATCH "NeededLibraries \\[[^]]*\\]" dependencyRecords "${commandStdout}")
+        _pangu_run_project_command(
+            PASS
+            ""
+            "${inspect}"
+            --file-headers
+            --needed-libs
+            --notes
+            --program-headers
+            "${path}"
+        )
+        string(
+            REGEX MATCH "NeededLibraries \\[[^]]*\\]"
+            dependencyRecords
+            "${commandStdout}"
+        )
         set(recordPattern "\n[ \t]+[^\r\n]+")
         set(namePattern "[ \t]+([^\r\n]+)$")
     elseif(CMAKE_HOST_WIN32)
-        ProjectCommand(PASS "" "$ENV{LLVM_ROOT}/bin/llvm-readobj.exe" --coff-imports "${path}")
+        _pangu_run_project_command(
+            PASS
+            ""
+            "$ENV{LLVM_ROOT}/bin/llvm-readobj.exe"
+            --coff-imports
+            "${path}"
+        )
         set(recordPattern "\n[ \t]+Name: [^\r\n]+")
         set(namePattern "Name: ([^\r\n]+)$")
     elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
-        ProjectCommand(PASS "" otool -l "${path}")
-        set(recordPattern "\n[ \t]+cmd LC_(LOAD(_WEAK|_UPWARD)?|LAZY_LOAD|REEXPORT)_DYLIB\r?\n[ \t]+cmdsize [0-9]+\r?\n[ \t]+name [^\r\n]+")
+        _pangu_run_project_command(
+            PASS
+            ""
+            otool
+            -l
+            "${path}"
+        )
+        set(recordPattern
+            "\n[ \t]+cmd LC_(LOAD(_WEAK|_UPWARD)?|LAZY_LOAD|REEXPORT)_DYLIB\r?\n[ \t]+cmdsize [0-9]+\r?\n[ \t]+name [^\r\n]+"
+        )
         set(namePattern "name (.+) \\(offset [0-9]+\\)$")
     else()
-        ProjectCommand(PASS "" readelf --dynamic --wide "${path}")
+        _pangu_run_project_command(
+            PASS
+            ""
+            readelf
+            --dynamic
+            --wide
+            "${path}"
+        )
         set(recordPattern "\n[^\r\n]*\\(NEEDED\\)[ \t]+Shared library: [^\r\n]+")
         set(namePattern "Shared library: \\[([^]]+)\\]$")
     endif()
     if(NOT PANGU_TARGET_PRESET STREQUAL "android-arm64")
         set(dependencyRecords "${commandStdout}")
     endif()
-    string(REGEX MATCHALL "${recordPattern}" records "${dependencyRecords}")
+    string(
+        REGEX MATCHALL "${recordPattern}"
+        records
+        "${dependencyRecords}"
+    )
     set(dependencies)
     foreach(record IN LISTS records)
         if(NOT record MATCHES "${namePattern}")

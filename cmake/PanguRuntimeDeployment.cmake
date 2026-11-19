@@ -35,31 +35,60 @@ function(pangu_stage_host_runtime)
         set(runtimeDirectory "${hostBinary}")
     endif()
     # 单配置目的地身份只接受可确定的字面路径及配置占位；复制路径仍由原生目标决定。
-    string(REPLACE "$<CONFIG>" "${CMAKE_BUILD_TYPE}" runtimeDirectory "${runtimeDirectory}")
+    string(
+        REPLACE "$<CONFIG>"
+        "${CMAKE_BUILD_TYPE}"
+        runtimeDirectory
+        "${runtimeDirectory}"
+    )
     if(runtimeDirectory MATCHES "\\$<")
-        message(FATAL_ERROR "unsupported output-directory generator expression:\n${runtimeDirectory}\n"
-            "Pangu runtime staging requires a literal path or $<CONFIG> for single-config destination identity")
+        message(
+            FATAL_ERROR
+            "unsupported output-directory generator expression:\n${runtimeDirectory}\n"
+            "Pangu runtime staging requires a literal path or $<CONFIG> for single-config destination identity"
+        )
     endif()
     cmake_path(ABSOLUTE_PATH runtimeDirectory BASE_DIRECTORY "${hostBinary}" NORMALIZE)
     string(SHA256 key "${runtimeDirectory}")
-    get_property(producer GLOBAL PROPERTY "PANGU_RUNTIME_PRODUCER_${key}")
+    string(TOUPPER "${key}" propertyKey)
+    get_property(producer GLOBAL PROPERTY "PANGU_RUNTIME_PRODUCER_${propertyKey}")
     if(producer)
         # 同一目的地的一组 Host 共享生产者及运行依赖并集。
-        set_property(GLOBAL APPEND PROPERTY "PANGU_RUNTIME_HOSTS_${key}" "${arg_TARGET}")
+        set_property(
+            GLOBAL
+            APPEND
+            PROPERTY
+                "PANGU_RUNTIME_HOSTS_${propertyKey}"
+                    "${arg_TARGET}"
+        )
         add_dependencies("${arg_TARGET}" "${producer}")
         return()
     endif()
     set(producer "PanguRuntime_${key}")
-    set_property(GLOBAL PROPERTY "PANGU_RUNTIME_PRODUCER_${key}" "${producer}")
-    set_property(GLOBAL PROPERTY "PANGU_RUNTIME_HOSTS_${key}" "${arg_TARGET}")
+    set_property(
+        GLOBAL
+        PROPERTY
+            "PANGU_RUNTIME_PRODUCER_${propertyKey}"
+                "${producer}"
+    )
+    set_property(
+        GLOBAL
+        PROPERTY
+            "PANGU_RUNTIME_HOSTS_${propertyKey}"
+                "${arg_TARGET}"
+    )
     # 延迟到全部 Host 已登记后生成一次目的地生产者。
-    cmake_language(EVAL CODE "cmake_language(DEFER DIRECTORY [[${CMAKE_SOURCE_DIR}]] CALL pangu_finalize_runtime [[${key}]] [[${producer}]])")
+    cmake_language(
+        EVAL CODE
+            "cmake_language(DEFER DIRECTORY [[${CMAKE_SOURCE_DIR}]] CALL _pangu_finalize_runtime [[${key}]] [[${producer}]])"
+    )
     add_custom_target("${producer}")
     add_dependencies("${arg_TARGET}" "${producer}")
 endfunction()
 
-function(pangu_finalize_runtime key producer)
-    get_property(hosts GLOBAL PROPERTY "PANGU_RUNTIME_HOSTS_${key}")
+function(_pangu_finalize_runtime key producer)
+    string(TOUPPER "${key}" propertyKey)
+    get_property(hosts GLOBAL PROPERTY "PANGU_RUNTIME_HOSTS_${propertyKey}")
     list(GET hosts 0 representativeHost)
     set(destination "$<TARGET_FILE_DIR:${representativeHost}>")
     set(dlls)
@@ -72,11 +101,12 @@ function(pangu_finalize_runtime key producer)
     set(depfile "${stamp}.d")
     # TARGET_RUNTIME_DLLS 在生成阶段求值，不能用于 OUTPUT/BYPRODUCTS。
     # 原生 depfile 跟踪部署文件，缺失时重跑本生产者，不建立另一套运行依赖图。
-    set(content [=[
+    set(content
+        [=[
 set(files [==[@files@]==])
 set(destination [==[@destination@]==])
 set(buildRoot [==[@CMAKE_BINARY_DIR@]==])
-function(EscapeDependency output path)
+function(_pangu_escape_deploy_dependency output path)
     file(RELATIVE_PATH relative "${buildRoot}" "${path}")
     string(REPLACE "$" "$$" relative "${relative}")
     string(REPLACE "#" "\\#" relative "${relative}")
@@ -89,18 +119,29 @@ foreach(file IN LISTS files)
     execute_process(COMMAND [==[@CMAKE_COMMAND@]==] -E copy_if_different
         "${file}" "${destination}" COMMAND_ERROR_IS_FATAL ANY)
     get_filename_component(name "${file}" NAME)
-    EscapeDependency(dependency "${destination}/${name}")
+    _pangu_escape_deploy_dependency(dependency "${destination}/${name}")
     string(APPEND dependencies " ${dependency}")
 endforeach()
-EscapeDependency(output [==[@stamp@]==])
+_pangu_escape_deploy_dependency(output [==[@stamp@]==])
 file(WRITE [==[@depfile@]==] "${output}:${dependencies}\n")
-]=])
+]=]
+    )
     string(CONFIGURE "${content}" content @ONLY)
     file(GENERATE OUTPUT "${script}" CONTENT "${content}")
-    add_custom_command(OUTPUT "${stamp}"
-        COMMAND "${CMAKE_COMMAND}" -P "${script}"
-        COMMAND "${CMAKE_COMMAND}" -E touch "${stamp}"
-        DEPENDS "${script}" ${dlls} DEPFILE "${depfile}" VERBATIM COMMAND_EXPAND_LISTS)
+    add_custom_command(
+        OUTPUT
+            "${stamp}"
+        COMMAND
+            "${CMAKE_COMMAND}" -P "${script}"
+        COMMAND
+            "${CMAKE_COMMAND}" -E touch "${stamp}"
+        DEPENDS
+            "${script}"
+            ${dlls}
+        DEPFILE "${depfile}"
+        VERBATIM
+        COMMAND_EXPAND_LISTS
+    )
     add_custom_target("${producer}_Files" DEPENDS "${stamp}")
     add_dependencies("${producer}" "${producer}_Files")
 endfunction()

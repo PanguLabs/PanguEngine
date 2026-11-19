@@ -15,26 +15,67 @@ add_library(PanguNullQuery SHARED NullQuery.cpp)
 pangu_configure_module(PanguNullQuery EXPORT_MACRO PG_NULL_QUERY_API)
 target_include_directories(PanguNullQuery PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 foreach(target IN ITEMS PanguSharedProvider PanguSharedConsumer PanguNullQuery)
-    target_link_libraries(${target} PRIVATE PanguModule PanguScopeTestSupport)
+    target_link_libraries(
+        ${target}
+        PRIVATE
+            PanguModule
+            PanguScopeTestSupport
+    )
 endforeach()
 foreach(name IN ITEMS Provider Consumer)
     add_library(PanguScope${name} SHARED Scope${name}.cpp)
     pangu_configure_module(PanguScope${name})
     target_include_directories(PanguScope${name} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    target_link_libraries(PanguScope${name} PRIVATE PanguModule PanguScopeTestSupport)
-    pangu_export_module_query(TARGET PanguScope${name} ID pg::module::fixture::kScope${name}Id ID_HEADER SharedFixtureContract.h QUERY pg::module::fixture::QueryScope${name} HEADER SharedFixtureContract.h)
+    target_link_libraries(
+        PanguScope${name}
+        PRIVATE
+            PanguModule
+            PanguScopeTestSupport
+    )
+    pangu_export_module_query(
+        TARGET PanguScope${name}
+        ID pg::module::fixture::kScope${name}Id
+        ID_HEADER SharedFixtureContract.h
+        QUERY pg::module::fixture::QueryScope${name}
+        HEADER SharedFixtureContract.h
+    )
 endforeach()
-pangu_export_module_query(TARGET PanguSharedProvider ID pg::module::fixture::kSharedProviderId ID_HEADER SharedFixtureContract.h QUERY pg::module::fixture::QuerySharedProvider HEADER SharedFixtureContract.h)
-pangu_export_module_query(TARGET PanguSharedConsumer ID pg::module::fixture::kSharedConsumerId ID_HEADER SharedFixtureContract.h QUERY pg::module::fixture::QuerySharedConsumer HEADER SharedFixtureContract.h)
+pangu_export_module_query(
+    TARGET PanguSharedProvider
+    ID pg::module::fixture::kSharedProviderId
+    ID_HEADER SharedFixtureContract.h
+    QUERY pg::module::fixture::QuerySharedProvider
+    HEADER SharedFixtureContract.h
+)
+pangu_export_module_query(
+    TARGET PanguSharedConsumer
+    ID pg::module::fixture::kSharedConsumerId
+    ID_HEADER SharedFixtureContract.h
+    QUERY pg::module::fixture::QuerySharedConsumer
+    HEADER SharedFixtureContract.h
+)
 add_library(PanguDiagnosticsCleanup SHARED DiagnosticsCleanup.cpp)
 pangu_configure_module(PanguDiagnosticsCleanup)
 target_include_directories(PanguDiagnosticsCleanup PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-target_link_libraries(PanguDiagnosticsCleanup PRIVATE PanguModule PanguScopeTestSupport)
-pangu_export_module_query(TARGET PanguDiagnosticsCleanup ID pg::module::fixture::kDiagnosticsCleanupId ID_HEADER SharedFixtureContract.h QUERY pg::module::fixture::QueryDiagnosticsCleanup HEADER SharedFixtureContract.h)
+target_link_libraries(
+    PanguDiagnosticsCleanup
+    PRIVATE
+        PanguModule
+        PanguScopeTestSupport
+)
+pangu_export_module_query(
+    TARGET PanguDiagnosticsCleanup
+    ID pg::module::fixture::kDiagnosticsCleanupId
+    ID_HEADER SharedFixtureContract.h
+    QUERY pg::module::fixture::QueryDiagnosticsCleanup
+    HEADER SharedFixtureContract.h
+)
 # 无身份的恶意 ABI 夹具保留手写空包装，不参与正常 Module 登记。
 
-file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/SharedFixturePaths.h" CONTENT
-"#pragma once
+file(
+    GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/SharedFixturePaths.h"
+    CONTENT
+        "#pragma once
 namespace pg::module::fixture {
 inline constexpr auto kSharedProviderPath = R\"($<TARGET_FILE:PanguSharedProvider>)\";
 inline constexpr auto kSharedConsumerPath = R\"($<TARGET_FILE:PanguSharedConsumer>)\";
@@ -44,13 +85,35 @@ inline constexpr auto kScopeProviderPath = R\"($<TARGET_FILE:PanguScopeProvider>
 inline constexpr auto kScopeConsumerPath = R\"($<TARGET_FILE:PanguScopeConsumer>)\";
 inline constexpr auto kDiagnosticsCleanupPath = R\"($<TARGET_FILE:PanguDiagnosticsCleanup>)\";
 }
-")
+"
+)
 add_executable(PanguNativeModuleLibraryTests ../../NativeModuleLibraryTests.cpp)
-target_include_directories(PanguNativeModuleLibraryTests PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}"
-    "${PROJECT_SOURCE_DIR}/Source/Runtime/Module/Private")
-target_link_libraries(PanguNativeModuleLibraryTests PRIVATE
-    PanguBuildOptions PanguModule PanguScopeTestSupport ThirdParty::GoogleTestMain)
-add_dependencies(PanguNativeModuleLibraryTests PanguSharedProvider PanguSharedConsumer PanguMissingQuery PanguNullQuery)
-set_target_properties(PanguNativeModuleLibraryTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")
+target_include_directories(
+    PanguNativeModuleLibraryTests
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+        "${CMAKE_CURRENT_BINARY_DIR}"
+        "${PROJECT_SOURCE_DIR}/Source/Runtime/Module/Private"
+)
+target_link_libraries(
+    PanguNativeModuleLibraryTests
+    PRIVATE
+        PanguBuildOptions
+        PanguModule
+        PanguScopeTestSupport
+        ThirdParty::GoogleTestMain
+)
+add_dependencies(
+    PanguNativeModuleLibraryTests
+    PanguSharedProvider
+    PanguSharedConsumer
+    PanguMissingQuery
+    PanguNullQuery
+)
+set_target_properties(
+    PanguNativeModuleLibraryTests
+    PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY
+            "${CMAKE_BINARY_DIR}/Bin"
+)
 pangu_register_gtest(TARGET PanguNativeModuleLibraryTests BOUNDARY integration AREA module TIER precommit)

@@ -8,7 +8,8 @@ endif()
 set(nlohmannJsonIncludeDir "${CMAKE_CURRENT_SOURCE_DIR}/Repo/single_include")
 foreach(header IN ITEMS json.hpp json_fwd.hpp)
     if(NOT EXISTS "${nlohmannJsonIncludeDir}/nlohmann/${header}")
-        message(FATAL_ERROR
+        message(
+            FATAL_ERROR
             "Pangu NlohmannJson submodule is missing or incomplete (${header}). "
             "From the repository root, run: git submodule update --init --recursive"
         )
@@ -19,9 +20,7 @@ endforeach()
 # This header-only dependency is compiled in its consumers' toolchain context.
 add_library(ThirdPartyNlohmannJson INTERFACE)
 add_library(ThirdParty::NlohmannJson ALIAS ThirdPartyNlohmannJson)
-target_include_directories(ThirdPartyNlohmannJson SYSTEM INTERFACE
-    "${nlohmannJsonIncludeDir}"
-)
+target_include_directories(ThirdPartyNlohmannJson SYSTEM INTERFACE "${nlohmannJsonIncludeDir}")
 
 # Keep literal operators in nlohmann::literals, without global namespace imports.
 target_compile_definitions(ThirdPartyNlohmannJson INTERFACE JSON_USE_GLOBAL_UDLS=0)

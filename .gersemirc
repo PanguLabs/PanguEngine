@@ -1,0 +1,19 @@
+# PanguEngine CMake 格式配置
+# 缩进和列宽与 .clang-format 对齐。
+indent: 4
+line_length: 120
+
+# 参数列表需要换行时，展开各组的条目。
+list_expansion: favour-expansion
+
+# 从构建系统、依赖接入和测试目录读取自定义命令定义。
+definitions:
+  - ./cmake
+  - ./BuildTools/PanguMetaTool/CMakeLists.txt
+  - ./Source/ThirdParty/Flecs/CMakeLists.txt
+  - ./Tests
+
+warn_about_unknown_commands: true
+
+# 比较格式化前后的语法树。
+unsafe: false

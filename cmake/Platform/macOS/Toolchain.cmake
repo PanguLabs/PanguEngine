@@ -9,8 +9,12 @@ endif()
 set(CMAKE_C_COMPILER "$ENV{LLVM_ROOT}/bin/clang")
 set(CMAKE_CXX_COMPILER "$ENV{LLVM_ROOT}/bin/clang++")
 set(CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS "$ENV{LLVM_ROOT}/bin/clang-scan-deps" CACHE FILEPATH "")
-string(FIND "${CMAKE_CXX_FLAGS_INIT}" "-stdlib=libc++" _pangu_has_libcxx_flags)
-if(_pangu_has_libcxx_flags EQUAL -1)
+string(
+    FIND "${CMAKE_CXX_FLAGS_INIT}"
+    "-stdlib=libc++"
+    panguLibcxxFlagIndex
+)
+if(panguLibcxxFlagIndex EQUAL -1)
     string(APPEND CMAKE_CXX_FLAGS_INIT " -stdlib=libc++")
 endif()
-unset(_pangu_has_libcxx_flags)
+unset(panguLibcxxFlagIndex)

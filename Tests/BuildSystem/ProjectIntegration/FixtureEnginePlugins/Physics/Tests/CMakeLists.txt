@@ -3,7 +3,18 @@ include("${PANGU_ENGINE_SOURCE_DIR}/cmake/PanguTestDependencies.cmake")
 pangu_require_googletest(RTTI ON)
 add_executable(FixtureEnginePhysicsPluginTests PluginBehaviorTests.cpp)
 # 独立部署目录避免与不消费 Physics 的宿主合并 DLL 依赖。
-set_target_properties(FixtureEnginePhysicsPluginTests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_link_libraries(FixtureEnginePhysicsPluginTests PRIVATE PanguBuildOptions FixtureEnginePhysics ThirdParty::GoogleTestMain)
+set_target_properties(
+    FixtureEnginePhysicsPluginTests
+    PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY
+            "${CMAKE_CURRENT_BINARY_DIR}"
+)
+target_link_libraries(
+    FixtureEnginePhysicsPluginTests
+    PRIVATE
+        PanguBuildOptions
+        FixtureEnginePhysics
+        ThirdParty::GoogleTestMain
+)
 pangu_stage_host_runtime(TARGET FixtureEnginePhysicsPluginTests)
 pangu_register_gtest(TARGET FixtureEnginePhysicsPluginTests BOUNDARY unit AREA build TIER fast)

@@ -1,8 +1,14 @@
 cmake_minimum_required(VERSION 4.0)
 include("${CMAKE_CURRENT_LIST_DIR}/ProjectTestHelpers.cmake")
-ConfigureFixture(Shared "fixture.physics;mygame.gameplay;mygame.editor-extras;mygame.shared-probe" PASS ""
-    -DPANGU_FIXTURE_BUILD_HOSTS=ON -DPANGU_LINK_MODE=Modular)
-BuildFixture(MyGame)
+_pangu_configure_project_fixture(
+    Shared
+    "fixture.physics;mygame.gameplay;mygame.editor-extras;mygame.shared-probe"
+    PASS
+    ""
+    -DPANGU_FIXTURE_BUILD_HOSTS=ON
+    -DPANGU_LINK_MODE=Modular
+)
+_pangu_build_project_fixture(MyGame)
 if(NOT EXISTS "${binary}/Generated/PanguMeta/Release/MyGameGameplay/Private/ModuleQuery.gen.cpp")
     message(FATAL_ERROR "Native Query must be emitted by the target's PanguMetaTool batch")
 endif()
@@ -11,7 +17,7 @@ file(GLOB deployed "${binary}/Deploy/*SharedProbe*")
 if(shared OR deployed)
     message(FATAL_ERROR "Game built/deployed an unconsumed SHARED Module")
 endif()
-CheckConsumer(MyGame Modular Gameplay EditorExtras)
+_pangu_check_project_consumer(MyGame Modular Gameplay EditorExtras)
 file(STRINGS "${binary}/MyGameDeployManifest.txt" gamePaths)
 list(GET gamePaths 1 gameplayDeploy)
 file(RENAME "${gameplayDeploy}" "${gameplayDeploy}.missing")
@@ -19,10 +25,10 @@ if(CMAKE_HOST_WIN32)
     set(executableSuffix .exe)
 endif()
 # DLL 缺失必须使宿主 Start 失败，证明激活来自明确部署候选。
-ProjectCommand(FAIL "EngineHost candidate start failed" "${binary}/Bin/MyGame${executableSuffix}")
+_pangu_run_project_command(FAIL "EngineHost candidate start failed" "${binary}/Bin/MyGame${executableSuffix}")
 file(RENAME "${gameplayDeploy}.missing" "${gameplayDeploy}")
-CheckConsumer(MyGame Modular Gameplay EditorExtras)
-BuildFixture(MyGameDeployShared)
+_pangu_check_project_consumer(MyGame Modular Gameplay EditorExtras)
+_pangu_build_project_fixture(MyGameDeployShared)
 file(STRINGS "${binary}/SharedDeployManifest.txt" paths)
 list(GET paths 0 library)
 list(GET paths 1 deployed)
@@ -41,13 +47,36 @@ if(NOT originalHash STREQUAL deployedHash)
     message(FATAL_ERROR "Deployment differs from TARGET_FILE")
 endif()
 if(CMAKE_HOST_WIN32)
-    ProjectCommand(PASS "" "$ENV{LLVM_ROOT}/bin/llvm-readobj.exe" --coff-exports "${library}")
+    _pangu_run_project_command(
+        PASS
+        ""
+        "$ENV{LLVM_ROOT}/bin/llvm-readobj.exe"
+        --coff-exports
+        "${library}"
+    )
 elseif(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
-    ProjectCommand(PASS "" nm -gU "${library}")
+    _pangu_run_project_command(
+        PASS
+        ""
+        nm
+        -gU
+        "${library}"
+    )
 else()
-    ProjectCommand(PASS "" "$ENV{LLVM_ROOT}/bin/llvm-nm" --dynamic --defined-only "${library}")
+    _pangu_run_project_command(
+        PASS
+        ""
+        "$ENV{LLVM_ROOT}/bin/llvm-nm"
+        --dynamic
+        --defined-only
+        "${library}"
+    )
 endif()
-string(REGEX MATCHALL "PanguModuleQueryV1" nativeQueries "${commandOutput}")
+string(
+    REGEX MATCHALL "PanguModuleQueryV1"
+    nativeQueries
+    "${commandOutput}"
+)
 list(LENGTH nativeQueries nativeCount)
 if(NOT nativeCount EQUAL 1)
     message(FATAL_ERROR "SharedProbe must export exactly one native Query")
@@ -68,11 +97,22 @@ get_filename_component(name "${deployed}" NAME)
 if(name MATCHES "Windows|Linux|macOS|Android|iOS")
     message(FATAL_ERROR "Artifact name contains a platform: ${name}")
 endif()
-file(TIMESTAMP "${deployed}" before "%s")
-execute_process(COMMAND "${CMAKE_COMMAND}" -E sleep 1)
-BuildFixture(MyGameDeployShared)
-RequireText("${commandOutput}" "no work to do")
-file(TIMESTAMP "${deployed}" after "%s")
+file(
+    TIMESTAMP "${deployed}"
+    before
+    "%s"
+)
+execute_process(
+    COMMAND
+        "${CMAKE_COMMAND}" -E sleep 1
+)
+_pangu_build_project_fixture(MyGameDeployShared)
+_pangu_require_test_text("${commandOutput}" "no work to do")
+file(
+    TIMESTAMP "${deployed}"
+    after
+    "%s"
+)
 if(NOT before STREQUAL after)
     message(FATAL_ERROR "Unchanged SHARED deployment was rewritten")
 endif()

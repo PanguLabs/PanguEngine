@@ -8,11 +8,20 @@ set(host "${PANGU_TEST_BUILD_ROOT}/Tests/BuildTools/PanguBuildTool")
 set(bootstrap "${PANGU_TEST_BUILD_ROOT}/BuildTools/PanguBuildTool")
 file(STRINGS "${bootstrap}/CMakeCache.txt" bootstrapTesting REGEX "^BUILD_TESTING:BOOL=")
 file(STRINGS "${host}/CMakeCache.txt" hostTesting REGEX "^BUILD_TESTING:BOOL=")
-if(NOT bootstrapTesting STREQUAL "BUILD_TESTING:BOOL=OFF" OR
-   NOT hostTesting STREQUAL "BUILD_TESTING:BOOL=ON" OR host STREQUAL bootstrap)
+if(
+    NOT bootstrapTesting
+        STREQUAL
+        "BUILD_TESTING:BOOL=OFF"
+    OR NOT hostTesting
+        STREQUAL
+        "BUILD_TESTING:BOOL=ON"
+    OR host
+        STREQUAL
+        bootstrap
+)
     message(FATAL_ERROR "bootstrap and host tests must use separate configurations")
 endif()
-TestingListTests(BINARY "${PANGU_TEST_BUILD_ROOT}" OUTPUT rootTests)
+_pangu_list_fixture_tests(BINARY "${PANGU_TEST_BUILD_ROOT}" OUTPUT rootTests)
 foreach(group IN ITEMS PluginManifest PluginDiscovery PluginCli)
     if(NOT rootTests MATCHES "BuildTools[.]PanguBuildTool[.]${group}")
         message(FATAL_ERROR "Missing root BuildTools group ${group}")
@@ -22,9 +31,18 @@ file(READ "${host}/compile_commands.json" commands)
 if(commands MATCHES "PANGU_PLATFORM_|PANGU_BUILD_CONFIGURATION_")
     message(FATAL_ERROR "Tool tests inherited runtime build policy")
 endif()
-TestingListTests(BINARY "${host}" OUTPUT hostTests)
-if(NOT hostTests MATCHES "PanguPluginManifestTests[.]" OR
-   NOT hostTests MATCHES "PanguPluginDiscoveryTests[.]" OR NOT hostTests MATCHES "PluginCli")
+_pangu_list_fixture_tests(BINARY "${host}" OUTPUT hostTests)
+if(
+    NOT hostTests
+        MATCHES
+        "PanguPluginManifestTests[.]"
+    OR NOT hostTests
+        MATCHES
+        "PanguPluginDiscoveryTests[.]"
+    OR NOT hostTests
+        MATCHES
+        "PluginCli"
+)
     message(FATAL_ERROR "Host tests were not built/discovered")
 endif()
 
@@ -35,10 +53,17 @@ foreach(tool IN ITEMS FixtureAlpha FixtureBeta)
     set(copy "${parent}/${tool} 副本😀")
     file(COPY "${PANGU_ENGINE_ROOT}/Tests/BuildSystem/TestInfrastructure/Fixtures/Registration/" DESTINATION "${copy}")
     file(READ "${copy}/CMakeLists.txt" fixtureCMake)
-    string(REPLACE "Registration" "${tool}Cases" fixtureCMake "${fixtureCMake}")
+    string(
+        REPLACE "Registration"
+        "${tool}Cases"
+        fixtureCMake
+        "${fixtureCMake}"
+    )
     file(WRITE "${copy}/CMakeLists.txt" "${fixtureCMake}")
 endforeach()
-file(WRITE "${parent}/CMakeLists.txt" [=[
+file(
+    WRITE "${parent}/CMakeLists.txt"
+    [=[
 cmake_minimum_required(VERSION 4.0)
 project(BuildToolsFixture LANGUAGES CXX)
 include(CTest)
@@ -65,29 +90,88 @@ elseif(MODE STREQUAL "config-conflict")
         GROUP Conflict BOUNDARY unit TIER fast BUILD_TARGETS Other TEST_REGEX "Other"
         CMAKE_ARGS -DMODE=other)
 endif()
-]=])
-TestingConfigure(NAME "shared sources" SOURCE "${parent}" EXPECT pass ARGS -DPANGU_TEST_BUILD_JOBS=1)
-set(binary "${Testing_BINARY}")
+]=]
+)
+_pangu_configure_test_infrastructure_fixture(
+    NAME "shared sources"
+    SOURCE "${parent}"
+    EXPECT pass
+    ARGS
+        -DPANGU_TEST_BUILD_JOBS=1
+)
+set(binary "${testingBinary}")
 # 以预算 1 串行准备两座工具，验证非默认预算贯穿构建和内层 CTest。
-TestingRun(EXPECT pass COMMAND "${CMAKE_COMMAND}" --build "${binary}" --target PanguTestsFast --parallel 1)
-TestingRun(EXPECT pass COMMAND "${CMAKE_CTEST_COMMAND}" --test-dir "${binary}"
-    --no-tests=error --output-on-failure --parallel "${PANGU_TEST_BUILD_JOBS}")
-TestingListTests(BINARY "${binary}" OUTPUT tests)
+_pangu_run_test_infrastructure_command(
+    EXPECT pass
+    COMMAND
+        "${CMAKE_COMMAND}"
+        --build
+        "${binary}"
+        --target
+        PanguTestsFast
+        --parallel
+        1
+)
+_pangu_run_test_infrastructure_command(
+    EXPECT pass
+    COMMAND
+        "${CMAKE_CTEST_COMMAND}"
+        --test-dir
+        "${binary}"
+        --no-tests=error
+        --output-on-failure
+        --parallel
+        "${PANGU_TEST_BUILD_JOBS}"
+)
+_pangu_list_fixture_tests(BINARY "${binary}" OUTPUT tests)
 string(JSON budgetTestCount LENGTH "${tests}" tests)
 math(EXPR lastBudgetTest "${budgetTestCount} - 1")
 foreach(index RANGE 0 ${lastBudgetTest})
-    string(JSON properties GET "${tests}" tests ${index} properties)
-    string(JSON command GET "${tests}" tests ${index} command)
-    string(JSON name GET "${tests}" tests ${index} name)
-    string(REGEX MATCH "^BuildTools[.]([^.]+)[.]" matched "${name}")
+    string(
+        JSON properties
+        GET "${tests}"
+        tests
+        ${index}
+        properties
+    )
+    string(
+        JSON command
+        GET "${tests}"
+        tests
+        ${index}
+        command
+    )
+    string(
+        JSON name
+        GET "${tests}"
+        tests
+        ${index}
+        name
+    )
+    string(
+        REGEX MATCH "^BuildTools[.]([^.]+)[.]"
+        matched
+        "${name}"
+    )
     set(tool "${CMAKE_MATCH_1}")
     set(groupLock)
     string(JSON propertyCount LENGTH "${properties}")
     math(EXPR lastProperty "${propertyCount} - 1")
     foreach(property RANGE 0 ${lastProperty})
-        string(JSON key GET "${properties}" ${property} name)
+        string(
+            JSON key
+            GET "${properties}"
+            ${property}
+            name
+        )
         if(key STREQUAL "RESOURCE_LOCK")
-            string(JSON groupLock GET "${properties}" ${property} value 0)
+            string(
+                JSON groupLock
+                GET "${properties}"
+                ${property}
+                value
+                0
+            )
         endif()
     endforeach()
     if(NOT groupLock)
@@ -97,9 +181,17 @@ foreach(index RANGE 0 ${lastBudgetTest})
         message(FATAL_ERROR "Groups of ${tool} must protect the same CTest tree")
     endif()
     set(${tool}CTestLock "${groupLock}")
-    if(NOT command MATCHES "PANGU_BUILD_TOOLS_TEST_JOBS=1" OR
-       NOT command MATCHES "CMAKE_BUILD_PARALLEL_LEVEL=1" OR
-       NOT command MATCHES "PANGU_TEST_BUILD_JOBS=1")
+    if(
+        NOT command
+            MATCHES
+            "PANGU_BUILD_TOOLS_TEST_JOBS=1"
+        OR NOT command
+            MATCHES
+            "CMAKE_BUILD_PARALLEL_LEVEL=1"
+        OR NOT command
+            MATCHES
+            "PANGU_TEST_BUILD_JOBS=1"
+    )
         message(FATAL_ERROR "BuildTools group did not consume the selected budget: ${command}")
     endif()
     # CTest JSON 省略默认 PROCESSORS=1；大于一的值必须拒绝。
@@ -107,9 +199,19 @@ foreach(index RANGE 0 ${lastBudgetTest})
         string(JSON propertyCount LENGTH "${properties}")
         math(EXPR lastProperty "${propertyCount} - 1")
         foreach(property RANGE 0 ${lastProperty})
-            string(JSON key GET "${properties}" ${property} name)
+            string(
+                JSON key
+                GET "${properties}"
+                ${property}
+                name
+            )
             if(key STREQUAL "PROCESSORS")
-                string(JSON value GET "${properties}" ${property} value)
+                string(
+                    JSON value
+                    GET "${properties}"
+                    ${property}
+                    value
+                )
                 if(NOT value EQUAL 1)
                     message(FATAL_ERROR "BuildTools PROCESSORS differs from selected budget: ${value}")
                 endif()
@@ -121,17 +223,31 @@ if(FixtureAlphaCTestLock STREQUAL FixtureBetaCTestLock)
     message(FATAL_ERROR "Independent tool CTest trees must remain independently schedulable")
 endif()
 foreach(tool IN ITEMS FixtureAlpha FixtureBeta)
-    if(NOT tests MATCHES "BuildTools[.]${tool}[.]Behavior" OR
-       NOT EXISTS "${binary}/Tests/BuildTools/${tool}/CMakeCache.txt")
+    if(
+        NOT tests
+            MATCHES
+            "BuildTools[.]${tool}[.]Behavior"
+        OR NOT EXISTS
+            "${binary}/Tests/BuildTools/${tool}/CMakeCache.txt"
+    )
         message(FATAL_ERROR "Shared BuildTools registration is not isolated for ${tool}")
     endif()
-    file(STRINGS "${binary}/Tests/BuildTools/${tool}/CMakeCache.txt" nestedBudget
-        REGEX "^PANGU_TEST_BUILD_JOBS:STRING=")
+    file(
+        STRINGS "${binary}/Tests/BuildTools/${tool}/CMakeCache.txt"
+        nestedBudget
+        REGEX "^PANGU_TEST_BUILD_JOBS:STRING="
+    )
     if(NOT nestedBudget STREQUAL "PANGU_TEST_BUILD_JOBS:STRING=1")
         message(FATAL_ERROR "Host tool test configure lost the reserved processor budget: ${nestedBudget}")
     endif()
 endforeach()
 foreach(mode IN ITEMS source-conflict config-conflict)
-    TestingConfigure(NAME "shared-${mode}" SOURCE "${parent}" EXPECT fail
-        DIAGNOSTIC "conflict" ARGS "-DMODE=${mode}")
+    _pangu_configure_test_infrastructure_fixture(
+        NAME "shared-${mode}"
+        SOURCE "${parent}"
+        EXPECT fail
+        DIAGNOSTIC "conflict"
+        ARGS
+            "-DMODE=${mode}"
+    )
 endforeach()

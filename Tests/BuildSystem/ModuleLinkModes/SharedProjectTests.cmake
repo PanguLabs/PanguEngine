@@ -1,11 +1,39 @@
 cmake_minimum_required(VERSION 4.0)
 include("${CMAKE_CURRENT_LIST_DIR}/Helpers.cmake")
 set(binary "${PANGU_TEST_ROOT}/SharedProject")
-Run(PASS "" "${CMAKE_COMMAND}"
-    -S "${PANGU_SOURCE_ROOT}/Tests/Module/Fixtures/SharedProject" -B "${binary}" -G Ninja
-    ${compilerArgs} -DCMAKE_BUILD_TYPE=Release
-    "-DPANGU_META_HOST_BUILD_ROOT=${PANGU_META_HOST_BUILD_ROOT}")
-Run(PASS "" "${CMAKE_COMMAND}" --build "${binary}"
-    --parallel "${PANGU_TEST_BUILD_JOBS}" --target PanguNativeModuleLibraryTests)
-Run(PASS "100% tests passed" "${CMAKE_CTEST_COMMAND}" --test-dir "${binary}"
-    -R "^PanguNativeModuleLibraryTests[.]" --output-on-failure --no-tests=error)
+_pangu_run_link_mode_command(
+    PASS
+    ""
+    "${CMAKE_COMMAND}"
+    -S
+    "${PANGU_SOURCE_ROOT}/Tests/Module/Fixtures/SharedProject"
+    -B
+    "${binary}"
+    -G
+    Ninja
+    ${compilerArgs}
+    -DCMAKE_BUILD_TYPE=Release
+    "-DPANGU_META_HOST_BUILD_ROOT=${PANGU_META_HOST_BUILD_ROOT}"
+)
+_pangu_run_link_mode_command(
+    PASS
+    ""
+    "${CMAKE_COMMAND}"
+    --build
+    "${binary}"
+    --parallel
+    "${PANGU_TEST_BUILD_JOBS}"
+    --target
+    PanguNativeModuleLibraryTests
+)
+_pangu_run_link_mode_command(
+    PASS
+    "100% tests passed"
+    "${CMAKE_CTEST_COMMAND}"
+    --test-dir
+    "${binary}"
+    -R
+    "^PanguNativeModuleLibraryTests[.]"
+    --output-on-failure
+    --no-tests=error
+)

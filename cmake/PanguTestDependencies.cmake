@@ -11,22 +11,49 @@ function(pangu_require_googletest)
     set(root "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../Source/ThirdParty/GoogleTest")
     cmake_path(NORMAL_PATH root)
     set(revision "063de7e9578f82b369302001269680b4b1553359")
-    foreach(source IN ITEMS googletest/src/gtest-all.cc googletest/src/gtest_main.cc
-            googlemock/src/gmock-all.cc googlemock/src/gmock_main.cc)
+    foreach(
+        source
+        IN
+        ITEMS
+            googletest/src/gtest-all.cc
+            googletest/src/gtest_main.cc
+            googlemock/src/gmock-all.cc
+            googlemock/src/gmock_main.cc
+    )
         if(NOT EXISTS "${root}/Repo/${source}")
             message(FATAL_ERROR "GoogleTest source missing: ${root}/Repo/${source}; initialize the pinned submodule")
         endif()
     endforeach()
     find_package(Git REQUIRED QUIET)
-    execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${root}/Repo" rev-parse HEAD
-        RESULT_VARIABLE result OUTPUT_VARIABLE actual OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_VARIABLE error)
+    execute_process(
+        COMMAND
+            "${GIT_EXECUTABLE}" -C "${root}/Repo" rev-parse HEAD
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE actual
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_VARIABLE error
+    )
     if(NOT result STREQUAL "0" OR NOT actual STREQUAL revision)
         message(FATAL_ERROR "GoogleTest revision conflict: expected ${revision}, got ${actual}: ${error}")
     endif()
-    set(names gtest gtest_main gmock gmock_main)
-    set(aliases GoogleTest GoogleTestMain GoogleMock GoogleMockMain)
-    set(sources googletest/src/gtest-all.cc googletest/src/gtest_main.cc
-        googlemock/src/gmock-all.cc googlemock/src/gmock_main.cc)
+    set(names
+        gtest
+        gtest_main
+        gmock
+        gmock_main
+    )
+    set(aliases
+        GoogleTest
+        GoogleTestMain
+        GoogleMock
+        GoogleMockMain
+    )
+    set(sources
+        googletest/src/gtest-all.cc
+        googletest/src/gtest_main.cc
+        googlemock/src/gmock-all.cc
+        googlemock/src/gmock_main.cc
+    )
     set(existing OFF)
     foreach(name IN LISTS names)
         if(TARGET "${name}")
@@ -62,24 +89,60 @@ function(pangu_require_googletest)
             elseif(name STREQUAL "gmock_main")
                 list(APPEND expectedLinks gmock)
             endif()
-            if(NOT kind STREQUAL "STATIC_LIBRARY" OR NOT targetRevision STREQUAL revision OR
-               NOT rtti STREQUAL arg_RTTI OR NOT targetSources STREQUAL "${root}/Repo/${source}" OR
-               NOT options STREQUAL "-fno-exceptions;-frtti" OR
-               NOT definitions STREQUAL "GTEST_HAS_EXCEPTIONS=0;GTEST_HAS_RTTI=1" OR
-               NOT interfaceDefinitions STREQUAL "GTEST_HAS_EXCEPTIONS=0;GTEST_HAS_RTTI=1" OR
-               NOT "cxx_std_23" IN_LIST features OR NOT links STREQUAL expectedLinks OR
-               NOT actualTarget STREQUAL name OR
-               NOT "${root}/Repo/googletest/include" IN_LIST includes OR
-               NOT "${root}/Repo/googlemock/include" IN_LIST includes)
-                message(FATAL_ERROR "GoogleTest target conflict: incompatible ${name} source, revision or compile contract")
+            if(
+                NOT kind
+                    STREQUAL
+                    "STATIC_LIBRARY"
+                OR NOT targetRevision
+                    STREQUAL
+                    revision
+                OR NOT rtti
+                    STREQUAL
+                    arg_RTTI
+                OR NOT targetSources
+                    STREQUAL
+                    "${root}/Repo/${source}"
+                OR NOT options
+                    STREQUAL
+                    "-fno-exceptions;-frtti"
+                OR NOT definitions
+                    STREQUAL
+                    "GTEST_HAS_EXCEPTIONS=0;GTEST_HAS_RTTI=1"
+                OR NOT interfaceDefinitions
+                    STREQUAL
+                    "GTEST_HAS_EXCEPTIONS=0;GTEST_HAS_RTTI=1"
+                OR NOT "cxx_std_23"
+                    IN_LIST
+                    features
+                OR NOT links
+                    STREQUAL
+                    expectedLinks
+                OR NOT actualTarget
+                    STREQUAL
+                    name
+                OR NOT "${root}/Repo/googletest/include"
+                    IN_LIST
+                    includes
+                OR NOT "${root}/Repo/googlemock/include"
+                    IN_LIST
+                    includes
+            )
+                message(
+                    FATAL_ERROR
+                    "GoogleTest target conflict: incompatible ${name} source, revision or compile contract"
+                )
             endif()
         endforeach()
         return()
     endif()
     set(PANGU_GOOGLETEST_RTTI "${arg_RTTI}")
     if(COMMAND pangu_add_owned_subdirectory AND PANGU_SOURCE_OWNER)
-        pangu_add_owned_subdirectory(SOURCE_DIR "${root}" OWNER "${PANGU_SOURCE_OWNER}"
-            RELATIVE_BINARY_DIR Source/ThirdParty/GoogleTest EXCLUDE_FROM_ALL)
+        pangu_add_owned_subdirectory(
+            SOURCE_DIR "${root}"
+            OWNER "${PANGU_SOURCE_OWNER}"
+            RELATIVE_BINARY_DIR Source/ThirdParty/GoogleTest
+            EXCLUDE_FROM_ALL
+        )
     else()
         add_subdirectory("${root}" "${CMAKE_BINARY_DIR}/ThirdParty/GoogleTest" EXCLUDE_FROM_ALL)
     endif()
@@ -96,17 +159,35 @@ function(pangu_require_googlebenchmark)
         message(FATAL_ERROR "Google Benchmark source missing: ${root}/Repo; initialize the pinned submodule")
     endif()
     find_package(Git REQUIRED QUIET)
-    execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${root}/Repo" rev-parse HEAD
-        RESULT_VARIABLE result OUTPUT_VARIABLE actual OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_VARIABLE error)
+    execute_process(
+        COMMAND
+            "${GIT_EXECUTABLE}" -C "${root}/Repo" rev-parse HEAD
+        RESULT_VARIABLE result
+        OUTPUT_VARIABLE actual
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_VARIABLE error
+    )
     if(NOT result STREQUAL "0" OR NOT actual STREQUAL revision)
         message(FATAL_ERROR "Google Benchmark revision conflict: expected ${revision}, got ${actual}: ${error}")
     endif()
     get_property(created GLOBAL PROPERTY PANGU_GOOGLEBENCHMARK_CREATED)
     if(created)
         foreach(name IN ITEMS benchmark benchmark_main)
-            foreach(prop IN ITEMS TYPE SOURCE_DIR SOURCES COMPILE_OPTIONS COMPILE_DEFINITIONS INTERFACE_COMPILE_FEATURES LINK_LIBRARIES)
+            string(TOUPPER "${name}" nameKey)
+            foreach(
+                prop
+                IN
+                ITEMS
+                    TYPE
+                    SOURCE_DIR
+                    SOURCES
+                    COMPILE_OPTIONS
+                    COMPILE_DEFINITIONS
+                    INTERFACE_COMPILE_FEATURES
+                    LINK_LIBRARIES
+            )
                 get_target_property(value ${name} ${prop})
-                get_property(expected GLOBAL PROPERTY "PANGU_GOOGLEBENCHMARK_${name}_${prop}")
+                get_property(expected GLOBAL PROPERTY "PANGU_GOOGLEBENCHMARK_${nameKey}_${prop}")
                 if(NOT "${value}" STREQUAL "${expected}")
                     message(FATAL_ERROR "Google Benchmark target conflict: ${name} ${prop} changed")
                 endif()
@@ -114,20 +195,55 @@ function(pangu_require_googlebenchmark)
         endforeach()
         return()
     endif()
-    if(TARGET benchmark OR TARGET benchmark_main OR TARGET ThirdParty::GoogleBenchmark OR TARGET ThirdParty::GoogleBenchmarkMain)
+    if(
+        TARGET
+            benchmark
+        OR TARGET
+            benchmark_main
+        OR TARGET
+            ThirdParty::GoogleBenchmark
+        OR TARGET
+            ThirdParty::GoogleBenchmarkMain
+    )
         message(FATAL_ERROR "Google Benchmark target conflict: existing targets cannot be verified")
     endif()
     if(COMMAND pangu_add_owned_subdirectory AND PANGU_SOURCE_OWNER)
-        pangu_add_owned_subdirectory(SOURCE_DIR "${root}" OWNER "${PANGU_SOURCE_OWNER}"
-            RELATIVE_BINARY_DIR Source/ThirdParty/GoogleBenchmark EXCLUDE_FROM_ALL)
+        pangu_add_owned_subdirectory(
+            SOURCE_DIR "${root}"
+            OWNER "${PANGU_SOURCE_OWNER}"
+            RELATIVE_BINARY_DIR Source/ThirdParty/GoogleBenchmark
+            EXCLUDE_FROM_ALL
+        )
     else()
         add_subdirectory("${root}" "${CMAKE_BINARY_DIR}/ThirdParty/GoogleBenchmark" EXCLUDE_FROM_ALL)
     endif()
     foreach(name IN ITEMS benchmark benchmark_main)
-        foreach(prop IN ITEMS TYPE SOURCE_DIR SOURCES COMPILE_OPTIONS COMPILE_DEFINITIONS INTERFACE_COMPILE_FEATURES LINK_LIBRARIES)
+        string(TOUPPER "${name}" nameKey)
+        foreach(
+            prop
+            IN
+            ITEMS
+                TYPE
+                SOURCE_DIR
+                SOURCES
+                COMPILE_OPTIONS
+                COMPILE_DEFINITIONS
+                INTERFACE_COMPILE_FEATURES
+                LINK_LIBRARIES
+        )
             get_target_property(value ${name} ${prop})
-            set_property(GLOBAL PROPERTY "PANGU_GOOGLEBENCHMARK_${name}_${prop}" "${value}")
+            set_property(
+                GLOBAL
+                PROPERTY
+                    "PANGU_GOOGLEBENCHMARK_${nameKey}_${prop}"
+                        "${value}"
+            )
         endforeach()
     endforeach()
-    set_property(GLOBAL PROPERTY PANGU_GOOGLEBENCHMARK_CREATED TRUE)
+    set_property(
+        GLOBAL
+        PROPERTY
+            PANGU_GOOGLEBENCHMARK_CREATED
+                TRUE
+    )
 endfunction()

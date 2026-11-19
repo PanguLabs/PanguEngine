@@ -17,6 +17,7 @@
       },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "$env{LLVM_ROOT}/bin/clang.exe",
         "CMAKE_CXX_COMPILER": "$env{LLVM_ROOT}/bin/clang++.exe",
         "CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS": "$env{LLVM_ROOT}/bin/clang-scan-deps.exe",
         "PANGU_ENGINE_SOURCE_DIR": "$env{PANGU_ENGINE_SOURCE_DIR}",

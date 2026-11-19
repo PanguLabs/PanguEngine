@@ -7,8 +7,14 @@ if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Repo/lib/zstd.h")
     message(FATAL_ERROR "zstd source missing; run git submodule update --init --recursive")
 endif()
 find_package(Git REQUIRED)
-execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${CMAKE_CURRENT_SOURCE_DIR}/Repo" rev-parse HEAD
-    RESULT_VARIABLE result OUTPUT_VARIABLE revision OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_VARIABLE error)
+execute_process(
+    COMMAND
+        "${GIT_EXECUTABLE}" -C "${CMAKE_CURRENT_SOURCE_DIR}/Repo" rev-parse HEAD
+    RESULT_VARIABLE result
+    OUTPUT_VARIABLE revision
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_VARIABLE error
+)
 if(NOT result EQUAL 0 OR NOT revision STREQUAL "f8745da6ff1ad1e7bab384bd1f9d742439278e99")
     message(FATAL_ERROR "zstd revision mismatch: ${revision}: ${error}")
 endif()
@@ -20,4 +26,9 @@ set(ZSTD_MULTITHREAD_SUPPORT OFF CACHE BOOL "" FORCE)
 set(ZSTD_LEGACY_SUPPORT OFF CACHE BOOL "" FORCE)
 add_subdirectory(Repo/build/cmake)
 add_library(ThirdParty::Zstd ALIAS libzstd_static)
-set_target_properties(libzstd_static PROPERTIES POSITION_INDEPENDENT_CODE ON)
+set_target_properties(
+    libzstd_static
+    PROPERTIES
+        POSITION_INDEPENDENT_CODE
+            ON
+)

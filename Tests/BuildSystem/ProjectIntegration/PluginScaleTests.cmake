@@ -7,19 +7,58 @@ foreach(count IN ITEMS 0 10 100)
         foreach(index RANGE 1 ${count})
             file(MAKE_DIRECTORY "${scaleSource}/Plugins/Plugin${index}")
             file(WRITE "${scaleSource}/Plugins/Plugin${index}/Plugin.toml" "[plugin]\nid = 'scale.plugin${index}'\n")
-            file(WRITE "${scaleSource}/Plugins/Plugin${index}/CMakeLists.txt" "message(FATAL_ERROR \"disabled scale plugin executed\")\n")
+            file(
+                WRITE "${scaleSource}/Plugins/Plugin${index}/CMakeLists.txt"
+                "message(FATAL_ERROR \"disabled scale plugin executed\")\n"
+            )
         endforeach()
     endif()
-    file(TO_CMAKE_PATH "${PANGU_ENGINE_SOURCE_DIR}" enginePath)
-    file(WRITE "${scaleSource}/CMakeLists.txt"
-        "cmake_minimum_required(VERSION 4.0)\nproject(PluginScale LANGUAGES NONE)\ninclude(\"${enginePath}/cmake/PanguPlugins.cmake\")\npangu_add_enabled_plugins(ENGINE_ROOT \"\${CMAKE_CURRENT_SOURCE_DIR}\")\n")
-    ProjectCommand(PASS "discovered ${count} source plugins" "${CMAKE_COMMAND}"
-        -S "${scaleSource}" -B "${scaleBinary}" -G Ninja)
-    ProjectCommand(PASS "no work to do" "${CMAKE_COMMAND}" --build "${scaleBinary}")
-    ProjectCommand(PASS "" ninja -C "${scaleBinary}" -t commands all)
-    RejectText("${commandOutput}" "Plugin1")
-    ProjectCommand(PASS "" "${scaleBinary}/BuildTools/PanguBuildTool/PanguBuildTool${executableSuffix}"
-        discover --engine-root "${scaleSource}")
+    file(
+        TO_CMAKE_PATH
+        "${PANGU_ENGINE_SOURCE_DIR}"
+        enginePath
+    )
+    file(
+        WRITE "${scaleSource}/CMakeLists.txt"
+        "cmake_minimum_required(VERSION 4.0)\nproject(PluginScale LANGUAGES NONE)\ninclude(\"${enginePath}/cmake/PanguPlugins.cmake\")\npangu_add_enabled_plugins(ENGINE_ROOT \"\${CMAKE_CURRENT_SOURCE_DIR}\")\n"
+    )
+    _pangu_run_project_command(
+        PASS
+        "discovered ${count} source plugins"
+        "${CMAKE_COMMAND}"
+        -S
+        "${scaleSource}"
+        -B
+        "${scaleBinary}"
+        -G
+        Ninja
+    )
+    _pangu_run_project_command(
+        PASS
+        "no work to do"
+        "${CMAKE_COMMAND}"
+        --build
+        "${scaleBinary}"
+    )
+    _pangu_run_project_command(
+        PASS
+        ""
+        ninja
+        -C
+        "${scaleBinary}"
+        -t
+        commands
+        all
+    )
+    _pangu_reject_test_text("${commandOutput}" "Plugin1")
+    _pangu_run_project_command(
+        PASS
+        ""
+        "${scaleBinary}/BuildTools/PanguBuildTool/PanguBuildTool${executableSuffix}"
+        discover
+        --engine-root
+        "${scaleSource}"
+    )
     string(JSON actualCount LENGTH "${commandOutput}" plugins)
     if(NOT actualCount EQUAL count)
         message(FATAL_ERROR "Scale JSON array size mismatch: ${count}/${actualCount}")

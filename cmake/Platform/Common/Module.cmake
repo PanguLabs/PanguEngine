@@ -23,7 +23,10 @@ function(pangu_configure_module targetName)
 
     pangu_module_library_type(expectedType)
     if(NOT targetType STREQUAL "${expectedType}_LIBRARY")
-        message(FATAL_ERROR "does not match PANGU_LINK_MODE: '${targetName}' is ${targetType}, mode is ${PANGU_LINK_MODE}.")
+        message(
+            FATAL_ERROR
+            "does not match PANGU_LINK_MODE: '${targetName}' is ${targetType}, mode is ${PANGU_LINK_MODE}."
+        )
     endif()
     if(NOT ARG_EXPORT_MACRO)
         string(TOUPPER "${targetName}_API" ARG_EXPORT_MACRO)
@@ -35,37 +38,75 @@ function(pangu_configure_module targetName)
         set(PANGU_SOURCE_OWNER project)
     endif()
     pangu_owned_build_root(ownedRoot "${PANGU_SOURCE_OWNER}")
-    set_property(TARGET "${targetName}" PROPERTY PANGU_SOURCE_OWNER "${PANGU_SOURCE_OWNER}")
+    set_property(
+        TARGET
+            "${targetName}"
+        PROPERTY
+            PANGU_SOURCE_OWNER
+                "${PANGU_SOURCE_OWNER}"
+    )
     if(PANGU_SOURCE_OWNER STREQUAL "engine")
-        get_property(context GLOBAL PROPERTY PANGU_LAYOUT_current_context)
-        target_compile_options("${targetName}" PRIVATE -include "${context}")
-        set_property(TARGET "${targetName}" PROPERTY PANGU_CONTEXT_INCLUDED ON)
+        get_property(context GLOBAL PROPERTY PANGU_LAYOUT_CURRENT_CONTEXT)
+        target_compile_options(
+            "${targetName}"
+            PRIVATE
+                -include
+                "${context}"
+        )
+        set_property(
+            TARGET
+                "${targetName}"
+            PROPERTY
+                PANGU_CONTEXT_INCLUDED
+                    ON
+        )
     endif()
     set(exportDirectory "${ownedRoot}/Generated/Export")
     file(MAKE_DIRECTORY "${exportDirectory}")
     set(exportHeader "#pragma once\n\n")
     if(expectedType STREQUAL "SHARED")
-        string(APPEND exportHeader "#ifdef _WIN32\n#  ifdef ${targetName}_EXPORTS\n#    define ${ARG_EXPORT_MACRO} __declspec(dllexport)\n#  else\n#    define ${ARG_EXPORT_MACRO} __declspec(dllimport)\n#  endif\n#else\n#  define ${ARG_EXPORT_MACRO} __attribute__((visibility(\"default\")))\n#endif\n")
+        string(
+            APPEND exportHeader
+            "#ifdef _WIN32\n#  ifdef ${targetName}_EXPORTS\n#    define ${ARG_EXPORT_MACRO} __declspec(dllexport)\n#  else\n#    define ${ARG_EXPORT_MACRO} __declspec(dllimport)\n#  endif\n#else\n#  define ${ARG_EXPORT_MACRO} __attribute__((visibility(\"default\")))\n#endif\n"
+        )
     else()
         string(APPEND exportHeader "#define ${ARG_EXPORT_MACRO}\n")
     endif()
     file(CONFIGURE OUTPUT "${exportDirectory}/${targetName}Export.h" CONTENT "${exportHeader}" @ONLY)
     target_include_directories("${targetName}" PUBLIC "$<BUILD_INTERFACE:${exportDirectory}>")
-    set_property(TARGET "${targetName}" PROPERTY PANGU_EXPORT_MACRO "${ARG_EXPORT_MACRO}")
+    set_property(
+        TARGET
+            "${targetName}"
+        PROPERTY
+            PANGU_EXPORT_MACRO
+                "${ARG_EXPORT_MACRO}"
+    )
 
     # Warnings and no-exception policy apply to this Module, not to its consumers.
     target_link_libraries("${targetName}" PRIVATE PanguBuildOptions)
-    set_target_properties("${targetName}" PROPERTIES
-        CXX_STANDARD 23
-        CXX_STANDARD_REQUIRED ON
-        CXX_EXTENSIONS OFF
-        POSITION_INDEPENDENT_CODE ON
-        DEFINE_SYMBOL "${targetName}_EXPORTS"
-        CXX_VISIBILITY_PRESET hidden
-        VISIBILITY_INLINES_HIDDEN ON
-        ARCHIVE_OUTPUT_DIRECTORY "${ownedRoot}/Lib"
-        LIBRARY_OUTPUT_DIRECTORY "${ownedRoot}/Bin"
-        RUNTIME_OUTPUT_DIRECTORY "${ownedRoot}/Bin"
+    set_target_properties(
+        "${targetName}"
+        PROPERTIES
+            CXX_STANDARD
+                23
+            CXX_STANDARD_REQUIRED
+                ON
+            CXX_EXTENSIONS
+                OFF
+            POSITION_INDEPENDENT_CODE
+                ON
+            DEFINE_SYMBOL
+                "${targetName}_EXPORTS"
+            CXX_VISIBILITY_PRESET
+                hidden
+            VISIBILITY_INLINES_HIDDEN
+                ON
+            ARCHIVE_OUTPUT_DIRECTORY
+                "${ownedRoot}/Lib"
+            LIBRARY_OUTPUT_DIRECTORY
+                "${ownedRoot}/Bin"
+            RUNTIME_OUTPUT_DIRECTORY
+                "${ownedRoot}/Bin"
     )
 endfunction()
 
@@ -78,6 +119,11 @@ function(pangu_export_module_query)
     if(NOT exportMacro)
         message(FATAL_ERROR "Configure Module '${ARG_TARGET}' before exporting its Query.")
     endif()
-    pangu_meta_module(TARGET "${ARG_TARGET}" ID "${ARG_ID}" ID_HEADER "${ARG_ID_HEADER}"
-        QUERY "${ARG_QUERY}" HEADER "${ARG_HEADER}")
+    pangu_meta_module(
+        TARGET "${ARG_TARGET}"
+        ID "${ARG_ID}"
+        ID_HEADER "${ARG_ID_HEADER}"
+        QUERY "${ARG_QUERY}"
+        HEADER "${ARG_HEADER}"
+    )
 endfunction()

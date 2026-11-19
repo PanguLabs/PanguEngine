@@ -34,8 +34,11 @@ function(pangu_prepare_meta_tool output)
     if(NOT source STREQUAL "${engine}/BuildTools/PanguMetaTool" AND NOT binary MATCHES "/Tests/")
         message(FATAL_ERROR "Alternate Meta tool sources require an isolated Tests host cache")
     endif()
-    set(arguments "-DPANGU_META_TOOL_SOURCE_DIR=${source}" "-DPANGU_META_TOOL_BINARY_DIR=${binary}"
-        "-DPANGU_ENGINE_SOURCE_DIR=${engine}")
+    set(arguments
+        "-DPANGU_META_TOOL_SOURCE_DIR=${source}"
+        "-DPANGU_META_TOOL_BINARY_DIR=${binary}"
+        "-DPANGU_ENGINE_SOURCE_DIR=${engine}"
+    )
     set(script "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/BuildMetaTool.cmake")
     set(manifest "${binary}/PanguMetaToolBuildInputs.cmake")
     set(configured "${binary}/PanguMetaToolConfigure.stamp")
@@ -44,20 +47,44 @@ function(pangu_prepare_meta_tool output)
         include("${manifest}")
         set(refresh OFF)
         foreach(input IN LISTS PANGU_META_BUILD_INPUTS)
-            if(NOT EXISTS "${input}" OR
-               (input MATCHES "(CMakeLists\\.txt|\\.cmake)$" AND "${input}" IS_NEWER_THAN "${configured}"))
+            if(
+                NOT EXISTS
+                    "${input}"
+                OR (
+                    input
+                        MATCHES
+                        "(CMakeLists\\.txt|\\.cmake)$"
+                    AND "${input}"
+                        IS_NEWER_THAN
+                        "${configured}"
+                )
+            )
                 set(refresh ON)
                 break()
             endif()
         endforeach()
-        if(NOT PANGU_META_BUILD_SOURCE STREQUAL source OR NOT PANGU_META_LLVM_ROOT STREQUAL selectedLlvmRoot OR
-           "${script}" IS_NEWER_THAN "${configured}")
+        if(
+            NOT PANGU_META_BUILD_SOURCE
+                STREQUAL
+                source
+            OR NOT PANGU_META_LLVM_ROOT
+                STREQUAL
+                selectedLlvmRoot
+            OR "${script}"
+                IS_NEWER_THAN
+                "${configured}"
+        )
             set(refresh ON)
         endif()
     endif()
     if(refresh)
-        execute_process(COMMAND "${CMAKE_COMMAND}" ${arguments} -DPANGU_META_CONFIGURE_ONLY=ON -P "${script}"
-            RESULT_VARIABLE status OUTPUT_VARIABLE configureOutput ERROR_VARIABLE error)
+        execute_process(
+            COMMAND
+                "${CMAKE_COMMAND}" ${arguments} -DPANGU_META_CONFIGURE_ONLY=ON -P "${script}"
+            RESULT_VARIABLE status
+            OUTPUT_VARIABLE configureOutput
+            ERROR_VARIABLE error
+        )
         if(NOT status EQUAL 0)
             message(FATAL_ERROR "Meta host bootstrap failed:\n${configureOutput}\n${error}")
         endif()
@@ -70,16 +97,40 @@ function(pangu_prepare_meta_tool output)
         set(suffix .exe)
     endif()
     set(executable "${binary}/PanguMetaTool${suffix}")
-    add_custom_command(OUTPUT "${executable}"
-        COMMAND "${CMAKE_COMMAND}" ${arguments} -P "${script}"
-        DEPENDS ${PANGU_META_BUILD_INPUTS} "${script}"
-        COMMENT "PanguMetaTool native host build" VERBATIM)
+    add_custom_command(
+        OUTPUT
+            "${executable}"
+        COMMAND
+            "${CMAKE_COMMAND}" ${arguments} -P "${script}"
+        DEPENDS
+            ${PANGU_META_BUILD_INPUTS}
+            "${script}"
+        COMMENT "PanguMetaTool native host build"
+        VERBATIM
+    )
     add_custom_target(PanguMetaToolHost DEPENDS "${executable}")
-    set_property(GLOBAL PROPERTY PANGU_META_TOOL_EXECUTABLE "${executable}")
-    set_property(GLOBAL PROPERTY PANGU_META_RESOURCE_DIR "${PANGU_META_RESOURCE_DIR}")
+    set_property(
+        GLOBAL
+        PROPERTY
+            PANGU_META_TOOL_EXECUTABLE
+                "${executable}"
+    )
+    set_property(
+        GLOBAL
+        PROPERTY
+            PANGU_META_RESOURCE_DIR
+                "${PANGU_META_RESOURCE_DIR}"
+    )
     # CMake 的缺失配置输入规则先触发父图重配，使旧清单中的删除项不会阻断 exe 构建。
     # 仅原生依赖变化时执行配置；普通 no-op 不运行嵌套脚本或目录扫描。
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-        "${manifest}" ${PANGU_META_BUILD_INPUTS} "${script}")
+    set_property(
+        DIRECTORY
+        APPEND
+        PROPERTY
+            CMAKE_CONFIGURE_DEPENDS
+                "${manifest}"
+                ${PANGU_META_BUILD_INPUTS}
+                "${script}"
+    )
     set(${output} "${executable}" PARENT_SCOPE)
 endfunction()

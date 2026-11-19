@@ -5,8 +5,7 @@ if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 endif()
 
 # Android uses the selected NDK Clang instead of LLVM 23.
-if(NOT ANDROID AND (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 23.0
-        OR NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 24.0))
+if(NOT ANDROID AND (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 23.0 OR NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 24.0))
     message(FATAL_ERROR "PanguEngine requires Clang 23.x except on Android.")
 endif()
 
@@ -16,15 +15,20 @@ if(NOT ANDROID)
         message(FATAL_ERROR "Set LLVM_ROOT to the selected LLVM 23 installation prefix.")
     endif()
 
-    get_filename_component(_pangu_llvm_root "$ENV{LLVM_ROOT}" REALPATH)
-    get_filename_component(_pangu_compiler_real "${CMAKE_CXX_COMPILER}" REALPATH)
-    cmake_path(IS_PREFIX _pangu_llvm_root "${_pangu_compiler_real}" NORMALIZE _pangu_is_llvm_clang)
-    if(NOT _pangu_is_llvm_clang)
-        message(FATAL_ERROR "Clang must come from the installation selected by LLVM_ROOT.")
-    endif()
-    unset(_pangu_llvm_root)
-    unset(_pangu_compiler_real)
-    unset(_pangu_is_llvm_clang)
+    block(SCOPE_FOR VARIABLES)
+        get_filename_component(llvmRoot "$ENV{LLVM_ROOT}" REALPATH)
+        get_filename_component(compilerPath "${CMAKE_CXX_COMPILER}" REALPATH)
+        cmake_path(
+            IS_PREFIX
+            llvmRoot
+            "${compilerPath}"
+            NORMALIZE
+            isLlvmClang
+        )
+        if(NOT isLlvmClang)
+            message(FATAL_ERROR "Clang must come from the installation selected by LLVM_ROOT.")
+        endif()
+    endblock()
 endif()
 
 if(ANDROID)

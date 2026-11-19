@@ -1,7 +1,7 @@
 include_guard(GLOBAL)
 
 # 仅记录命令元数据，不包装 execute_process，保留调用方原有输出与失败判断。
-function(pangu_test_record_command_time started result)
+function(_pangu_record_test_command_time started result)
     string(TIMESTAMP finished "%s%f" UTC)
     math(EXPR elapsed "${finished} - ${started}")
     set(phase run)

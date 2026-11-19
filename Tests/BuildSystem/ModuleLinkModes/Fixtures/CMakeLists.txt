@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 4.0)
-project(ModuleLinkModes LANGUAGES CXX)
+project(
+    ModuleLinkModes
+    LANGUAGES
+        C
+        CXX
+)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(DEFINED FIXTURE_PARENT_MODE)
     set(PANGU_LINK_MODE "${FIXTURE_PARENT_MODE}")
@@ -29,7 +34,11 @@ if(FIXTURE_CHANGE_MODE)
     pangu_initialize_link_mode()
 endif()
 if(FIXTURE_WRONG_TYPE)
-    add_library(WrongModule ${FIXTURE_WRONG_TYPE} ThirdParty.cpp)
+    add_library(
+        WrongModule
+        ${FIXTURE_WRONG_TYPE}
+        ThirdParty.cpp
+    )
     pangu_configure_module(WrongModule EXPORT_MACRO PG_WRONG_API)
 endif()
 add_library(ThirdParty STATIC ThirdParty.cpp)
@@ -39,13 +48,22 @@ if(NOT thirdPartyType STREQUAL "STATIC_LIBRARY")
 endif()
 foreach(name IN ITEMS First Second)
     pangu_module_library_type(moduleType)
-    add_library(PanguCatalog${name} ${moduleType} "${PANGU_SOURCE_ROOT}/Tests/Module/Fixtures/${name}.cpp")
+    add_library(
+        PanguCatalog${name}
+        ${moduleType}
+        "${PANGU_SOURCE_ROOT}/Tests/Module/Fixtures/${name}.cpp"
+    )
     string(TOUPPER "${name}" upperName)
     pangu_configure_module(PanguCatalog${name} EXPORT_MACRO "PG_CATALOG_${upperName}_API")
     target_link_libraries(PanguCatalog${name} PUBLIC PanguModule)
     target_include_directories(PanguCatalog${name} PRIVATE "${PANGU_SOURCE_ROOT}/Tests/Module/Fixtures")
-    pangu_export_module_query(TARGET PanguCatalog${name} ID "pg::module::fixture::k${name}Id" ID_HEADER FixtureModules.h QUERY "pg::module::fixture::Query${name}"
-        HEADER FixtureModules.h)
+    pangu_export_module_query(
+        TARGET PanguCatalog${name}
+        ID "pg::module::fixture::k${name}Id"
+        ID_HEADER FixtureModules.h
+        QUERY "pg::module::fixture::Query${name}"
+        HEADER FixtureModules.h
+    )
     get_target_property(moduleSources PanguCatalog${name} SOURCES)
     if(EXPECT_MODE STREQUAL "Monolithic" AND moduleSources MATCHES "ModuleQuery.cpp")
         message(FATAL_ERROR "STATIC Module must not compile the fixed native Query wrapper")
@@ -58,21 +76,64 @@ foreach(name IN ITEMS First Second)
         configure_file(QueryConsumer.cpp.in "${CMAKE_CURRENT_BINARY_DIR}/Query${name}Consumer.cpp" @ONLY)
         add_executable(Query${name}Consumer "${CMAKE_CURRENT_BINARY_DIR}/Query${name}Consumer.cpp")
         target_include_directories(Query${name}Consumer PRIVATE "${PANGU_SOURCE_ROOT}/Tests/Module/Fixtures")
-        target_link_libraries(Query${name}Consumer PRIVATE PanguBuildOptions PanguCatalog${name})
-        set_target_properties(Query${name}Consumer PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")
+        target_link_libraries(
+            Query${name}Consumer
+            PRIVATE
+                PanguBuildOptions
+                PanguCatalog${name}
+        )
+        set_target_properties(
+            Query${name}Consumer
+            PROPERTIES
+                RUNTIME_OUTPUT_DIRECTORY
+                    "${CMAKE_BINARY_DIR}/Bin"
+        )
     endif()
 endforeach()
 target_link_libraries(PanguCatalogFirst PRIVATE PanguCatalogSecond)
 add_executable(ModeConsumer Consumer.cpp)
-target_include_directories(ModeConsumer PRIVATE "${PANGU_SOURCE_ROOT}/Tests/Module/Fixtures"
-    "${PANGU_SOURCE_ROOT}/Source/Runtime/Module/Private")
-target_link_libraries(ModeConsumer PRIVATE PanguBuildOptions PanguEngineHost PanguModule PanguCatalogFirst PanguCatalogSecond ThirdParty)
-set_target_properties(ModeConsumer PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")
+target_include_directories(
+    ModeConsumer
+    PRIVATE
+        "${PANGU_SOURCE_ROOT}/Tests/Module/Fixtures"
+        "${PANGU_SOURCE_ROOT}/Source/Runtime/Module/Private"
+)
+target_link_libraries(
+    ModeConsumer
+    PRIVATE
+        PanguBuildOptions
+        PanguEngineHost
+        PanguModule
+        PanguCatalogFirst
+        PanguCatalogSecond
+        ThirdParty
+)
+set_target_properties(
+    ModeConsumer
+    PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY
+            "${CMAKE_BINARY_DIR}/Bin"
+)
 if(EXPECT_MODE STREQUAL "Modular")
     add_executable(QueryEngineHostConsumer QueryEngineHostConsumer.cpp)
-    target_link_libraries(QueryEngineHostConsumer PRIVATE PanguBuildOptions PanguEngineHost)
-    set_target_properties(QueryEngineHostConsumer PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")
-    add_dependencies(ModeConsumer QueryFirstConsumer QuerySecondConsumer QueryEngineHostConsumer)
+    target_link_libraries(
+        QueryEngineHostConsumer
+        PRIVATE
+            PanguBuildOptions
+            PanguEngineHost
+    )
+    set_target_properties(
+        QueryEngineHostConsumer
+        PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY
+                "${CMAKE_BINARY_DIR}/Bin"
+    )
+    add_dependencies(
+        ModeConsumer
+        QueryFirstConsumer
+        QuerySecondConsumer
+        QueryEngineHostConsumer
+    )
 endif()
 enable_testing()
 add_test(NAME ModeConsumerSmoke COMMAND ModeConsumer)
@@ -83,8 +144,17 @@ if(EXPECT_MODE STREQUAL "Modular")
 endif()
 
 # Meta 在根目录 DEFER 后接入源文件；必须在同一队列末尾检查最终目标。
-function(CheckFinalQuerySources)
-    foreach(target IN ITEMS PanguFoundation PanguModule PanguEngineHost PanguCatalogFirst PanguCatalogSecond)
+function(_pangu_check_final_query_sources)
+    foreach(
+        target
+        IN
+        ITEMS
+            PanguFoundation
+            PanguModule
+            PanguEngineHost
+            PanguCatalogFirst
+            PanguCatalogSecond
+    )
         get_target_property(sources "${target}" SOURCES)
         list(FILTER sources INCLUDE REGEX "ModuleQuery(\\.gen)?\\.cpp$")
         list(LENGTH sources count)
@@ -95,4 +165,4 @@ function(CheckFinalQuerySources)
         endif()
     endforeach()
 endfunction()
-cmake_language(DEFER CALL CheckFinalQuerySources)
+cmake_language(DEFER CALL _pangu_check_final_query_sources)

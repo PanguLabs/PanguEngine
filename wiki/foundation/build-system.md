@@ -26,9 +26,11 @@
 
 依据 [ADR-0014](../decisions/0014-source-plugins-project-build.md)：Engine 可独立顶层构建；Game Project 自行选择 Toolchain、CTest、隔离 BuildRoot，通过 `find_package(PanguEngine REQUIRED MODULE)` 查找源码包，再调用 `pangu_initialize()`。内部以 `add_subdirectory()` 将 Engine 源码加入同一目标图。配置期仅从 Engine/Project 两个固定 `Plugins/` 根扫描直接子目录，所有候选必须同时包含 `Plugin.toml` + `CMakeLists.txt`，严格验证稳定 ID 和可选 SemVer。顶层每次 Configure（**包括无 Plugin**）都须通过宿主 Clang/C++23 独立增量构建并运行 `PanguBuildTool`（`toml++`、JSON）；不能因插件为空跳过。Plugin 显式启用后仍用 `EXCLUDE_FROM_ALL`，只由实际 Game/Editor/Tool Target 链接/依赖触发编译，部署和激活另行控制。
 
-Project 在自身 `project()` 后按以下方式接入；`PANGU_ENGINE_SOURCE_DIR` 指向选定的 Engine 源码根，`PANGU_ENGINE_BUILD_ROOT` 为绝对路径：
+Project 在顶层 `project()` 启用 C 与 CXX 后接入 Engine。`PANGU_ENGINE_SOURCE_DIR` 指向选定的 Engine 源码根，`PANGU_ENGINE_BUILD_ROOT` 为绝对路径。
 
 ```cmake
+cmake_minimum_required(VERSION 4.0)
+project(MyGame LANGUAGES C CXX)
 list(PREPEND CMAKE_MODULE_PATH "${PANGU_ENGINE_SOURCE_DIR}/cmake")
 find_package(PanguEngine REQUIRED MODULE)
 set(PANGU_ENGINE_BUILD_ROOT "${CMAKE_BINARY_DIR}/EngineBuild" CACHE PATH "Engine artifacts")
@@ -43,6 +45,8 @@ Project Git 锁校验使用 `git --no-optional-locks` 只读查询，禁止因�
 HEAD、tracked dirty、子模块及显式 override 的判定保持不变；查询失败或真实不一致仍拒绝，不重试吞错。
 
 ## CMake Target 命名与职责（Frozen）
+
+其它 CMake 名称类别（命令、函数、变量、缓存、属性、关键字、生成器表达式）的统一写法见 [CMake 命名规范](cmake-naming.md)；本节继续作为 Target 命名空间及归属的权威约束。
 
 | 命名 | 归属 | 示例 |
 | --- | --- | --- |
@@ -131,7 +135,7 @@ cmake/
     iOS/Settings.cmake     + Toolchain.cmake + CMakePresets.json
 ```
 
-- `PanguPlatform.cmake` 在语言启用后按**目标平台**校验工具链。独立 Engine 项目声明 `LANGUAGES C CXX`。嵌入时，`find_package(PanguEngine)` 只发现源码包，`pangu_initialize()` 在调用者配置中按需启用 C，再接入 Engine 子目录。C 与 CXX 选择同一目标工具链，Android 使用官方 NDK 自带 Clang。Windows 的 CXX-only 调用者未指定 C 编译器且未设置 `CC` 时，使用其 CXX Clang 同目录的 `clang.exe`。父项目保留原名称和 CXX 编译器。C++ 保持 C++23，flecs 的 C 源码使用目标 Clang 的 C99。
+- `PanguPlatform.cmake` 在语言启用后按**目标平台**校验工具链。独立 Engine 和消费 Engine 的顶层 Project 都在 `project()` 中声明 `LANGUAGES C CXX`。嵌入时，`find_package(PanguEngine)` 只发现源码包，`pangu_initialize()` 验证调用方已启用这两门语言，再接入 Engine 子目录。Project 在 `project()` 前通过 Preset 或 Toolchain 为 C 和 CXX 选择同一目标工具链。Windows 使用同一 LLVM 安装中的 `clang.exe` 和 `clang++.exe`，Android 使用官方 NDK 自带 Clang。父项目拥有项目名称和编译器选择。C++ 保持 C++23，flecs 的 C 源码使用目标 Clang 的 C99。
 - `PanguBuildOptions` 是无产物、无 `Pangu::` 别名的 **INTERFACE 编译策略 Target**，仅为显式依赖它的 Pangu 自有 Target 设置 C++23、`-fno-exceptions` 和基础告警参数；工具链/标准库选择由 Preset/Toolchain 在 `project()` 之前完成，普通 ThirdParty Target 不需要链接 `PanguBuildOptions`。Pangu 自有 Runtime、BuildTools、测试和基准保留 RTTI；独立 PanguMetaTool 的 Clang 适配编译单元匹配 Clang 库 RTTI，Linux 宿主工具可使用 libstdc++，例外见 [ADR-0018](../decisions/0018-installed-pangumeta-sdk.md)；框架与消费方保持 RTTI 一致，CRT/Iterator 等有效配置遵守平台工具链策略，不恢复逐 TU Collector。
 - `pangu_configure_module(<existing-target>)` 仅为现有 `add_library(... STATIC|SHARED ...)` Target **PRIVATE** 应用 Pangu 编译策略，并设置 PIC 和输出目录；必须**先创建**真实 Module Target，不隐式生成 Library、Manifest、Catalog 或 ModuleId。当前 `PanguModule` 通过 `pangu_module_library_type` 得到统一模式类型后创建，`Pangu::Module` 仅是 Alias。
 - 平台 Settings 负责目标特殊规则：Windows 使用 Clang + MSVC STL（Windows ARM 不在 v1）；Linux Toolchain 在 `project()` 前选择并核对匹配 LLVM 的 libc++ 头文件、`__config_site`、运行库及 RPATH；缺失时拒绝，不退回 `libstdc++`，不同安装布局可用 `PANGU_LIBCXX_ROOT` 显式覆盖；macOS Toolchain 统一选择 MacPorts Clang 23 与 libc++；Android 采用 NDK Clang；iOS 采用 MacPorts Clang 23 + 独立 iPhoneOS SDK。

@@ -9,31 +9,59 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux")
 endif()
 project(PanguBuildTool LANGUAGES CXX)
 
-if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux" AND
-   (NOT CMAKE_CXX_FLAGS MATCHES "-nostdinc[+][+]" OR
-    NOT CMAKE_EXE_LINKER_FLAGS MATCHES "-stdlib=libc[+][+]"))
-    message(FATAL_ERROR "PanguBuildTool requires the native Linux libc++ toolchain; use a fresh BuildRoot or reset stale CMAKE_CXX_FLAGS/CMAKE_EXE_LINKER_FLAGS")
+if(
+    CMAKE_HOST_SYSTEM_NAME
+        STREQUAL
+        "Linux"
+    AND (
+        NOT CMAKE_CXX_FLAGS
+            MATCHES
+            "-nostdinc[+][+]"
+        OR NOT CMAKE_EXE_LINKER_FLAGS
+            MATCHES
+            "-stdlib=libc[+][+]"
+    )
+)
+    message(
+        FATAL_ERROR
+        "PanguBuildTool requires the native Linux libc++ toolchain; use a fresh BuildRoot or reset stale CMAKE_CXX_FLAGS/CMAKE_EXE_LINKER_FLAGS"
+    )
 endif()
 
-if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR
-   NOT CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "23.0" OR
-   CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "24.0")
-    message(FATAL_ERROR "PanguBuildTool requires host Clang 23.x, got ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+if(
+    NOT CMAKE_CXX_COMPILER_ID
+        STREQUAL
+        "Clang"
+    OR NOT CMAKE_CXX_COMPILER_VERSION
+        VERSION_GREATER_EQUAL
+        "23.0"
+    OR CMAKE_CXX_COMPILER_VERSION
+        VERSION_GREATER_EQUAL
+        "24.0"
+)
+    message(
+        FATAL_ERROR
+        "PanguBuildTool requires host Clang 23.x, got ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
+    )
 endif()
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../Source/ThirdParty/TomlPlusPlus"
-                 "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/TomlPlusPlus")
+add_subdirectory(
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../Source/ThirdParty/TomlPlusPlus"
+    "${CMAKE_CURRENT_BINARY_DIR}/ThirdParty/TomlPlusPlus"
+)
 
 add_library(PanguPluginManifest STATIC Private/PluginManifest.cpp)
 target_include_directories(PanguPluginManifest PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/Private")
 target_link_libraries(PanguPluginManifest PRIVATE ThirdParty::TomlPlusPlus)
 target_compile_options(PanguPluginManifest PRIVATE -fno-exceptions)
 
-add_library(PanguPluginDiscovery STATIC
+add_library(
+    PanguPluginDiscovery
+    STATIC
     Private/PluginDiscovery.cpp
     Private/PluginJson.cpp
     Private/PluginPathInputs.cpp
@@ -52,6 +80,8 @@ if(BUILD_TESTING)
     include("${PANGU_ENGINE_ROOT}/cmake/PanguTestDependencies.cmake")
     include("${PANGU_ENGINE_ROOT}/cmake/PanguTesting.cmake")
     pangu_test_context(OWNER engine ENABLED "${BUILD_TESTING}")
-    add_subdirectory("${PANGU_ENGINE_ROOT}/Tests/BuildTools/PanguBuildTool"
-        "${CMAKE_CURRENT_BINARY_DIR}/Tests/BuildTools/PanguBuildTool")
+    add_subdirectory(
+        "${PANGU_ENGINE_ROOT}/Tests/BuildTools/PanguBuildTool"
+        "${CMAKE_CURRENT_BINARY_DIR}/Tests/BuildTools/PanguBuildTool"
+    )
 endif()

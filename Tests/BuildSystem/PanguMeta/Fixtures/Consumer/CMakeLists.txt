@@ -19,18 +19,50 @@ pangu_initialize_link_mode()
 add_subdirectory("${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Foundation" Foundation)
 target_link_libraries(Owner PRIVATE PanguFoundation)
 pangu_configure_module(Owner EXPORT_MACRO PG_META_OWNER_API)
-set_property(TARGET Owner PROPERTY PANGU_SOURCE_OWNER project)
-target_include_directories(Owner PUBLIC Public PRIVATE "${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Foundation/Public"
-    "${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Module/Public")
-target_compile_options(Owner PRIVATE -Wall -Wextra -Werror)
+set_property(
+    TARGET
+        Owner
+    PROPERTY
+        PANGU_SOURCE_OWNER
+            project
+)
+target_include_directories(
+    Owner
+    PUBLIC
+        Public
+    PRIVATE
+        "${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Foundation/Public"
+        "${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Module/Public"
+)
+target_compile_options(
+    Owner
+    PRIVATE
+        -Wall
+        -Wextra
+        -Werror
+)
 target_compile_definitions(Owner PRIVATE "FIXTURE_VALUE=${FIXTURE_VALUE}")
 pangu_meta_module(TARGET Owner ID fixture::kModuleId ID_HEADER Identity.h QUERY fixture::Query HEADER Identity.h)
-add_executable(Consumer Main.cpp Unrelated.cpp)
+add_executable(
+    Consumer
+    Main.cpp
+    Unrelated.cpp
+)
 add_library(Bridge STATIC Unrelated.cpp)
 target_link_libraries(Consumer PRIVATE Bridge)
-target_compile_options(Consumer PRIVATE -Wall -Wextra -Werror)
-target_include_directories(Consumer PRIVATE "${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Foundation/Public"
-    "${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Module/Public")
+target_compile_options(
+    Consumer
+    PRIVATE
+        -Wall
+        -Wextra
+        -Werror
+)
+target_include_directories(
+    Consumer
+    PRIVATE
+        "${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Foundation/Public"
+        "${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Module/Public"
+)
 if(NOT NO_INPUT)
     if(DUPLICATE_OWNER)
         pangu_meta_headers(TARGET Consumer ROOT Public VISIBILITY public EMIT check HEADERS Actor.h)
@@ -62,16 +94,38 @@ if(IDENTITY_TEST AND DESCRIPTION AND NOT NO_INPUT)
     include("${PANGU_ENGINE_SOURCE_DIR}/cmake/PanguTestDependencies.cmake")
     pangu_require_googletest(RTTI ON)
     add_executable(MetadataDefinitionUsesSharedIdentity IdentityConsumer.cpp)
-    set_target_properties(MetadataDefinitionUsesSharedIdentity PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/Bin")
-    target_link_libraries(MetadataDefinitionUsesSharedIdentity PRIVATE Owner PanguFoundation ThirdParty::GoogleTestMain)
-    target_include_directories(MetadataDefinitionUsesSharedIdentity PRIVATE Public
-        "${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Module/Public")
+    set_target_properties(
+        MetadataDefinitionUsesSharedIdentity
+        PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY
+                "${CMAKE_BINARY_DIR}/Bin"
+    )
+    target_link_libraries(
+        MetadataDefinitionUsesSharedIdentity
+        PRIVATE
+            Owner
+            PanguFoundation
+            ThirdParty::GoogleTestMain
+    )
+    target_include_directories(
+        MetadataDefinitionUsesSharedIdentity
+        PRIVATE
+            Public
+            "${PANGU_ENGINE_SOURCE_DIR}/Source/Runtime/Module/Public"
+    )
     add_test(NAME MetadataDefinitionUsesSharedIdentity COMMAND MetadataDefinitionUsesSharedIdentity)
-    set_tests_properties(MetadataDefinitionUsesSharedIdentity PROPERTIES TIMEOUT 30)
+    set_tests_properties(
+        MetadataDefinitionUsesSharedIdentity
+        PROPERTIES
+            TIMEOUT
+                30
+    )
 endif()
 if(NOT NO_TASK)
     pangu_meta_host_catalog(TARGET Consumer MODULES Owner)
 endif()
-file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/Registration.txt" CONTENT
-    "sources=$<TARGET_PROPERTY:Owner,SOURCES>\ninputs=$<TARGET_PROPERTY:Owner,PANGU_META_INPUTS>\nlinks=$<TARGET_PROPERTY:Consumer,LINK_LIBRARIES>\nbridge_links=$<TARGET_PROPERTY:Bridge,LINK_LIBRARIES>\ndefs=$<TARGET_PROPERTY:Owner,COMPILE_DEFINITIONS>\n")
+file(
+    GENERATE OUTPUT "${CMAKE_BINARY_DIR}/Registration.txt"
+    CONTENT
+        "sources=$<TARGET_PROPERTY:Owner,SOURCES>\ninputs=$<TARGET_PROPERTY:Owner,PANGU_META_INPUTS>\nlinks=$<TARGET_PROPERTY:Consumer,LINK_LIBRARIES>\nbridge_links=$<TARGET_PROPERTY:Bridge,LINK_LIBRARIES>\ndefs=$<TARGET_PROPERTY:Owner,COMPILE_DEFINITIONS>\n"
+)
