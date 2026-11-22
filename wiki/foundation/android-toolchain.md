@@ -1,7 +1,7 @@
 # Pangu Android 构建工具链
 
-> 状态：Partially Frozen（NDK 内置 Clang + C++23 配置已确定；设备运行/集成待验收）
-> 更新：2026-10-20
+> 状态：Partially Frozen（NDK 内置 Clang + C++23 配置已确定，ARM64 Renderer 测试应用已验收，正式 App 包装配置待冻结）
+> 更新：2026-11-22
 > 参考工程：`D:\AllProject\AndroidStudio\CppDemo`（只读参考）
 > 决策：[ADR-0004](../decisions/0004-platform-clang-toolchains.md)
 
@@ -11,7 +11,7 @@ Android 使用选定 NDK 自带 Clang 与 NDK `libc++`，采用 C++23、禁用�
 
 ## 当前验证与参考配置
 
-下表记录本机探针及只读参考工程 CppDemo 的配置，不将其中的版本、路径、API Level 或 ABI 验证范围自动冻结为产品支持要求。AGP / Gradle / targetSdk 来自参考工程，不代表 PanguEngine 已完成 App 集成。
+下表记录本机探针及只读参考工程 CppDemo 的配置。产品支持范围以已冻结的工具链政策和对应验收为准。
 
 | 配置 | 验证或参考值 |
 | --- | --- |
@@ -27,7 +27,7 @@ Android 使用选定 NDK 自带 Clang 与 NDK `libc++`，采用 C++23、禁用�
 | Gradle Wrapper | 9.6.0（来自 CppDemo） |
 | 已验证 ABI 范围 | arm64-v8a、armeabi-v7a、x86、x86_64 |
 
-参考工程中的 `app/build.gradle.kts` 定义 SDK/NDK/CMake，`gradle/libs.versions.toml` 定义 AGP，`gradle/wrapper/gradle-wrapper.properties` 定义 Gradle。后续 App 集成可参考其 `externalNativeBuild.cmake` 流程，但**不继承 CppDemo 的 `-std=c++20`**，应改为 C++23；这些路径不表示 PanguEngine 已具有相应文件。
+参考工程中的 `app/build.gradle.kts` 定义 SDK/NDK/CMake，`gradle/libs.versions.toml` 定义 AGP，`gradle/wrapper/gradle-wrapper.properties` 定义 Gradle。PanguEngine 的 [Android Studio Vulkan 预览测试工程](../../Tests/Renderer/NativeActivity/AndroidStudio/README.md) 通过 `externalNativeBuild` 使用引擎的 C++23 配置。
 
 ## Android 编译器政策
 
@@ -56,8 +56,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 早期曾验证“桌面 LLVM Clang23 + NDK r30 显式 Runtime”的手工链接，但已不再是正式实现路线；避免将早期探索误写成最终 Android 构建契约。
 
+### ARM64 Renderer 验收
+
+- 根 `android-arm64` preset 使用 NDK r30 和 API 29。NativeActivity 生命周期测试在 Monolithic、Modular 两种链接模式下均完成最终链接、`ANativeActivity_onCreate` 导出检查及含 `libc++_shared.so` 的 APK 打包与签名检查。Monolithic APK 在 Adreno 750 真机验证了窗口撤销、恢复和宿主关闭。 [生命周期验收](../../docs/superpowers/plans/2026-11-21-android-native-activity-host.md#验收记录)
+- Gradle 的 `agdkDebug` Vulkan 开发预览已完成 ARM64 Monolithic APK 构建、安装和真机呈现。退出复验三轮均完成原生 `APP_CMD_DESTROY` 和 Java `performDestroy`。 [预览验收](../../docs/superpowers/plans/2026-11-21-android-studio-renderer-check.md#主动退出复验)
+
 ## 尚未验证
 
-Gradle 包装层完整构建/安装、Android 设备或模拟器运行、JNI 入口、libc++ 打包、多 Module ABI/Allocator 边界、Sanitizer 以及正式 CMake Preset。
+其余 ABI 的 APK 打包和设备运行、模拟器运行、完整 Engine Runtime 的多 Module ABI/Allocator 边界及 Sanitizer。Android Vulkan 的发布门槛见 [Renderer 接入规格](../../docs/superpowers/specs/2026-11-20-renderer-forge-igraphics-design.md#验收口径)。
 
 本规范冻结范围为上文“已确定的工具链政策”；探针配置与结果不代表整个 Android Engine Runtime 已完成。

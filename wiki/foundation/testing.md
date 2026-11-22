@@ -4,6 +4,8 @@
 
 测试按 `boundary.unit`、`boundary.integration`、`boundary.system` 标明验证边界，按 `area.*` 标明领域，按 `owner.engine` 或 `owner.project` 标明来源。显式启用且其所属方允许测试的 Plugin 沿用来源方 owner，附带 `plugin.*`；资源要求用 `requires.*` 标识。`run.fast`、`run.precommit`、`run.full` 是累计集合，不是互斥类别。回归与契约可叠加 `type.*`。
 
+需要可用图形设备或原生窗口的测试分别标记 `requires.gpu` 和 `requires.window`。Windows Renderer 的真实设备和窗口用例在 full 集合中运行。
+
 GoogleTest 按用例登记；CTest 工作目录和 XML 输出位于宿主 BuildRoot 中隔离的测试目录。直接批量运行时也须指定 BuildRoot 内工作目录。并发仅保证单一验证会话内经过隔离的测试；不得同时运行多个共享同一 BuildRoot 的 configure、build 或 test 会话。显式 BuildTools 的同一工具测试组共用 PRE_TEST 发现和 CTest 临时目录，使用工具级资源锁串行，不同工具可并行。嵌套构建应计入处理器预算。
 
 桌面使用根 preset 的 `<platform>-fast`、`<platform>-precommit`、`<platform>-full` workflow；依次配置、构建和执行。正式 Engine full 需要 BUILD_TESTING、PANGU_BUILD_ENGINE_TESTS 均开启；接入 Engine 测试时始终配置 Toolchain 探针。fast 60 秒及 precommit 5 分钟是测试执行优化目标，构建单独记录，超时不删除覆盖。空测试选择应失败。详细命令和维护约定见 Tests README。

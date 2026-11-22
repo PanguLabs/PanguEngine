@@ -26,6 +26,32 @@ ctest --preset windows-full -R '^ToolchainLibraryLink$' --output-on-failure
 
 ## 现行移动端真实 Module 最终链接
 
+移动端显式启用 `PANGU_BUILD_FORGE_LINK_CHECK=ON` 后，构建 `PanguForgeLinkCheck` 同时触发独立的 Renderer 链接探针。Android 的 `PanguVulkanRendererLinkCheck` 和 iOS 的 `PanguMetalRendererLinkCheck` 通过 `Pangu::Renderer` 调用公开 Module Query。最终可执行文件用于宿主链接检查，设备启动和图形呈现另行验收。
+
+Android 的 `PanguAndroidJniThreadCheck` 目标生成可执行文件 `PanguJniThreadCheck`。它使用 NDK 的 JNI 调用表验证线程已附加、需要附加及两种失败路径。在 Android ARM64 设备上运行该检查可核对原始 JNI 状态码和线程分离责任。
+
+Android 还会通过 `pangu_add_application(KIND GRAPHICS)` 构建 `PanguNativeActivityCheck`。
+在 Windows 上用 [Package.ps1](../Renderer/NativeActivity/Package.ps1) 打包当前链接模式的 ARM64 生命周期测试 APK。
+脚本使用 Android SDK 构建工具、`JAVA_HOME` 指向的 JDK 和已生成的 Android 调试签名库。
+此入口要求 `PANGU_ENABLE_VULKAN_PREVIEW=OFF`，APK 的 Manifest 声明 `android:hasCode="false"`。 [生命周期测试 Manifest](../Renderer/NativeActivity/AndroidManifest.xml)
+安装 APK 后运行 [Observe.ps1](../Renderer/NativeActivity/Observe.ps1)，以 ADB 验证同一个 Activity
+的窗口撤销、重建和 EngineHost 正常关闭。Renderer 在借用 Android 窗口前报告 `kPresentationUnavailable`。
+
+```powershell
+cmake --preset android-arm64 -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON -DPANGU_BUILD_FORGE_LINK_CHECK=ON -DPANGU_ENABLE_VULKAN_PREVIEW=OFF
+cmake --build --preset android-arm64 --target PanguForgeLinkCheck
+./Tests/Renderer/NativeActivity/Package.ps1 -BuildRoot Build/Android
+# 安装 Build/Android/Tests/NativeActivity/Monolithic/PanguNativeActivityCheck.apk 后运行。
+./Tests/Renderer/NativeActivity/Observe.ps1 -LogPath Build/Android/Tests/NativeActivity/Monolithic/device.log
+```
+
+Android Vulkan 预览由 [Android Studio 测试工程](../Renderer/NativeActivity/AndroidStudio/) 的 `agdkDebug` 打包。它启用 `PANGU_ENABLE_VULKAN_PREVIEW`，经 `Pangu::Renderer` 使用 Forge 的 Vulkan 取图和呈现。
+这个 APK 使用独立的 Manifest，链接官方 Swappy 2.1.3 AAR 的原生库，并把对应版本的官方 Java 源码编译进应用 DEX。 [Gradle Manifest](../Renderer/NativeActivity/AndroidStudio/app/src/main/AndroidManifest.xml)
+前台运行时，`PanguFirstFrame` 日志在第 120 次呈现请求后留下标记，数秒后应用主动关闭。[ObserveSwappy.ps1](../Renderer/NativeActivity/ObserveSwappy.ps1) 默认采集三轮 SurfaceFlinger 实际呈现时间，并检查 Java 类加载和正常退出。
+
+Linux 的 Xlib 预览通过 `-DPANGU_ENABLE_VULKAN_PREVIEW=ON` 开启，需要 Forge 能选择的 Vulkan GPU。原版 Forge 会在 GPU 枚举时排除 `VK_PHYSICAL_DEVICE_TYPE_CPU`。
+预览的帧数与截图可验证前台呈现，常规构建的窗口生命周期验收条件见 [Renderer 接入规格](../../docs/superpowers/specs/2026-11-20-renderer-forge-igraphics-design.md)。
+
 旧 `LinkSmoke/` 空程序 SDK 冒烟已删除，其最终链接能力由下面的真实 Runtime/业务宿主检查承接。
 正式根分别 `cmake --preset android-arm64|ios-arm64 -DPANGU_LINK_MODE=<Monolithic|Modular> -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON` 并用对应 build preset 编译，再显式执行：
 

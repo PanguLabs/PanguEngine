@@ -76,6 +76,10 @@ Runtime 外的消费者可引用上述 Runtime 别名；自身使用普通目标
 
 同一个 BuildRoot 可在上一验证会话结束后串行重新配置切换模式；模式改变由原生 CMake/Ninja 图重编/重链接，禁止混用旧发现/部署产物。无变化构建不新增扫描/生成/重链接。`BUILD_SHARED_LIBS` 不作为全局 Pangu 策略，也不影响 ThirdParty 的自有类型。Monolithic 的宿主 Catalog 保留归档根引用；Modular 每 Module 独立库、固定 Query，无内嵌逻辑 STATIC Module 或 LinkedStaticModules。
 
+Windows、Linux 和 macOS 在同一部署目录切换链接模式或移除依赖时，部署器按目标路径和内容哈希清理自己复制过的旧运行库，并保留用户新增或替换的文件。
+
+Linux 和 macOS 只为应用及其实际链接的本地共享库启用部署搜索路径。macOS 动态 Framework 按完整目录部署，包含版本链接、资源和二进制文件；清理时按整个 Framework 核对内容归属。
+
 ## 当前正式构建目录
 
 普通开发、维护和诊断工具源码位于根目录 `Tools/`。旧 `BuildTools/AbiProfile/` 与 `cmake/BuildTools.cmake` 已按 ADR-0013 从源码移除。未来若出现真实代码生成等构建工具，只按实际消费者显式接入，不预建通用 Bootstrap，也不引入新的构建内核。

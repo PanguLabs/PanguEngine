@@ -25,3 +25,6 @@
 [submodule "Source/ThirdParty/Flecs/Repo"]
 	path = Source/ThirdParty/Flecs/Repo
 	url = https://github.com/SanderMertens/flecs.git
+[submodule "Source/ThirdParty/TheForge/Repo"]
+	path = Source/ThirdParty/TheForge/Repo
+	url = https://github.com/ConfettiFX/The-Forge.git

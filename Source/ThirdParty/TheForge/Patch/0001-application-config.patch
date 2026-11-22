@@ -1,0 +1,50 @@
+diff --git a/Common_3/Application/Config.h b/Common_3/Application/Config.h
+index d53c672..e5f7f99 100644
+--- a/Common_3/Application/Config.h
++++ b/Common_3/Application/Config.h
+@@ -24,9 +24,9 @@
+ #pragma once
+
+ // Support external config file override
+-#if defined(EXTERNAL_CONFIG_FILEPATH)
++#if 0
+ #include EXTERNAL_CONFIG_FILEPATH
+-#elif defined(EXTERNAL_CONFIG_FILEPATH_NO_STRING)
++#elif 0
+ // When invoking clanng from FastBuild the EXTERNAL_CONFIG_FILEPATH define doesn't get expanded to a string,
+ // quotes are removed, that's why we add this variation of the macro that turns the define back into a valid string
+ #define TF_EXTERNAL_CONFIG_STRINGIFY2(x) #x
+@@ -239,7 +239,7 @@ COMPILE_ASSERT(sizeof(ssize_t) == sizeof(int64_t));
+ #define _WIN32_WINNT  _WIN32_WINNT_WIN7
+
+ // Whitelist of compiler versions
+-#if (_MSC_VER == 1929) // VS 2019 all VC++ compilers
++#if (_MSC_VER == 1929) || defined(__clang__) // VS 2019 all VC++ compilers
+ #else
+ #pragma message("Bad Visual Studio version: (" QUOTE(_MSC_VER) " " QUOTE(_MSC_FULL_VER) " " QUOTE(_MSC_BUILD) ").")
+ #error "Bad Visual Studio version"
+@@ -301,24 +301,12 @@ COMPILE_ASSERT(sizeof(ssize_t) == sizeof(int64_t));
+ //// General options
+ //////////////////////////////////////////////
+ // #define ENABLE_MATH_CHECKS // Enables low level math library debug checks like SIMD variable alignment checks
+-#define ENABLE_FORGE_SCRIPTING
+-#define ENABLE_FORGE_RELOAD_SHADER
+-#define ENABLE_FORGE_UI
+-#define ENABLE_FORGE_FONTS
+ #define ENABLE_FORGE_INPUT
+-#define ENABLE_FORGE_ANIMATION_DEBUG
+ // #define ENABLE_FORGE_GPU_ANIMATION_DEBUG
+-#define ENABLE_FORGE_MATERIALS
+-#define ENABLE_ZIP_FILESYSTEM
+-#define ENABLE_SCREENSHOT
+-#define ENABLE_PROFILER
+-#define ENABLE_MESHOPTIMIZER
+-#define ENABLE_THREAD_PERFORMANCE_STATS
+ // #define ENABLE_VMA_LOG // Very verbose, prints for each allocation
+
+ // ENABLE_FORGE_ANDROID_SHADERC can be disabled if all shaders are compiled offline.
+ // This way we also avoid to link to this library
+-#define ENABLE_FORGE_ANDROID_SHADERC
+
+ #if TARGET_OS_IPHONE || (defined(MAC_OS_VERSION_11_0) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_VERSION_11_0)
+ // needed for GC haptics. Because we have to link CoreHaptics libs

@@ -114,6 +114,44 @@ set_target_properties(
         RUNTIME_OUTPUT_DIRECTORY
             "${CMAKE_BINARY_DIR}/Bin"
 )
+if(FIXTURE_STAGE_RUNTIME)
+    set_target_properties(
+        ModeConsumer
+        PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY
+                "${CMAKE_BINARY_DIR}/Deploy"
+    )
+    if(WIN32 AND EXPECT_MODE STREQUAL "Modular")
+        add_library(TheForge INTERFACE)
+        file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/FixtureCompiler.dll" CONTENT "compiler fixture\n")
+        file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/FixtureCore.dll" CONTENT "core fixture\n")
+        file(CONFIGURE OUTPUT "${CMAKE_BINARY_DIR}/FixtureLayers.dll" CONTENT "layers fixture\n")
+        set_target_properties(
+            TheForge
+            PROPERTIES
+                PANGU_D3D12_AGILITY_SDK_VERSION
+                    614
+                PANGU_D3D12_RUNTIME_FILES
+                    "${CMAKE_BINARY_DIR}/FixtureCompiler.dll"
+                PANGU_D3D12_AGILITY_FILES
+                    "${CMAKE_BINARY_DIR}/FixtureCore.dll;${CMAKE_BINARY_DIR}/FixtureLayers.dll"
+        )
+        _pangu_stage_win32_graphics_runtime(ModeConsumer)
+    endif()
+    pangu_stage_host_runtime(TARGET ModeConsumer APPLICATION)
+    if(EXPECT_MODE STREQUAL "Modular")
+        file(
+            GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/DeploymentArtifacts.cmake"
+            CONTENT
+                [=[
+set(deploy [==[$<TARGET_FILE_DIR:ModeConsumer>]==])
+set(firstName [==[$<TARGET_FILE_NAME:PanguCatalogFirst>]==])
+set(secondName [==[$<TARGET_FILE_NAME:PanguCatalogSecond>]==])
+set(librarySuffix [==[$<TARGET_FILE_SUFFIX:PanguCatalogFirst>]==])
+]=]
+        )
+    endif()
+endif()
 if(EXPECT_MODE STREQUAL "Modular")
     add_executable(QueryEngineHostConsumer QueryEngineHostConsumer.cpp)
     target_link_libraries(

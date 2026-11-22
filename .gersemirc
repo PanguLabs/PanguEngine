@@ -10,6 +10,7 @@ list_expansion: favour-expansion
 definitions:
   - ./cmake
   - ./BuildTools/PanguMetaTool/CMakeLists.txt
+  - ./Source/ThirdParty/ApplyPatch.cmake
   - ./Source/ThirdParty/Flecs/CMakeLists.txt
   - ./Tests
 

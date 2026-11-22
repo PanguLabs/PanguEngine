@@ -8,7 +8,7 @@
 | `PluginIntegration/` | 源码插件构建接线、宿主工具引导、源码和文件链接变化引发的失效重建；集中登记相关插件与 Project 回归 |
 | `ProjectIntegration/` | 独立 Project 通过 FindPanguEngine / pangu_initialize 接入 Engine 的测试脚本、共享辅助函数，以及 MyGame / Engine Plugin 夹具；覆盖包发现、版本锁定、启用、协作、链接、部署和移动最终链接 |
 | `TestInfrastructure/` | 测试注册、分类、依赖与基准隔离、构建工具测试准备及 workflow 完整性 |
-| `ModuleLinkModes/` | Monolithic / Modular 配置、切换、跨模式回归及独立 SharedProject 接入 |
+| `ModuleLinkModes/` | Monolithic / Modular 配置与切换、三个桌面平台的旧运行库清理和用户文件保护、跨模式回归及独立 SharedProject 接入 |
 | `PanguMeta/` | Meta 注册、增量、失败恢复、BuildRoot 归属与 Project 切换 |
 | `LogConfig/` | 编译配置与 Assert 选项组合、第三方宏隔离及真实分配夹具验证 |
 | `EnvironmentTests.cmake` | 工具链环境变量缺失时的配置预检 |

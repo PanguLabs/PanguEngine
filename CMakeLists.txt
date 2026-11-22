@@ -26,6 +26,7 @@ pangu_initialize_link_mode()
 include(cmake/PanguBuildLayout.cmake)
 pangu_initialize_build_layout()
 include(cmake/PanguRuntimeDeployment.cmake)
+include(cmake/PanguApplication.cmake)
 include(cmake/Platform/Common/Module.cmake)
 
 option(PANGU_BUILD_BENCHMARKS "Build native performance benchmarks" OFF)

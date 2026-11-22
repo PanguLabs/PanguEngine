@@ -1,5 +1,27 @@
 cmake_minimum_required(VERSION 4.0)
 
+if(LINUX OR (APPLE AND NOT IOS))
+    pangu_register_test(
+        NAME RuntimeDeployment
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-DPANGU_SOURCE_ROOT=${PROJECT_SOURCE_DIR}"
+            "-DPANGU_TEST_ROOT=${CMAKE_BINARY_DIR}/Tests/Work/RuntimeDeployment"
+            "-DPANGU_TEST_BUILD_JOBS=${PANGU_TEST_BUILD_JOBS}"
+            -P
+            "${CMAKE_CURRENT_SOURCE_DIR}/RuntimeDeploymentTests.cmake"
+        BOUNDARY system
+        AREA module
+        TIER full
+        TYPES
+            regression
+        REQUIRES
+            subprocess
+            nested-build
+        PROCESSORS "${PANGU_TEST_BUILD_JOBS}"
+    )
+endif()
+
 foreach(scenario IN ITEMS Matrix Switch)
     pangu_register_test(
         NAME "ModuleLinkMode${scenario}"

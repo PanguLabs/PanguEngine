@@ -1,0 +1,4 @@
+bundled RD_OTHER_FILES = GPUCfg/
+bundled RD_GPU_CONFIG = GPUCfg/
+RD_LOG = Logs/
+RD_PIPELINE_CACHE = PipelineCache/

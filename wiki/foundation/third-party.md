@@ -76,12 +76,75 @@ Source/ThirdParty/<DependencyName>/
 没有上游修改时不建立空的 `Patch/`。确需修改时：
 
 1. 在 `Patch/` 保存标准 Git diff，使用有序文件名，并在依赖 README 中明确应用顺序、对应上游提交、原因和上游反馈位置。
-2. 外层构建接入在 `Build/<Platform>/` 内准备源码副本，对该副本按明确顺序应用补丁；不要在配置/构建时直接修改 `Repo/`。
+2. 外层构建接入在对应平台的 BuildRoot 内准备源码副本，对该副本按明确顺序应用补丁；不要在配置/构建时直接修改 `Repo/`。
 3. 补丁不匹配应终止配置，不得静默跳过。基线提交或补丁内容变化后重新准备副本，避免重复应用或沿用旧源码。
 4. 验证补丁后的源码和功能，并检查 `git -C <Dependency>/Repo status --short` 保持干净。
 
-当前 NlohmannJson 无补丁；本次不预建通用补丁应用工具。第一个需要补丁的依赖必须随接入实现上述步骤，
-并加入补丁不匹配与重复配置的验证。若通过 fork 保存修改，也应固定明确提交并记录与上游的差异。
+补丁应用由各依赖的外层构建接线负责。新增补丁接线时，验证补丁不匹配会导致配置失败，重复配置会得到相同结果。若通过 fork 保存修改，也应固定明确提交并记录与上游的差异。
+
+### 生成 Git 补丁
+
+从主仓库 gitlink 固定的提交导出待改文件，在隔离副本里暂存基线，再编辑并导出工作区相对基线的差异。下面以 The Forge 的 Windows GUID 补丁为例，在仓库根目录的 PowerShell 中运行。补丁路径以第三方源码根为基准，如 `a/Common_3/Graphics/Direct3D12/Direct3D12.c`。示例按现有 CMake 接线将 UTF-8 源码和补丁文本统一为 LF。
+
+```powershell
+$forge = Join-Path (Get-Location).Path 'Source/ThirdParty/TheForge'
+$base = '7443530ef7e888771f307de74b7872becfd64450'
+$source = 'Common_3/Graphics/Direct3D12/Direct3D12.c'
+$patchWork = (New-Item -ItemType Directory -Force ".probe/forge-patch-$([guid]::NewGuid())").FullName
+$archive = Join-Path $patchWork 'baseline.tar'
+$patchFile = Join-Path $patchWork '0002-d3d12-use-sdk-guids.patch'
+
+function Set-LfText([string]$path) {
+    $text = [IO.File]::ReadAllText($path).Replace("`r`n", "`n")
+    if ($text.Length -gt 0 -and -not $text.EndsWith("`n")) { $text += "`n" }
+    [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
+}
+
+git -C "$forge/Repo" archive --format=tar "--output=$archive" $base -- $source
+if ($LASTEXITCODE -ne 0) { throw '导出固定版本失败' }
+tar -xf $archive -C $patchWork
+if ($LASTEXITCODE -ne 0) { throw '解包基线失败' }
+Set-LfText "$patchWork/$source"
+git -C $patchWork init --quiet
+git -C $patchWork -c core.autocrlf=false add -- $source
+
+# 编辑 "$patchWork/$source"，保留 LF 换行。
+git -C $patchWork -c core.autocrlf=false diff --no-ext-diff --no-textconv --binary --src-prefix=a/ --dst-prefix=b/ "--output=$patchFile" -- $source
+```
+
+用 `git diff --output` 直接写出补丁，保留 Git 输出的编码和字节。调整已有补丁时，暂存基线后先在副本应用旧补丁的 LF 副本，再编辑并导出完整差异。一个补丁依赖前序补丁时，先应用前序补丁再暂存基线。新增文件在导出前用 `git add -N -- <文件>` 标记。二进制文件按原始字节准备基线和计算哈希。
+
+### 预检、应用与接入构建
+
+重新解包基线到一个干净的临时目录。有前序补丁时先按顺序应用它们。用 `git apply --check` 检查本次补丁，再应用并核对结果。
+
+```powershell
+$applyWork = (New-Item -ItemType Directory -Path (Join-Path $patchWork "apply-$([guid]::NewGuid())")).FullName
+tar -xf $archive -C $applyWork
+if ($LASTEXITCODE -ne 0) { throw '解包基线失败' }
+Set-LfText "$applyWork/$source"
+git -C $applyWork init --quiet
+cmake -E sha256sum "$applyWork/$source"
+git -C $applyWork -c core.autocrlf=false apply --check $patchFile
+if ($LASTEXITCODE -ne 0) { throw '补丁预检失败' }
+git -C $applyWork -c core.autocrlf=false apply $patchFile
+if ($LASTEXITCODE -ne 0) { throw '补丁应用失败' }
+cmake -E sha256sum "$applyWork/$source"
+```
+
+核对差异后，将补丁放入依赖的 `Patch/` 并同步其 README。外层 CMake 可包含 `Source/ThirdParty/ApplyPatch.cmake`，通过 `pangu_apply_third_party_patch()` 为单个 UTF-8 源文件应用 Git 补丁。调用时用 `SOURCE_DIR` 和 `RELATIVE_PATH` 指定基线文件，用 `PATCH_FILE` 指定补丁，用 `INPUT_SHA256` 和 `OUTPUT_SHA256` 记录 LF 文本的前后校验值，再用 `OUTPUT_FILE` 指定 BuildRoot 内供目标编译或包含的文件。The Forge 的配置头和 Windows GUID 补丁均通过此入口接入。 [公共入口](../../Source/ThirdParty/ApplyPatch.cmake) · [Forge 接线](../../Source/ThirdParty/TheForge/CMakeLists.txt) · [Windows 接线](../../Source/ThirdParty/TheForge/Windows.cmake)
+
+公共入口每次配置都从基线准备独立副本，将源码和补丁统一为 LF，并为缺少末尾换行的非空文件补齐 LF。Git 应用成功且输出哈希匹配后才发布结果，内容相同时保留输出文件的时间戳。更新补丁时，应按相同的换行规则计算输入和输出哈希。
+
+使用目标平台的正式 preset 配置并构建受影响的目标。以下命令覆盖示例中的 Windows 编译和链接检查。
+
+```powershell
+cmake --preset windows -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON -DPANGU_BUILD_FORGE_LINK_CHECK=ON
+cmake --build --preset windows --target PanguForgeLinkCheck
+git -C "$forge/Repo" status --short
+```
+
+以相同参数再次配置，核对生成副本的 SHA-256 与首次一致。保留构建或测试结果及 `Repo/` 干净的检查结果。
 
 ## 当前接入
 

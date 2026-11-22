@@ -21,6 +21,7 @@ foreach(
     IN
     ITEMS
         CMakeLists.txt
+        cmake/PanguApplication.cmake
         cmake/PanguBuildLayout.cmake
         cmake/PanguRuntimeDeployment.cmake
         Source/Runtime/Foundation/CMakeLists.txt
@@ -77,6 +78,7 @@ function(pangu_initialize)
     file(REAL_PATH "${panguEngineSourceDir}" panguEngineSourceDir)
     include("${panguEngineSourceDir}/cmake/PanguBuildLayout.cmake")
     include("${panguEngineSourceDir}/cmake/PanguRuntimeDeployment.cmake")
+    include("${panguEngineSourceDir}/cmake/PanguApplication.cmake")
     set(PANGU_ENGINE_SOURCE_DIR "${panguEngineSourceDir}" PARENT_SCOPE)
     set(PANGU_SOURCE_OWNER project PARENT_SCOPE)
     add_subdirectory("${panguEngineSourceDir}" "${PANGU_ENGINE_BUILD_ROOT}/Targets/Engine")

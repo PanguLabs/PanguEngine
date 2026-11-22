@@ -4,6 +4,10 @@ cmake_minimum_required(VERSION 4.0)
 add_subdirectory(ThirdParty)
 add_subdirectory(Module)
 add_subdirectory(Flecs)
+option(PANGU_BUILD_FORGE_LINK_CHECK "Enable the explicit The Forge link check" OFF)
+if(PANGU_BUILD_FORGE_LINK_CHECK)
+    add_subdirectory(TheForge EXCLUDE_FROM_ALL)
+endif()
 pangu_test_build_dependencies(
     TIER full
     TARGETS
