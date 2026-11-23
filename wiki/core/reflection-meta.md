@@ -231,7 +231,7 @@ struct Actor
 
 | 层次 | Windows | Linux | macOS |
 | --- | --- | --- | --- |
-| PanguMetaTool 运行宿主 | Windows 原生 EXE | WSL Ubuntu 原生 ELF | macOS 原生 Mach-O |
+| PanguMetaTool 运行宿主 | Windows 原生 EXE | Ubuntu 原生 ELF | macOS 原生 Mach-O |
 | 宿主 C++ 标准库 | MSVC STL | libstdc++（独立工具例外） | libc++ |
 | Clang 依赖来源 | 已安装 LLVM 23 开发包 | 已安装 LLVM 23 开发包，优先 clang-cpp 共享库 | 已安装 MacPorts LLVM 23 开发包 |
 | Clang 适配代码 RTTI | 匹配对应 Clang 库 | 匹配对应 Clang 库 | 匹配对应 Clang 库 |

@@ -54,7 +54,7 @@ Linux/macOS 使用根 `linux`/`macos` preset 和 AGENTS.md 指定的共享源码
 | 平台 | new 捕获 | C 分配捕获与盲区 |
 | --- | --- | --- |
 | Windows | 测试进程 ordinary/array/nothrow/aligned new 替换 | Debug 独立 EXE 另以 CRT allocation hook 对真实 malloc 自验证并拒绝两个初始化 Try 分配；Release 不拦 CRT malloc/HeapAlloc，且不声称捕获全部 DLL/OS 内部入口 |
-| WSL Linux | 同上 | 链接器 `--wrap` 捕获可执行文件/静态库对 malloc/calloc/realloc/aligned_alloc/posix_memalign 的直接引用，不覆盖 libc/libc++ 动态库内部绑定 |
+| Linux | 同上 | 链接器 `--wrap` 捕获可执行文件/静态库对 malloc/calloc/realloc/aligned_alloc/posix_memalign 的直接引用，不覆盖 libc/libc++ 动态库内部绑定 |
 | macOS | 同上 | 不拦截系统 malloc zone 或系统 dylib 内部 C 入口；以当前 libc++ 头文件的空构造源码补充 |
 
 历史 BackendLogger 审计使用 MSVC STL 145（`_MSVC_STL_UPDATE=202604L`）、`_ITERATOR_DEBUG_LEVEL=0`：

@@ -18,7 +18,7 @@
 
 - PanguEngine 是基于 **C++23** 的自研跨平台游戏引擎。
 - 目标支持 **Windows、Linux、macOS、Android、iOS**，统一采用 **C++23 + Clang**；各平台的编译器和标准库选择以 [`wiki/foundation/toolchain.md`](wiki/foundation/toolchain.md) 为准，已验证程度以 [`wiki/foundation/platform.md`](wiki/foundation/platform.md) 为准。
-- **Windows 是主要开发环境**；Linux 使用 Windows 上 **WSL 中的 Ubuntu**；macOS 使用 `ssh moozen-macos` 访问，自动化 SSH 命令可使用 `-o BatchMode=yes`。
+- **Windows 是主要开发环境**。Linux 使用 Ubuntu 真机，通过 `ssh moozen-ubuntu` 访问。macOS 通过 `ssh moozen-macos` 访问。两台主机的自动化 SSH 命令均可加 `-o BatchMode=yes`。
 - 项目本地源码位于 homelab 的 **`D:\Git\PanguEngine`**。
 - GitHub 远程仓库：**`PanguLabs/PanguEngine`**（`https://github.com/PanguLabs/PanguEngine`）。
 - 架构设计可参考下列项目；需要核对实现细节时，查阅对应的本地源码。路径均相对于本仓库根目录。应结合 PanguEngine 已确定的需求和约束进行取舍，避免直接照搬。
@@ -44,7 +44,7 @@
 - 从 **Codex** 进入时，使用当前 Agent 提供的本地文件和终端工具。
 - 从 **ChatGPT Web** 进入时，**不要调用 Codex**；优先使用 ChatGPT Web 中已安装的插件，通过 **Desktop Commander** 访问和操作本地仓库。
 - 优先在本地仓库 `D:\Git\PanguEngine` 检查与修改代码。需要核对远程版本时，使用 GitHub 仓库。
-- 执行 Linux 命令时使用 WSL Ubuntu，通过 SMB3/CIFS 挂载的 `/home/moozen/WindowsGit/PanguEngine` 运行正式 CMake preset、构建和 CTest，Linux 使用 WSL ext4 本地构建目录 `$HOME/PanguEngineBuild/Linux`，不在 CIFS 共享源码树下生成正式构建产物；不要通过 `/mnt/d/Git/PanguEngine` 混用同一构建树的绝对路径。执行 macOS 命令时使用 `ssh -o BatchMode=yes moozen-macos`。**macOS 通过已挂载的 `/Users/moozen/WindowsGit/PanguEngine` 直接访问同一份源码，禁止将源码复制到 macOS 临时目录再构建**。正式构建统一使用根目录 `CMakePresets.json`：Windows/Android 输出到源码仓库的 `Build/Windows`、`Build/Android`（NTFS），Linux 输出到 `$HOME/PanguEngineBuild/Linux`（ext4），macOS/iOS 输出到 Mac 的 `$HOME/PanguEngineBuild/macOS`、`$HOME/PanguEngineBuild/iOS`（APFS）。各平台 BuildRoot 必须隔离，旧 SMB 构建树不得与新构建树混用。macOS/iOS 的编译器与 SDK 细节见 [`wiki/foundation/apple-toolchain.md`](wiki/foundation/apple-toolchain.md)；Android 以只读参考项目 `D:\AllProject\AndroidStudio\CppDemo` 的构建流程为参照，具体配置见 [`wiki/foundation/android-toolchain.md`](wiki/foundation/android-toolchain.md)。不要将 Windows 路径、Shell 或平台库行为直接视为可跨平台复用。
+- 执行 Linux 命令时通过 `ssh -o BatchMode=yes moozen-ubuntu` 登录 Ubuntu 真机，从 SMB3/CIFS 挂载的 `/home/moozen/WindowsGit/PanguEngine` 运行正式 CMake preset、构建和 CTest。执行 macOS 命令时使用 `ssh -o BatchMode=yes moozen-macos`。**macOS 通过已挂载的 `/Users/moozen/WindowsGit/PanguEngine` 直接访问同一份源码，禁止将源码复制到 macOS 临时目录再构建**。正式构建统一使用根目录 `CMakePresets.json`：Windows/Android 输出到源码仓库的 `Build/Windows`、`Build/Android`（NTFS），Linux 输出到 `$HOME/PanguEngineBuild/Linux`（ext4），macOS/iOS 输出到 Mac 的 `$HOME/PanguEngineBuild/macOS`、`$HOME/PanguEngineBuild/iOS`（APFS）。各平台 BuildRoot 必须隔离，旧 SMB 构建树不得与新构建树混用。macOS/iOS 的编译器与 SDK 细节见 [`wiki/foundation/apple-toolchain.md`](wiki/foundation/apple-toolchain.md)；Android 以只读参考项目 `D:\AllProject\AndroidStudio\CppDemo` 的构建流程为参照，具体配置见 [`wiki/foundation/android-toolchain.md`](wiki/foundation/android-toolchain.md)。不要将 Windows 路径、Shell 或平台库行为直接视为可跨平台复用。
 - 共享 Agent Skills 的唯一规范目录为 `.agents/skills/`。
 - 新工作区可从仓库根目录执行 `python Scripts/setup-agent-links.py`，为 Claude Code 生成本地 Skills 映射：Windows 使用 Junction，Linux/macOS 使用 Symlink。
 - `.claude/skills` 是本地生成的目录映射，不应提交到 Git；Codex 可以直接使用 `.agents/skills/`。

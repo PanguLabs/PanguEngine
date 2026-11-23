@@ -1,14 +1,14 @@
 # Pangu 平台支持基线
 
 > 状态：Partially Frozen（目标平台与访问环境已确定；Runtime/HAL 与完整 CI 尚未冻结）
-> 更新：2026-11-22
+> 更新：2026-11-23
 
 ## 目标平台与验证状态
 
 | 目标平台 | 开发 / 访问环境 | 当前验证状态 |
 | --- | --- | --- |
 | Windows | 主开发环境（homelab） | 已有针对性的 C++23 构建与 Runtime 探针测试；非完整 Engine 验收 |
-| Linux | Windows 上 WSL Ubuntu | 已有针对性的 C++23 构建与 Runtime 探针测试；非完整 Engine 验收 |
+| Linux | Ubuntu 真机（`ssh moozen-ubuntu`） | 已验证 SSH、共享源码挂载及 `linux` preset 可见性。既有 C++23 构建与 Runtime 探针结果来自 WSL |
 | macOS | `ssh -o BatchMode=yes moozen-macos` | C++23 原生编译、链接、运行探针通过 |
 | Android | Windows 上 Android SDK/NDK 工具链 | 四种 ABI 的 C++23 动态库编译与链接通过。ARM64 已验证 NativeActivity APK 打包、安装和真机生命周期，Vulkan 开发预览已在真机呈现。见 [Android 工具链验收](android-toolchain.md#arm64-renderer-验收) |
 | iOS | macOS 主机交叉编译 iPhoneOS Device | iOS ARM64 动态库编译与链接通过；签名、打包及真机/模拟器验证未完成 |
@@ -42,6 +42,6 @@ Platform HAL 的 Module 布局、Window/Input/File/Socket/Thread/VirtualMemory/C
 
 ## 访问规范
 
-从 Codex 进入时，使用当前 Agent 的本地文件和终端工具；从 ChatGPT Web 进入时，优先通过已授权的 Desktop Commander 访问本地仓库，不调用 Codex。Linux 使用 WSL Ubuntu；macOS 使用 `ssh moozen-macos`（自动化可加 `-o BatchMode=yes`）。访问方式以根目录 [AGENTS.md](../../AGENTS.md) 为准；不同平台的路径、Shell、SDK 不能互换。实际 SDK 路径请查阅上述平台工具链文档。
+从 Codex 进入时，使用当前 Agent 的本地文件和终端工具；从 ChatGPT Web 进入时，优先通过已授权的 Desktop Commander 访问本地仓库，不调用 Codex。Linux 通过 `ssh moozen-ubuntu` 登录 Ubuntu 真机，macOS 通过 `ssh moozen-macos` 登录。两者的自动化 SSH 命令均可加 `-o BatchMode=yes`。访问方式以根目录 [AGENTS.md](../../AGENTS.md) 为准；不同平台的路径、Shell、SDK 不能互换。实际 SDK 路径请查阅上述平台工具链文档。
 
 相关契约：[ABI](abi.md)、[Memory](../core/memory-management.md)。

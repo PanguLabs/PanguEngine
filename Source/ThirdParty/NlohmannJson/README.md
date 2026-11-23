@@ -42,5 +42,5 @@ git submodule update --init --recursive
   不引入其他版本的独立头文件或实验性零拷贝 API。
 
 升级必须明确更新版本要求，在 `Repo/` 检出目标提交并更新主仓库 gitlink，复核许可证、
-PanguMetaTool 的相关测试及 Windows/WSL/macOS Clang 测试。
+PanguMetaTool 的相关测试及 Windows/Linux/macOS Clang 测试。
 不得将不同版本或提交的头文件复制混用。

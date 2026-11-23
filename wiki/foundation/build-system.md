@@ -84,17 +84,17 @@ Linux 和 macOS 只为应用及其实际链接的本地共享库启用部署搜�
 
 普通开发、维护和诊断工具源码位于根目录 `Tools/`。旧 `BuildTools/AbiProfile/` 与 `cmake/BuildTools.cmake` 已按 ADR-0013 从源码移除。未来若出现真实代码生成等构建工具，只按实际消费者显式接入，不预建通用 Bootstrap，也不引入新的构建内核。
 
-正式构建输出**按宿主文件系统隔离**：Windows/Android 使用 Windows NTFS；WSL Linux 使用 ext4；macOS/iOS 使用 macOS APFS。源码仍为 Windows 上唯一工作区，Linux 与 macOS 直接从 SMB 挂载读取同一份源码；不再要求正式构建输出都位于源码仓库内。不再借用 `.probe/` 存放正式构建结果：
+正式构建输出**按宿主文件系统隔离**：Windows/Android 使用 Windows NTFS；Ubuntu 真机使用本地 ext4；macOS/iOS 使用 macOS APFS。源码仍为 Windows 上唯一工作区，Linux 与 macOS 直接从 SMB 挂载读取同一份源码；不再要求正式构建输出都位于源码仓库内。不再借用 `.probe/` 存放正式构建结果：
 
 | 目标平台 | 构建宿主 / 文件系统 | 正式 BinaryDir（相对于宿主） |
 | --- | --- | --- |
 | Windows | Windows / NTFS | `${sourceDir}/Build/Windows` |
-| Linux | WSL Ubuntu / ext4 | `$HOME/PanguEngineBuild/Linux` |
+| Linux | Ubuntu 真机 / ext4 | `$HOME/PanguEngineBuild/Linux` |
 | macOS | macOS / APFS | `$HOME/PanguEngineBuild/macOS` |
 | Android | Windows / NTFS | `${sourceDir}/Build/Android` |
 | iOS | macOS / APFS | `$HOME/PanguEngineBuild/iOS` |
 
-Linux 通过 WSL Ubuntu 的 SMB3/CIFS 挂载 `/home/moozen/WindowsGit/PanguEngine` **只共享源码**，从该目录执行 `cmake --preset linux`、`cmake --build --preset linux`、`ctest --preset linux`，所有正式 Linux 构建文件写入 ext4 的 `/home/moozen/PanguEngineBuild/Linux`。不得从 `/mnt/d/Git/PanguEngine` 混用另一份源码绝对路径或复用旧 CMake Cache。
+通过 `ssh moozen-ubuntu` 登录 Ubuntu 真机，自动化 SSH 可加 `-o BatchMode=yes`。从 SMB3/CIFS 挂载的源码目录 `/home/moozen/WindowsGit/PanguEngine` 执行 `cmake --preset linux`、`cmake --build --preset linux`、`ctest --preset linux`，所有正式 Linux 构建文件写入 ext4 的 `/home/moozen/PanguEngineBuild/Linux`。新宿主首次配置时由 preset 创建本地构建树，不复用旧宿主的 CMake Cache。
 
 macOS 使用 `ssh -o BatchMode=yes moozen-macos`，通过 `/Users/moozen/WindowsGit/PanguEngine` 直接读取同一份 Windows 源码，不复制源码；本机 APFS 构建目录分别是 `/Users/moozen/PanguEngineBuild/macOS` 和 `/Users/moozen/PanguEngineBuild/iOS`。Windows/Android 仍使用仓库 `Build/Windows` 与 `Build/Android`。Preset 通过 `$env{HOME}` 解析 Linux/Apple 宿主目录，实际编译器、libc++ / SDK/NDK 由平台 Toolchain 控制。
 
@@ -156,7 +156,7 @@ cmake/
 | `ANDROID_NDK_HOME` | Android 的构建宿主 | NDK 安装根目录，其下包含 `build/cmake/android.toolchain.cmake` |
 | `PANGU_IOS_SDK_PATH` | iOS 的 macOS 宿主 | 独立安装的 iPhoneOS Device SDK；未设置时先通过 `xcrun --sdk iphoneos --show-sdk-path` 查找，失败或目录无效时回退到 `$HOME/Library/Developer/SDKs/iPhoneOS18.2.sdk`；仍不存在则要求显式设置 |
 
-macOS 可在 `~/.zshenv` 导出 `LLVM_ROOT`；WSL Ubuntu 可由 `/etc/profile.d/llvm.sh` 配置，并在 `~/.bashrc` 中引用。非登录且非交互的 Bash 不会自动读取这些登录配置，自动化调用方应传入环境变量或使用登录 Shell。
+macOS 可在 `~/.zshenv` 导出 `LLVM_ROOT`；Ubuntu 可由 `/etc/profile.d/llvm.sh` 配置，并在 `~/.bashrc` 中引用。非登录且非交互的 Bash 不会自动读取这些登录配置，自动化调用方应传入环境变量或使用登录 Shell。
 
 从相应平台的 PanguEngine 仓库根目录运行：
 
@@ -165,7 +165,7 @@ cmake --preset windows        # Windows PowerShell
 cmake --build --preset windows
 ctest --preset windows
 
-cmake --preset linux          # WSL Ubuntu
+cmake --preset linux          # ssh moozen-ubuntu
 cmake --build --preset linux
 ctest --preset linux
 

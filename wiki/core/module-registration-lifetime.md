@@ -136,7 +136,7 @@ Draining 与依赖逆序析构必须协同推进，遵循 [Service 的生命周�
 | 在途析构和跨 Module Allocator | 先清理借用与对象，再释放 CodePin 和动态库句柄 |
 | Modular 单库单 Module | Query 仅返回本定义，真实 DLL 卸载后残留凭据安全 |
 | 失败/回滚与报告 | 原始 Error 保留，操作级有界报告可在模块卸载后阅读 |
-| Windows、WSL Linux、macOS | 独立验证代码驻留与原生链接行为；Android/iOS 首先做平台能力和链接验证，不将其等同于设备运行验收 |
+| Windows、Linux、macOS | 独立验证代码驻留与原生链接行为；Android/iOS 首先做平台能力和链接验证，不将其等同于设备运行验收 |
 
 ## 10. 冻结范围与后续设计
 

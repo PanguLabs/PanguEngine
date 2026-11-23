@@ -24,7 +24,7 @@ bash Scripts/build.sh --list
 | --- | --- | --- | --- | --- | --- |
 | Windows | Windows PowerShell 5.1+ / PowerShell 7，`D:/Git/PanguEngine` | `-Platform windows`（默认） | `windows` | `Build/Windows` | Modular |
 | Android | Windows，同一源码根 | `-Platform android` | `android-arm64` | `Build/Android` | Monolithic |
-| Linux | WSL Ubuntu，`/home/moozen/WindowsGit/PanguEngine` | `--platform linux`（Linux 默认） | `linux` | `$HOME/PanguEngineBuild/Linux` | Modular |
+| Linux | Ubuntu 真机（`ssh moozen-ubuntu`），`/home/moozen/WindowsGit/PanguEngine` | `--platform linux`（Linux 默认） | `linux` | `$HOME/PanguEngineBuild/Linux` | Modular |
 | macOS | Mac 本机终端，`/Users/moozen/WindowsGit/PanguEngine` | `--platform macos`（macOS 默认） | `macos` | `$HOME/PanguEngineBuild/macOS` | Modular |
 | iOS | Mac 本机终端，同一共享源码根 | `--platform ios` | `ios-arm64` | `$HOME/PanguEngineBuild/iOS` | Monolithic |
 
@@ -40,7 +40,7 @@ bash Scripts/build.sh --list
 
 工具链安装方式及具体校验以 [Toolchain](../wiki/foundation/toolchain.md)、[Apple 工具链](../wiki/foundation/apple-toolchain.md)、[Android 工具链](../wiki/foundation/android-toolchain.md)为准。脚本不下载或猜测工具链。首次配置可能需要编译宿主构建工具，耗时会明显长于增量构建。
 
-Linux 构建产物写入 WSL ext4，macOS/iOS 写入 Mac APFS；二者只从 WindowsGit 共享源码读取输入。不从 `/mnt/d/Git/PanguEngine` 运行同一 Linux 构建树，不把源码复制到 Mac 临时目录构建。
+Linux 构建产物写入 Ubuntu 真机的本地 ext4，macOS/iOS 写入 Mac 的本地 APFS。两台主机都直接从 WindowsGit 共享源码构建。
 
 ## 各种构建的区别
 
@@ -125,9 +125,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\build.ps1 fast
 .\Scripts\build.ps1 mobile-link -Platform android -LinkMode Modular
 ```
 
-## Linux：WSL Ubuntu 本机执行
+## Linux：在 Ubuntu 真机执行
 
-先自行打开 WSL Ubuntu 终端，让其登录环境提供 `LLVM_ROOT` 和工具路径：
+使用 `ssh moozen-ubuntu` 登录，随后在远端终端执行以下命令。自动化连接可使用 `ssh -o BatchMode=yes moozen-ubuntu`。远端构建进程需要从登录 Shell 或显式传入的环境变量取得 `LLVM_ROOT`。
 
 ```sh
 cd /home/moozen/WindowsGit/PanguEngine

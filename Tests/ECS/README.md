@@ -7,7 +7,7 @@
 - `ProjectIntegration.EcsWorld` 从独立 Project 构建并运行 `MyGameEcsHost`，覆盖 Gameplay/Consumer 的组件和枚举绑定、推进、多宿主、单关与回滚。Modular 检查实际 flecs 导入、加载路径与 Gameplay 原生卸载顺序，Monolithic 检查最终链接的 Query 与 flecs。
 - 父 Scope、宿主整体关闭与外部 Pin 的回归在 `Tests/EngineHost` 和 `Tests/Module`。
 
-在 Windows 使用以下命令，WSL Linux 和 macOS 分别换为 `linux` 和 `macos`。正式 Project 回归使用干净 Git 提交且关闭本地锁覆盖。分别按 `Monolithic` 和 `Modular` 配置。
+在 Windows 使用以下命令，Ubuntu 真机和 macOS 分别换为 `linux` 和 `macos`。正式 Project 回归使用干净 Git 提交且关闭本地锁覆盖。分别按 `Monolithic` 和 `Modular` 配置。
 
 ```powershell
 cmake --preset windows -DCMAKE_BUILD_TYPE=Release -DPANGU_LINK_MODE=Modular -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON -DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE=OFF

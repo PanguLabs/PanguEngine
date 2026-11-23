@@ -14,7 +14,7 @@ New-Item -ItemType Directory -Force Build/Windows/BenchmarkResults/run
 & ./Build/Windows/Bin/PanguModuleBenchmarks.exe --benchmark_repetitions=5 --benchmark_out=Build/Windows/BenchmarkResults/run/results.json --benchmark_out_format=json
 ```
 
-WSL/Linux shell（BuildRoot 为 `$HOME/PanguEngineBuild/Linux`）：
+使用 `ssh moozen-ubuntu` 登录 Ubuntu 真机后执行，BuildRoot 为 `$HOME/PanguEngineBuild/Linux`。
 
 ```sh
 cd /home/moozen/WindowsGit/PanguEngine

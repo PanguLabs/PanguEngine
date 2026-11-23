@@ -189,7 +189,7 @@ SDK 版本化 Manifest 和 MSVC 工具集安装元数据，然后复用冻结 Sc
 
 Schema/测试向量的临时 **C++23 验证探针**曾位于本地 `.probe/abi-profile/`（被 `.gitignore` 排除，**不是正式 Tests，也不是版本化回归测试**；已于 2026-10-28 清理），使用 Clang + CMake + CTest + 旧版 JSON 探针实现。它仅覆盖本 Schema 使用的 JSON Schema 关键字，并核对 Canonical JSON/SHA-256 测试向量；不是完整 JSON Schema 实现，也不代表实际 Toolchain/Loader 已集成。该历史阶段要求正式 ABI 回归测试在引擎 C++23 实现完成后接入仓库 CMake + CTest；当前已完成的 STATIC 范围见上文最新构建期实施状态。此处保留当时的验证清单：Canonical JSON/SHA-256 测试向量、字段顺序不变性、变异拒绝、同 ABI 跨 Target/C++ 标准库交换、Windows `_ITERATOR_DEBUG_LEVEL`/CRT 拒绝、libc++ ABI namespace/version 变异、Toolchain Patch 差异、每 TU 配置一致性、STATIC Catalog 组合、SHARED 预检+二次入口、ModuleCodePin/失败回滚，以及宿主与动态库生命周期。
 
-平台验证目标依照现有 Toolchain 约束：Windows/WSL Linux/macOS 做本机跨库加载测试；Android/iOS 先完成目标编译链接与 ABI 采集，设备运行/打包必须独立验收。现有探针不自动代表正式引擎功能通过。
+平台验证目标依照现有 Toolchain 约束：Windows/Linux/macOS 做本机跨库加载测试；Android/iOS 先完成目标编译链接与 ABI 采集，设备运行/打包必须独立验收。现有探针不自动代表正式引擎功能通过。
 
 **尚未冻结**：AbiProfile/AbiFingerprint 的 C++ 对象内存布局、具体 Toolchain Probe 实现、精确 Runtime/SDK 身份提取工具、机器可读 Manifest、原生 C++ Query 导出符号/API 契约、ModuleDescriptor Public API、公共接口签名与 API Surface Digest、包内可信元数据绑定、签名认证、跨版本兼容例外、多个 Host/Hot Reload。上述属于实现或后续专项协议，**不影响本次冻结的 JSON Schema、Fingerprint 算法与严格相容判定**。
 
