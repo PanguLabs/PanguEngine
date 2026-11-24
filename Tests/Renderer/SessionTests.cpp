@@ -23,7 +23,7 @@ constexpr LinearColor kColor{.R = 0.05F, .G = 0.32F, .B = 0.58F, .A = 1.0F};
 constexpr NativeErrorCode kNativeFault{.Source = NativeErrorSourceId{72}, .Value = -106};
 
 // 两次挂接使用同一原生句柄值；假后端不解引用它。
-const NativeSurface kWindow{XlibSurface{.Display = nullptr, .Window = 123}};
+const NativeSurface kWindow{WaylandSurface{}};
 
 class SessionRig final
 {

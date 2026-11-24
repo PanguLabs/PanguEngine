@@ -12,6 +12,9 @@
 #include <expected>
 #include <limits>
 #include <memory>
+#include <optional>
+#include <ranges>
+#include <span>
 #include <string_view>
 #include <utility>
 #include <variant>
@@ -20,7 +23,7 @@
 #ifndef __ANDROID__
 #include <array>
 #endif
-#if defined(_WIN32) || (defined(__linux__) && !defined(__ANDROID__))
+#ifdef _WIN32
 #include <iterator>
 #endif
 
@@ -47,6 +50,12 @@
 #include <Common_3/Resources/ResourceLoader/ThirdParty/OpenSource/tinyimageformat/tinyimageformat_base.h>
 #include <Common_3/Utilities/Interfaces/IFileSystem.h>
 #include <Common_3/Utilities/Interfaces/ILog.h> // IWYU pragma: keep
+
+#if defined(__linux__) && !defined(__ANDROID__)
+#include "SurfacePresentQueue.h"
+#include <Common_3/Graphics/ThirdParty/OpenSource/VulkanSDK/include/vulkan/vulkan_core.h>
+#include <Common_3/Graphics/ThirdParty/OpenSource/VulkanSDK/include/vulkan/vulkan_wayland.h>
+#endif
 
 #ifdef _WIN32
 // Forge 图形头已按目标架构载入 windows.h。
@@ -174,16 +183,70 @@ static_assert(kGpuDataFileBytes > std::string_view{kGpuConfigFile}.size());
         }
     }
 #else
-    if (const auto* handle = std::get_if<XlibSurface>(&surface.Handle());
-        handle != nullptr && handle->Display != nullptr)
+    if (const auto* handle = std::get_if<WaylandSurface>(&surface.Handle());
+        handle != nullptr && handle->Display != nullptr && handle->Surface != nullptr)
     {
-        window.type = WINDOW_HANDLE_TYPE_XLIB;
-        window.display = handle->Display;
-        window.window = handle->Window;
+        window.type = WINDOW_HANDLE_TYPE_WAYLAND;
+        // Forge 的 C 接口用 type 选择匿名联合体的 Wayland 成员。
+        // NOLINTBEGIN(cppcoreguidelines-pro-type-union-access)
+        window.wl_display = handle->Display;
+        window.wl_surface = handle->Surface;
+        // NOLINTEND(cppcoreguidelines-pro-type-union-access)
     }
 #endif
     return window;
 }
+
+#if defined(__linux__) && !defined(__ANDROID__)
+[[nodiscard]] bool CanPresentToWayland(VkInstance instance, VkPhysicalDevice gpu, const WaylandSurface& window) noexcept
+{
+    if (window.Display == nullptr || window.Surface == nullptr || vkCreateWaylandSurfaceKHR == nullptr ||
+        vkDestroySurfaceKHR == nullptr || vkGetPhysicalDeviceSurfaceSupportKHR == nullptr)
+    {
+        return false;
+    }
+    VkWaylandSurfaceCreateInfoKHR info{};
+    info.sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR;
+    info.display = window.Display;
+    info.surface = window.Surface;
+    VkSurfaceKHR surface{};
+    if (vkCreateWaylandSurfaceKHR(instance, &info, nullptr, &surface) != VK_SUCCESS)
+    {
+        return false;
+    }
+    const bool supported = HasSurfacePresentQueue(gpu, surface, vkGetPhysicalDeviceQueueFamilyProperties,
+                                                  vkGetPhysicalDeviceSurfaceSupportKHR);
+    vkDestroySurfaceKHR(instance, surface, nullptr);
+    return supported;
+}
+
+[[nodiscard]] std::optional<std::uint32_t> SelectWaylandGpu(RendererContext& context, const NativeSurface* surface)
+{
+    // gpu.cfg 的排序可优先选择随后会被厂商规则拒绝的集显。只对可用设备排序，
+    // 并将选中项映射回 Forge Context，保留驱动筛选和用户的 GPU 偏好。
+    const auto devices = std::span{context.mGpus}.first(context.mGpuCount);
+    const auto* window = surface != nullptr ? std::get_if<WaylandSurface>(&surface->Handle()) : nullptr;
+    std::vector<GpuDesc> supported;
+    std::vector<std::uint32_t> indices;
+    for (auto [index, device] : std::views::enumerate(devices))
+    {
+        if (device.mGraphicsQueueSupported && device.mGpuVendorPreset.mPresetLevel >= GPU_PRESET_VERYLOW &&
+            util_check_is_gpu_supported(&device) && checkDriverRejectionSettings(&device) &&
+            (surface == nullptr ||
+             (window != nullptr && CanPresentToWayland(context.mVk.pInstance, device.mVk.pGpu, *window))))
+        {
+            supported.push_back(device);
+            indices.push_back(static_cast<std::uint32_t>(index));
+        }
+    }
+    if (supported.empty())
+    {
+        return std::nullopt;
+    }
+    const auto best = util_select_best_gpu(supported.data(), static_cast<std::uint32_t>(supported.size()));
+    return best < indices.size() ? std::optional{indices.at(best)} : std::nullopt;
+}
+#endif
 
 class ForgeBackend final : public FrameBackend
 {
@@ -300,7 +363,7 @@ Status ForgeBackend::Open(RendererOpenDesc desc) noexcept
     }
     RendererDesc settings{}; // NOLINT(bugprone-invalid-enum-default-initialization)
     settings.pContext = Context;
-#if defined(DIRECT3D12) || defined(VULKAN)
+#ifdef DIRECT3D12
     // 显式 Context 使 Forge 按索引选择设备，仍采用 Forge 的 GPU 配置和驱动筛选。
     settings.mGpuIndex = util_select_best_gpu(std::data(Context->mGpus), Context->mGpuCount);
     if (settings.mGpuIndex >= Context->mGpuCount)
@@ -312,12 +375,17 @@ Status ForgeBackend::Open(RendererOpenDesc desc) noexcept
     {
         return Failure(RendererStage::kOpen, RendererError::kNoDevice);
     }
-#ifdef DIRECT3D12
     if (candidate.mGpuVendorPreset.mPresetLevel < GPU_PRESET_VERYLOW)
     {
         return Failure(RendererStage::kOpen, RendererError::kNoDevice);
     }
-#endif
+#elifdef VULKAN
+    const auto selected = SelectWaylandGpu(*Context, desc.PresentationSurface);
+    if (!selected)
+    {
+        return Failure(RendererStage::kOpen, RendererError::kNoDevice);
+    }
+    settings.mGpuIndex = *selected;
 #endif
 #else
     // 与 Forge 样例一致，零初始化的描述符采用后端默认设置。
@@ -371,10 +439,23 @@ Status ForgeBackend::OpenCommands() noexcept
 Status ForgeBackend::Attach(NativeSurface surface, PixelSize size) noexcept
 {
     const auto window = ForgeWindow(surface, size);
+#if defined(__linux__) && !defined(__ANDROID__)
+    if (window.type != WINDOW_HANDLE_TYPE_WAYLAND)
+#else
     if (window.window == decltype(window.window){})
+#endif
     {
         return Failure(RendererStage::kAttach, RendererError::kInvalidSurface);
     }
+
+#if defined(__linux__) && !defined(__ANDROID__)
+    // Attach 可以接收与 Open 不同的窗口；进入 Forge 的交换链路径前检查实际 Surface。
+    if (!CanPresentToWayland(Context->mVk.pInstance, Device->pGpu->mVk.pGpu,
+                             std::get<WaylandSurface>(surface.Handle())))
+    {
+        return Failure(RendererStage::kAttach, RendererError::kPresentationUnavailable);
+    }
+#endif
 
     SwapChainDesc desc{};
     desc.mWindowHandle = window;

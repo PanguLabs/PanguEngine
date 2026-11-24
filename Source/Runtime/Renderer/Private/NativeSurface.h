@@ -2,9 +2,10 @@
 
 #include <variant>
 
-// 保留 SDK 的不透明类型名称，避免把 Win32 和 Xlib 头传递到跨平台状态机。
-struct HWND__;    // NOLINT(bugprone-reserved-identifier, readability-identifier-naming)
-struct _XDisplay; // NOLINT(bugprone-reserved-identifier)
+// 平台 SDK 的不透明类型仅用于借用，不将平台头传入跨平台状态机。
+struct HWND__; // NOLINT(bugprone-reserved-identifier, readability-identifier-naming)
+struct wl_display;
+struct wl_surface;
 struct ANativeWindow;
 
 namespace pg::renderer
@@ -14,10 +15,10 @@ struct Win32Surface
     HWND__* Window{};
 };
 
-struct XlibSurface
+struct WaylandSurface
 {
-    _XDisplay* Display{};
-    unsigned long Window{};
+    wl_display* Display{};
+    wl_surface* Surface{};
 };
 
 struct AndroidSurface
@@ -32,7 +33,7 @@ struct MetalSurface
     void* Layer{};
 };
 
-using NativeSurfaceHandle = std::variant<Win32Surface, XlibSurface, AndroidSurface, MetalSurface>;
+using NativeSurfaceHandle = std::variant<Win32Surface, WaylandSurface, AndroidSurface, MetalSurface>;
 
 // 仅 Engine 平台适配器构造；复制描述不会延长原生窗口或 View 的寿命。
 class NativeSurface final

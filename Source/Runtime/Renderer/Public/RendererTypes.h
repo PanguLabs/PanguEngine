@@ -10,10 +10,16 @@ struct ANativeActivity;
 
 namespace pg::renderer
 {
+class NativeSurface;
+
 struct RendererOpenDesc
 {
     // Android Vulkan 预览需要有效的 Activity。调用方须在 Open 期间保活，成功后延续至会话关闭完成。
     ANativeActivity* Activity{};
+#if defined(__linux__) && !defined(__ANDROID__)
+    // 已有窗口时据此选取能呈现的 GPU。仅在本次 Open 调用期间借用。
+    const NativeSurface* PresentationSurface{};
+#endif
 };
 
 struct LinearColor

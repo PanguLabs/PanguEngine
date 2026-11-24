@@ -64,10 +64,14 @@ function(_pangu_stage_win32_graphics_runtime targetName)
     )
 endfunction()
 
-function(_pangu_require_xlib)
-    if(NOT TARGET PkgConfig::PanguXlib)
-        find_package(PkgConfig REQUIRED)
-        pkg_check_modules(PanguXlib REQUIRED IMPORTED_TARGET GLOBAL x11)
+function(_pangu_require_wayland)
+    if(NOT TARGET ThirdParty::WaylandWindow)
+        pangu_add_owned_subdirectory(
+            SOURCE_DIR "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../Source/ThirdParty/WaylandWindow"
+            OWNER engine
+            RELATIVE_BINARY_DIR Source/ThirdParty/WaylandWindow
+            EXCLUDE_FROM_ALL
+        )
     endif()
 endfunction()
 
@@ -167,9 +171,9 @@ function(_pangu_add_application)
             find_library(quartzCore QuartzCore REQUIRED NO_CACHE)
             list(APPEND platformLink "${quartzCore}")
         elseif(LINUX)
-            _pangu_require_xlib()
-            set(platformEntry Xlib.cpp)
-            set(platformLink PkgConfig::PanguXlib)
+            _pangu_require_wayland()
+            set(platformEntry Wayland.cpp)
+            set(platformLink ThirdParty::WaylandWindow)
         else()
             message(FATAL_ERROR "Pangu graphical Application has no entry point for ${CMAKE_SYSTEM_NAME}")
         endif()
@@ -194,7 +198,7 @@ function(_pangu_add_application)
                 "${applicationSource}/Public"
                 "${rendererSource}/Private"
         )
-        if(ANDROID AND PANGU_ENABLE_VULKAN_PREVIEW)
+        if((ANDROID OR LINUX) AND PANGU_ENABLE_VULKAN_PREVIEW)
             target_compile_definitions("${entryTarget}" PRIVATE PG_RENDERER_VULKAN_PREVIEW)
         endif()
         if(WIN32)

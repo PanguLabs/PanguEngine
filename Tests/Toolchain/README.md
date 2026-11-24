@@ -49,8 +49,24 @@ Android Vulkan 预览由 [Android Studio 测试工程](../Renderer/NativeActivit
 这个 APK 使用独立的 Manifest，链接官方 Swappy 2.1.3 AAR 的原生库，并把对应版本的官方 Java 源码编译进应用 DEX。 [Gradle Manifest](../Renderer/NativeActivity/AndroidStudio/app/src/main/AndroidManifest.xml)
 前台运行时，`PanguFirstFrame` 日志在第 120 次呈现请求后留下标记，数秒后应用主动关闭。[ObserveSwappy.ps1](../Renderer/NativeActivity/ObserveSwappy.ps1) 默认采集三轮 SurfaceFlinger 实际呈现时间，并检查 Java 类加载和正常退出。
 
-Linux 的 Xlib 预览通过 `-DPANGU_ENABLE_VULKAN_PREVIEW=ON` 开启，需要 Forge 能选择的 Vulkan GPU。原版 Forge 会在 GPU 枚举时排除 `VK_PHYSICAL_DEVICE_TYPE_CPU`。
+Linux 首帧预览使用原生 Wayland 桌面。Ubuntu 构建依赖包括 `libwayland-dev`、`libdecor-0-dev`（0.2.2+）及 Forge 头所需的 `libx11-dev`。GNOME 上使用 `libdecor-0-plugin-1-gtk` 提供标题栏、拖动边框和窗口按钮。GPU 必须能够向目标窗口呈现。选卡时查询实际 Vulkan Surface 的队列族支持，再按 Forge 规则排序。在支持 xdg-shell v6 的 libdecor 和合成器上，收到 `suspended` 后暂停提交，恢复时采用最近协商的内容尺寸。旧版合成器仍能运行预览。
+
+在 `moozen-ubuntu` 的共享源码根运行以下命令。开启预览的桌面验收使用 Python 3、Sway（含 `swaymsg`）和 `grim`。通过 SSH 执行时，使用桌面会话所属用户的 `XDG_RUNTIME_DIR` 和 `WAYLAND_DISPLAY`（本机桌面为 `wayland-0`）。
+
+```sh
+cmake --preset linux -DPANGU_ENABLE_VULKAN_PREVIEW=ON
+ctest --preset linux --no-tests=error -R '^Renderer[.]DesktopFrame$' --output-on-failure
+cmake --preset linux -DPANGU_ENABLE_VULKAN_PREVIEW=OFF
+```
+
+`Renderer.DesktopFrame` 构建、搬移并运行独立 Project。开启预览时，[Wayland 观察器](../Renderer/Acceptance/ObserveWayland.py) 清除 X11 显示入口，在隔离的嵌套桌面按 PID 定位窗口。它先采样 720×480 窗口的中心像素 `#3F99C8`，调整到 560×360 后触发换色，确认 `#FF0000` 与至少 120 次呈现请求，再由合成器关闭窗口并检查进程成功退出。该轮的像素与退出摘要保存在测试运行目录的 `deployment.log`，逐帧计数在 `Deploy/first-frame.stdout`。默认关闭预览时，同一测试在无可用桌面连接的条件下检查 Renderer 在 Open 阶段返回呈现不可用。
 预览的帧数与截图可验证前台呈现，常规构建的窗口生命周期验收条件见 [Renderer 接入规格](../../docs/superpowers/specs/2026-11-20-renderer-forge-igraphics-design.md)。
+
+2026-11-23 在 `moozen-ubuntu` 验证了 `f2d551d` 加本轮未提交修复的 Release / Modular 工作区。独立 Project 使用本地源码锁覆盖。上述预览 CTest 在嵌套 Sway 中采到两种指定颜色和尺寸，并由合成器关闭成功。原生 Ubuntu v6 桌面运行了 120 次呈现请求，零跳帧。另用隔离的 Mutter 46 虚拟显示器最小化窗口，稳定后一秒内计数保持 98，恢复后增长至 160，随后收到关闭事件并正常退出。预览关闭的独立 Project 在无显示服务时通过 Open 拒绝检查。恢复预览和本地覆盖为 OFF 后，16 项 Renderer 单测及 Vulkan 导出符号检查通过，其中无可用呈现队列与查询失败由单测覆盖。
+
+同日在 `789f662` 加窗口装饰修复的 Release / Modular 工作区复测。Ubuntu 的 libdecor 0.2.2 与 GTK 插件在原生 GNOME 会话协商 xdg-shell v6，完成 120 次呈现请求，零跳帧。独立 Mutter 46 会话中，鼠标拖动标题栏使窗口移动 65×38 像素，拖动右侧边框使窗口增宽 90 像素，最小化时呈现计数停止，恢复后继续增长，点击标题栏关闭按钮后进程成功退出。嵌套 Sway 的原有清屏像素、调整尺寸及关闭验收和 17 项 Renderer 定向 CTest 通过。关闭预览重新构建独立 Project 后，仍可在无桌面服务时返回呈现不可用。
+
+2026-11-24 的干净提交双模式复验见 [Linux Wayland 双模式验收](../../docs/superpowers/plans/2026-11-20-renderer-forge-igraphics.md#linux-wayland-双模式验收)。
 
 旧 `LinkSmoke/` 空程序 SDK 冒烟已删除，其最终链接能力由下面的真实 Runtime/业务宿主检查承接。
 正式根分别 `cmake --preset android-arm64|ios-arm64 -DPANGU_LINK_MODE=<Monolithic|Modular> -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON` 并用对应 build preset 编译，再显式执行：

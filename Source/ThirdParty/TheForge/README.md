@@ -19,7 +19,7 @@ macOS 和 iOS Sources。Linux 与 Android 核对 `Common_3/OS/{Linux,Android}`�
 | 平台 | 后端与 SDK/系统依赖 | GPU 数据文件，路径相对于 `Repo/Common_3` |
 | --- | --- | --- |
 | Windows x64 | Direct3D 12，Windows SDK 的 D3D12/DXGI、GUID、系统窗口和输入库。随 Forge 固定的 Agility SDK、DXC、AGS、NVAPI、WinPixEventRuntime 见 `Graphics/ThirdParty/OpenSource` | `OS/Windows/pc_gpu.data` |
-| Linux x86-64 | Vulkan、X11 开发包。Forge 接口使用 X11 头，Application 链接 X11 并处理窗口。系统 `libvulkan.so.1` 由上游 volk 在运行时加载，另需 Vulkan 驱动 | `OS/Windows/pc_gpu.data`（共用桌面 GPU 数据） |
+| Linux x86-64 | 图形 Application 使用 [Wayland 窗口依赖](../WaylandWindow/README.md)。Forge v1.63 的 Linux 头仍需 X11 开发头。预览运行时由 volk 加载系统 `libvulkan.so.1`，驱动须支持 `VK_KHR_wayland_surface` | `OS/Windows/pc_gpu.data`（共用桌面 GPU 数据） |
 | Android ARM64 | Vulkan、NDK、`libc++_shared.so` 以及系统 Android/Log 等基础库。Forge 公共头包含 NDK NativeActivity Glue 头。Vulkan API 由系统 loader 与驱动提供 | `OS/Android/android_gpu.data` |
 | macOS / iOS | Metal，目标 macOS/iPhoneOS SDK；Metal、MetalPerformanceShaders、GameController、CoreHaptics、QuartzCore、Foundation、CoreFoundation、CoreGraphics、CoreVideo，以及 AppKit/IOKit 或 UIKit。用 preset Clang 编译 OBJC/OBJCXX，Apple 语言启用在图形消费者与依赖的共同目录作用域 | `OS/Darwin/apple_gpu.data` |
 

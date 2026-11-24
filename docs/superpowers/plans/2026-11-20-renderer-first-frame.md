@@ -1,6 +1,8 @@
 # Renderer 五平台首帧 Implementation Plan
 
-> **状态：已被替代（Superseded），整体验收未完成。** 原接入路线停止于 `18541d2`。后续实施以 [Renderer 原版 Forge IGraphics 迁移实施计划](2026-11-20-renderer-forge-igraphics.md) 为准。
+> **状态：已被替代（Superseded），原方案整体验收未完成。** 原接入路线停止于 `18541d2`。后续实施以 [Renderer 原版 Forge IGraphics 迁移实施计划](2026-11-20-renderer-forge-igraphics.md) 为准。
+>
+> **承接方案已验收。** 2026-11-24，macOS 和 iOS 通过编译及最终链接，Windows、Android 和 Linux 通过约定范围内的运行补验。结果已在 `98ef4fa` 归档，Vulkan 正式发布缺项继续按接入规格跟踪。[各平台补验与结项](2026-11-20-renderer-forge-igraphics.md#2026-11-24-各平台补充验证)
 
 下方原任务清单供追溯。实际进度见文末的收尾记录。
 
@@ -154,4 +156,4 @@
 | Android arm64 / `android-arm64` | `af2091c`，Forge 链接检查通过。 | 产品 APK、设备运行、窗口生命周期及双模式记录。 |
 | iOS arm64 / `ios-arm64` | `18541d2`，Renderer 消费探针通过 Monolithic 链接。 | 生产入口、签名安装及真机生命周期。 |
 
-按仓库规范，保留原计划的本地日志和评审目录 `.superpowers/sdd/2026-11-20-renderer-first-frame/`。上表记录的是旧后端的观察结果。新后端的通过记录以迁移计划中实际执行的测试为准。
+本节归档旧方案的关键提交、验收证据与遗留项。2026-11-24 承接方案按约定范围通过验收，旧方案的本地执行目录已清理。[承接方案结项记录](2026-11-20-renderer-forge-igraphics.md#迁移结项)

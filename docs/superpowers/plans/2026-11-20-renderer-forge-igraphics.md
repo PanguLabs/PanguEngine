@@ -109,3 +109,56 @@ Windows Debug 的 `PanguRendererTests.Host.RendererOwnedByExactHost` 曾报 `0xc
 - 呈现、交换链清理和后端关闭按 Forge 的公开返回能力建模，删除旧后端的呈现失败、异步退休和清理阶段设备丢失模拟。保留取图与提交失败、首错、进程独占、窗口代次和跨线程撤销覆盖。两个旧应用退出用例收束为一个，验证可观察的提交错误在窗口资源清理后返回。
 
 清理后的 Windows Renderer 定向验证 17/17 通过，包含独立 Project 首帧与无图形启动。WSL Linux 15/15 通过，包含独立 Project 的 Vulkan 启动拒绝。macOS 14 项通过，独立 Project 按无 Metal 设备条件跳过物理呈现。Android NativeActivity 生命周期 APK 验证窗口撤销、重建和宿主关闭，`agdkDebug` APK 完成三轮真机呈现采样，Swappy Java 加载告警及内嵌 DEX 回退均为 0/3。Activity 正常退出见[主动退出复验](2026-11-21-android-studio-renderer-check.md#主动退出复验)。iOS 通过 Renderer 最终链接。清理阶段的 Android 真机日志位于 `Build/Android/Tests/NativeActivity/RendererCleanup`。
+
+## Linux Wayland 双模式验收
+
+2026-11-24 在 `moozen-ubuntu` 从共享源码根验收 x86-64 Release。被测干净提交为 `e6eef0dac28481f1ec14aa90534478a73e8dce09`，tree 为 `74255ba3cd7240c7d1e9657fa620134e51f3d293`。Clang 23.1.0、CMake 4.4.2、libwayland 1.22.0、libdecor 0.2.2。宿主启用原生 Wayland，Vulkan 使用 GTX 1050 Ti 和 NVIDIA 驱动 580.178.04。独立 Project 锁定同一提交，源码锁覆盖为 OFF。
+
+| 链接模式 | Renderer CTest | 独立部署结果 |
+| --- | --- | --- |
+| Monolithic | 18/18，通过且无跳过 | FirstFrame 不含 Pangu 动态库依赖。记录 123 次呈现请求，合成器关闭后退出 0。Headless 输出 `context-closed`。 |
+| Modular | 19/19，通过且无跳过，包含 Vulkan 导出符号检查 | FirstFrame 从搬移后的部署目录加载 `libPanguRenderer.so`。记录 121 次呈现请求，合成器关闭后退出 0。Headless 输出 `context-closed`。 |
+
+两个模式均由版本化的桌面观察器在嵌套 Sway 中采到 720×480 窗口的 `#3F99C8`，调整到 560×360 后采到 `#FF0000`。测试运行期间隔离了独立 Project 的构建目录。另在独立的 Mutter 46 会话补测 xdg-shell v6 挂起与恢复。Monolithic 最小化时呈现计数稳定在 77，恢复后增长至 138。Modular 对应计数为 23 和 84。两者均收到合成器关闭事件并正常退出。
+
+按 [Linux 构建说明](../../Tests/Toolchain/README.md) 准备 Wayland 环境，从 `/home/moozen/WindowsGit/PanguEngine` 串行执行：
+
+```sh
+export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.autocrlf GIT_CONFIG_VALUE_0=true
+for mode in Monolithic Modular; do
+    cmake --preset linux -DCMAKE_BUILD_TYPE=Release "-DPANGU_LINK_MODE=$mode" \
+        -DPANGU_ENABLE_VULKAN_PREVIEW=ON -DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE=OFF \
+        -DBUILD_TESTING=ON -DPANGU_BUILD_ENGINE_TESTS=ON -DPANGU_TEST_BUILD_JOBS=4
+    cmake --build --preset linux --target PanguRendererTests --parallel 4
+    ctest --preset linux --no-tests=error -L '^area[.]renderer$' -V --output-on-failure
+done
+```
+
+日志保存在 Ubuntu 的 `~/PanguEngineBuild/Linux/Tests/Results/Wayland-2026-11-24-QPXC69`，按模式记录 CTest 日志和 JUnit、ELF 依赖及 Mutter 协议日志。独立首帧部署分别位于 `Tests/Work/Renderer.DesktopFrame/ccad07460cfe` 和 `Tests/Work/Renderer.DesktopFrame/8fc729f55763`（相对于 Linux BuildRoot）。结束后恢复 Release / Modular、预览 OFF、源码锁覆盖 OFF 和测试构建预算 2。
+
+此次补齐 Linux 的双模式开发预览与隔离部署验收。有界取图、取图期间的原生窗口撤销，以及旧交换链的呈现退休仍属于正式发布门槛。[Renderer 接入规格](../specs/2026-11-20-renderer-forge-igraphics-design.md#验收口径)
+
+## 2026-11-24 各平台补充验证
+
+被测干净提交为 `9472991d6cb416b3e7591dd71ac19f30f038a755`，tree 为 `5db60bad31177be4e144b3aa9b93828d6c4ce814`。本轮 macOS 和 iOS 的验收范围为编译及最终链接，Windows、Android 和 Linux 按下表验证运行。
+
+| 平台 | 验收结果 |
+| --- | --- |
+| Windows x64 | Release Monolithic 和 Modular 各 17/17，通过且无跳过。两模式的首帧 Project 均从独立部署运行，客户端中心从 698×424 的 `#3F99C8` 切换到 518×304 的 `#FF0000`，各 123 次呈现请求、零跳帧、零失败、退出 0。独立无图形 Project 均输出 `context-closed`。Engine 源码锁覆盖为 OFF。 |
+| Android ARM64 | Release 的 Monolithic 和 Modular 生命周期测试 APK 均在 23127PN0CC（Android 16）安装运行。关闭 Vulkan 预览时验证 Activity 后台切换、窗口代次 1 和 2 的撤销与重建、Activity 销毁及宿主关闭。Modular APK 包含独立的 `libPanguRenderer.so`。 |
+| Android Vulkan 开发预览 | `agdkDebug` 的 Debug Monolithic APK 在同一真机通过三轮。每轮 421 次呈现请求、零跳帧、原生宿主关闭及 Java `performDestroy` 完成，Swappy Java 加载警告和内嵌 DEX 回退均为零。SurfaceFlinger 每轮采到 127 个实际呈现时间戳，374/378 个采样间隔落在 16.667 ms 的 ±1 ms 内。 |
+| Linux x86-64 | 从 `e6eef0d` 到本轮提交只修改了两份 Markdown 文档，复用上节的 Ubuntu 真机双模式验收，Monolithic 18/18、Modular 19/19。当前提交在 Release Modular、预览 OFF 的正式根补跑 17 项 Renderer 定向回归，17/17，含 Vulkan 导出符号检查。 |
+| macOS x86-64 | MacPorts Clang 23.1.2，Release Modular。真实 `libPanguRenderer.dylib` 与 `PanguForgeLinkCheck` 均最终链接为 x86-64 Mach-O。 |
+| iOS ARM64 | Release Monolithic，iPhoneOS SDK 18.2。真实 `PanguMetalRendererLinkCheck.app` 可执行文件最终链接为 ARM64 Mach-O，`LC_BUILD_VERSION` 标记平台 iOS、最低系统版本 18.0。 |
+
+Windows 分别用 `windows` preset 配置两种链接模式，构建 `PanguRendererTests`、`PanguRendererHostTests`、`PanguForgeLinkCheck`，再执行 `ctest --preset windows --no-tests=error -L '^area[.]renderer$' -V --output-on-failure`。macOS 用 `macos` preset 构建 `PanguRenderer` 和 `PanguForgeLinkCheck`，iOS 用 `ios-arm64` preset 构建 `PanguForgeLinkCheck`，两者均启用 `PANGU_BUILD_FORGE_LINK_CHECK`。
+
+Android 生命周期用 `android-arm64` preset 分别构建两种模式的 `PanguForgeLinkCheck`，依次运行 `Package.ps1`、`adb install -r` 和 `Observe.ps1`。预览用 `:app:assembleAgdkDebug`，采用校验官方 SHA-256 的 Gradle 9.6.0 分发包及本机的 Swappy 2.1.3 AAR，装包后执行 `ObserveSwappy.ps1 -Runs 3`。预览 APK 的 SHA-256 为 `39621554e440496db30beda50f34f671e6b04a031e64eb4ff9e306eb5c0a4db9`。
+
+原始记录分别位于 Windows 的 `Build/Windows/Tests/Results/Renderer-2026-11-24-190836`、Android 的 `Build/Android/Tests/NativeActivity/Results/Renderer-2026-11-24-191100`、Ubuntu 的 `~/PanguEngineBuild/Linux/Tests/Results/RendererDefault-PX1kBQ` 及 Mac 的 `~/PanguEngineBuild/macOS/Tests/Results/RendererBuild-NRnyvs`。
+
+### 迁移结项
+
+迁移阶段已通过整分支评审和本轮约定的五平台验收。最终复评确认 `b1dfdf6` 解决了三项评审发现。各阶段的关键提交、通过范围和原始验收日志位置记录于本计划。
+
+Linux 和 Android 的 Vulkan 正式发布仍待验证有界取图、呈现期间的原生窗口撤销，以及旧交换链的呈现退休。后续发布验收按 [Renderer 接入规格](../specs/2026-11-20-renderer-forge-igraphics-design.md#验收口径) 跟踪。

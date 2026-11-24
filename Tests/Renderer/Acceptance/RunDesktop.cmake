@@ -15,10 +15,28 @@ endforeach()
 set(deploy "${rendererProjectRunRoot}/Deploy")
 file(COPY "${runtime}/" DESTINATION "${deploy}")
 cmake_path(GET executable FILENAME executableName)
-if(CMAKE_HOST_LINUX)
+if(CMAKE_HOST_LINUX AND PANGU_ENABLE_VULKAN_PREVIEW)
+    find_program(pythonInterpreter python3 NO_CACHE REQUIRED)
     _pangu_run_relocated_unix(
         PanguRenderer
         --unset=DISPLAY
+        "${pythonInterpreter}"
+        "${CMAKE_CURRENT_LIST_DIR}/ObserveWayland.py"
+        "${deploy}/${executableName}"
+    )
+    if(NOT exitCode STREQUAL "0")
+        message(
+            FATAL_ERROR
+            "Wayland Vulkan preview failed (exit=${exitCode}): see ${rendererProjectRunRoot}/deployment.log"
+        )
+    endif()
+    string(STRIP "${output}" summary)
+    message(STATUS "${summary}")
+elseif(CMAKE_HOST_LINUX)
+    _pangu_run_relocated_unix(
+        PanguRenderer
+        --unset=DISPLAY
+        WAYLAND_DISPLAY=/nonexistent/pangu-wayland
         "${deploy}/${executableName}"
     )
     if(

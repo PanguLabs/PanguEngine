@@ -9,6 +9,20 @@ include("${PROJECT_SOURCE_DIR}/cmake/PanguTestDependencies.cmake")
 pangu_require_googletest(RTTI ON)
 
 add_executable(PanguRendererTests SessionTests.cpp)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_sources(
+        PanguRendererTests
+        PRIVATE
+            WaylandConfigurationTests.cpp
+            SurfacePresentQueueTests.cpp
+    )
+    target_link_libraries(PanguRendererTests PRIVATE ThirdParty::TheForge)
+    target_include_directories(
+        PanguRendererTests
+        PRIVATE
+            "${PROJECT_SOURCE_DIR}/Source/Runtime/Application/Private/Platform"
+    )
+endif()
 if(APPLE AND NOT IOS)
     target_sources(PanguRendererTests PRIVATE MacWindowPixelTests.cpp)
     target_link_libraries(PanguRendererTests PRIVATE "-framework CoreGraphics")
@@ -139,7 +153,7 @@ if(WIN32 OR LINUX OR (APPLE AND NOT IOS))
         subprocess
         nested-build
     )
-    if(WIN32 OR APPLE)
+    if(WIN32 OR APPLE OR (LINUX AND PANGU_ENABLE_VULKAN_PREVIEW))
         list(
             APPEND desktopFrameRequirements
             gpu
@@ -176,6 +190,7 @@ if(WIN32 OR LINUX OR (APPLE AND NOT IOS))
             "${CMAKE_COMMAND}"
             "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}"
             "-DPANGU_TEST_ROOT:PATH=${CMAKE_BINARY_DIR}/Tests/Work/Renderer.DesktopFrame"
+            "-DPANGU_ENABLE_VULKAN_PREVIEW:BOOL=${PANGU_ENABLE_VULKAN_PREVIEW}"
             "-DPANGU_TEST_BUILD_JOBS:STRING=${PANGU_TEST_BUILD_JOBS}"
             "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
             "-DPANGU_LINK_MODE:STRING=${PANGU_LINK_MODE}"

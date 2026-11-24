@@ -30,7 +30,7 @@ public:
     [[nodiscard]] Result<std::optional<app::detail::Drawable>> Poll() noexcept override
     {
         return app::detail::Drawable{
-            .Surface = NativeSurface{XlibSurface{.Display = nullptr, .Window = 7}},
+            .Surface = NativeSurface{WaylandSurface{}},
             .Size = {.Width = 800, .Height = 600},
         };
     }
