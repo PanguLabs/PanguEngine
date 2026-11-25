@@ -94,7 +94,6 @@ public:
 
     [[nodiscard]] Status Run(renderer::RendererSession& session) noexcept override
     {
-#ifdef PG_RENDERER_VULKAN_PREVIEW
         auto* const vm = App->activity->vm;
         const auto detachOnExit = AttachActivityThread(*vm);
         if (!detachOnExit)
@@ -107,26 +106,6 @@ public:
             vm->DetachCurrentThread();
         }
         return frames;
-#else
-        const auto opened = session.Open();
-        const auto closed = session.Close();
-        if (!closed)
-        {
-            return closed;
-        }
-        if (opened)
-        {
-            return std::unexpected(
-                renderer::MakeRendererError(renderer::RendererStage::kOpen, renderer::RendererError::kInvalidState));
-        }
-        if (opened.error() != renderer::MakeRendererError(renderer::RendererStage::kOpen,
-                                                          renderer::RendererError::kPresentationUnavailable))
-        {
-            return opened;
-        }
-        __android_log_write(ANDROID_LOG_INFO, kLogTag, "presentation-unavailable");
-        return WaitForDestroy();
-#endif
     }
 
 private:

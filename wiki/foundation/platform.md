@@ -10,7 +10,7 @@
 | Windows | 主开发环境（homelab） | 已有针对性的 C++23 构建与 Runtime 探针测试；非完整 Engine 验收 |
 | Linux | Ubuntu 真机（`ssh moozen-ubuntu`） | 已验证 SSH、共享源码挂载及 `linux` preset 可见性。既有 C++23 构建与 Runtime 探针结果来自 WSL |
 | macOS | `ssh -o BatchMode=yes moozen-macos` | C++23 原生编译、链接、运行探针通过 |
-| Android | Windows 上 Android SDK/NDK 工具链 | 四种 ABI 的 C++23 动态库编译与链接通过。ARM64 已验证 NativeActivity APK 打包、安装和真机生命周期，Vulkan 开发预览已在真机呈现。见 [Android 工具链验收](android-toolchain.md#arm64-renderer-验收) |
+| Android | Windows 上 Android SDK/NDK 工具链 | 四种 ABI 的 C++23 动态库编译与链接通过。ARM64 已验证 NativeActivity APK 打包、安装和真机生命周期，Forge Vulkan 已在真机呈现。见 [Android 工具链验收](android-toolchain.md#arm64-renderer-验收) |
 | iOS | macOS 主机交叉编译 iPhoneOS Device | iOS ARM64 动态库编译与链接通过；签名、打包及真机/模拟器验证未完成 |
 
 **目标支持不等于完整引擎实现或设备运行验证。** 上表只列出验证层级，不作为平台工具链版本、路径和参数的权威来源。

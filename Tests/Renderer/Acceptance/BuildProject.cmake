@@ -37,9 +37,6 @@ function(_pangu_build_renderer_project target)
     endif()
     if(graphics)
         list(APPEND platformArgs "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE:PATH=${projectBuild}/ReleaseBin")
-        if(CMAKE_HOST_LINUX)
-            list(APPEND platformArgs "-DPANGU_ENABLE_VULKAN_PREVIEW:BOOL=${PANGU_ENABLE_VULKAN_PREVIEW}")
-        endif()
     endif()
     execute_process(
         COMMAND

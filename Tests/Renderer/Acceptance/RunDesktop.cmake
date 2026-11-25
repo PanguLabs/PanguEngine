@@ -15,7 +15,7 @@ endforeach()
 set(deploy "${rendererProjectRunRoot}/Deploy")
 file(COPY "${runtime}/" DESTINATION "${deploy}")
 cmake_path(GET executable FILENAME executableName)
-if(CMAKE_HOST_LINUX AND PANGU_ENABLE_VULKAN_PREVIEW)
+if(CMAKE_HOST_LINUX)
     find_program(pythonInterpreter python3 NO_CACHE REQUIRED)
     _pangu_run_relocated_unix(
         PanguRenderer
@@ -27,35 +27,11 @@ if(CMAKE_HOST_LINUX AND PANGU_ENABLE_VULKAN_PREVIEW)
     if(NOT exitCode STREQUAL "0")
         message(
             FATAL_ERROR
-            "Wayland Vulkan preview failed (exit=${exitCode}): see ${rendererProjectRunRoot}/deployment.log"
+            "Wayland Vulkan presentation failed (exit=${exitCode}): see ${rendererProjectRunRoot}/deployment.log"
         )
     endif()
     string(STRIP "${output}" summary)
     message(STATUS "${summary}")
-elseif(CMAKE_HOST_LINUX)
-    _pangu_run_relocated_unix(
-        PanguRenderer
-        --unset=DISPLAY
-        WAYLAND_DISPLAY=/nonexistent/pangu-wayland
-        "${deploy}/${executableName}"
-    )
-    if(
-        NOT exitCode
-            STREQUAL
-            "1"
-        OR NOT errors
-            MATCHES
-            "Pangu Application: error domain=70672e72656e64 code=265"
-        OR NOT errors
-            MATCHES
-            "Windowed presentation is unavailable"
-        OR "${output}${errors}"
-            MATCHES
-            "first-frame |GPU selection rules|Adding Vulkan swapchain|Initializing Vulkan"
-    )
-        message(FATAL_ERROR "Vulkan presentation must be rejected during Open (exit=${exitCode}):\n${output}${errors}")
-    endif()
-    message(STATUS "Vulkan presentation unavailable; Open rejection and exit verified")
 elseif(CMAKE_HOST_APPLE)
     include("${CMAKE_CURRENT_LIST_DIR}/CheckMetalResourcePath.cmake")
     _pangu_run_relocated_unix(

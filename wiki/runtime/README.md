@@ -9,9 +9,9 @@
 | 功能领域 | 已确定 | 尚未冻结 |
 | --- | --- | --- |
 | ECS | **flecs v4.2.0**。已交付并验收原生 API、登记、推进与 World 关闭顺序。[首版 World 契约](ecs.md) | 公开 C++ API/ABI、后续 Meta/Task 集成 |
-| Rendering | 底层库采用 **The Forge v1.63**，固定提交 [`7443530ef7e888771f307de74b7872becfd64450`](https://github.com/ConfettiFX/The-Forge/tree/7443530ef7e888771f307de74b7872becfd64450)。首版清屏呈现的目标平台为 Windows、Linux、macOS、Android 和 iOS。Windows 已通过实际窗口呈现验收。Linux 的 [Wayland / Vulkan 开发预览](../../Tests/Toolchain/README.md)已在 Ubuntu 真机验证首帧、窗口尺寸变化与关闭。各平台的发布缺项见[迁移计划](../../docs/superpowers/plans/2026-11-20-renderer-forge-igraphics.md)。 | Renderer 接口、各平台设备集成、Pipeline、Shader/Material、场景与编辑器预览 |
+| Rendering | 底层库采用 **The Forge v1.63**，固定提交 [`7443530ef7e888771f307de74b7872becfd64450`](https://github.com/ConfettiFX/The-Forge/tree/7443530ef7e888771f307de74b7872becfd64450)。首版清屏呈现的目标平台为 Windows、Linux、macOS、Android 和 iOS。Windows 已通过实际窗口呈现验收。Linux 和 Android 的图形应用使用 Forge Vulkan，参见[真机测试入口](../../Tests/Toolchain/README.md)和[平台验证记录](../../docs/superpowers/plans/2026-11-20-renderer-forge-igraphics.md)。 | Renderer 接口、各平台设备集成、Pipeline、Shader/Material、场景与编辑器预览 |
 
-ECS 的桌面运行和移动链接覆盖见[最终验收](../../docs/superpowers/plans/2026-11-18-ecs-world.md#ecs-交付验收)。Renderer 首版由 Engine 向 Project 提供 Application 入口，源码位于 `Source/Runtime/Application/`。Renderer 的设计采用原版 Forge `IGraphics` 公开接口，平台发布门槛和实施状态见 [Renderer 接入规格](../../docs/superpowers/specs/2026-11-20-renderer-forge-igraphics-design.md)。
+ECS 的桌面运行和移动链接覆盖见[最终验收](../../docs/superpowers/plans/2026-11-18-ecs-world.md#ecs-交付验收)。Renderer 首版由 Engine 向 Project 提供 Application 入口，源码位于 `Source/Runtime/Application/`。Renderer 采用原版 Forge `IGraphics` 公开接口，平台验收口径见 [Renderer 接入规格](../../docs/superpowers/specs/2026-11-20-renderer-forge-igraphics-design.md)。
 
 图形与渲染功能的取舍见[渲染接入原则](rendering.md)。
 

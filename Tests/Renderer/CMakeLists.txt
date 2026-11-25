@@ -149,17 +149,6 @@ endif()
 
 if(WIN32 OR LINUX OR (APPLE AND NOT IOS))
     set(observerArgs)
-    set(desktopFrameRequirements
-        subprocess
-        nested-build
-    )
-    if(WIN32 OR APPLE OR (LINUX AND PANGU_ENABLE_VULKAN_PREVIEW))
-        list(
-            APPEND desktopFrameRequirements
-            gpu
-            window
-        )
-    endif()
     if(APPLE AND NOT IOS)
         add_executable(PanguMacWindowSampler Acceptance/SampleMacWindow.mm)
         set_target_properties(
@@ -190,7 +179,6 @@ if(WIN32 OR LINUX OR (APPLE AND NOT IOS))
             "${CMAKE_COMMAND}"
             "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}"
             "-DPANGU_TEST_ROOT:PATH=${CMAKE_BINARY_DIR}/Tests/Work/Renderer.DesktopFrame"
-            "-DPANGU_ENABLE_VULKAN_PREVIEW:BOOL=${PANGU_ENABLE_VULKAN_PREVIEW}"
             "-DPANGU_TEST_BUILD_JOBS:STRING=${PANGU_TEST_BUILD_JOBS}"
             "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
             "-DPANGU_LINK_MODE:STRING=${PANGU_LINK_MODE}"
@@ -207,7 +195,10 @@ if(WIN32 OR LINUX OR (APPLE AND NOT IOS))
             contract
             regression
         REQUIRES
-            ${desktopFrameRequirements}
+            subprocess
+            nested-build
+            gpu
+            window
         PROCESSORS "${PANGU_TEST_BUILD_JOBS}"
         TIMEOUT 900
     )

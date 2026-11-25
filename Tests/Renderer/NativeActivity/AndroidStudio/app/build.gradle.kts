@@ -36,6 +36,11 @@ abstract class StageForgeAssets : DefaultTask() {
     }
 }
 
+val panguLinkMode = providers.gradleProperty("panguLinkMode").orElse("Monolithic").get()
+require(panguLinkMode == "Monolithic" || panguLinkMode == "Modular") {
+    "panguLinkMode must be Monolithic or Modular"
+}
+
 val nativeActivity = rootProject.layout.projectDirectory.dir("..")
 val engine = rootProject.layout.projectDirectory.dir("../../../..")
 val gradleBuildRoot = engine.dir("Build/Android/Tests/NativeActivity/Gradle")
@@ -69,9 +74,8 @@ android {
                 "-DBUILD_TESTING=ON",
                 "-DPANGU_BUILD_ENGINE_TESTS=ON",
                 "-DPANGU_BUILD_FORGE_LINK_CHECK=ON",
-                "-DPANGU_ENABLE_VULKAN_PREVIEW=ON",
                 "-DPANGU_FORGE_USE_PREFAB_SWAPPY=ON",
-                "-DPANGU_LINK_MODE=Monolithic",
+                "-DPANGU_LINK_MODE=$panguLinkMode",
             )
             targets += "PanguNativeActivityCheck"
         }

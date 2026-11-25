@@ -344,10 +344,6 @@ Status ForgeBackend::OpenRuntime(RendererOpenDesc desc) noexcept
 
 Status ForgeBackend::Open(RendererOpenDesc desc) noexcept
 {
-#if defined(VULKAN) && !defined(PG_RENDERER_VULKAN_PREVIEW)
-    // 原版 Vulkan 路径的窗口呈现由开发构建显式启用。
-    return Failure(RendererStage::kOpen, RendererError::kPresentationUnavailable);
-#endif
     if (const auto started = OpenRuntime(desc); !started)
     {
         return started;

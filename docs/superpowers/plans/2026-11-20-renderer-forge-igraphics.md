@@ -15,7 +15,7 @@
 - 固定 Forge gitlink `7443530ef7e888771f307de74b7872becfd64450`，正式配置离线，第三方补丁只做编译、链接兼容。
 - 使用仓库指定的共享源码根与隔离的宿主 BuildRoot。Application 不引入新的 Module 或 `Pangu::` 别名。
 - Project 回调沿用 Engine 入口，Forge 构建参数和 Renderer 私有目录留在对应编译目标。
-- 记录实际命令、被测提交或工作区状态及可观察结果。平台发布门槛按规格记录。
+- 记录实际命令、被测提交或工作区状态及可观察结果。平台验收按接入规格执行。
 
 ## 评审核对
 
@@ -25,7 +25,7 @@
 | 私有后端或功能补丁混入统一后的 Renderer | 任务 2 检查正式源清单、补丁和实际链接对象。 |
 | Forge 返回 `void` 时把调用计为原生接纳 | 任务 2、3 核对公开枚举和独立 Project 日志。 |
 | 旧后端测试的通过结果被引用为新路径的证据 | 任务 3 对新路径复测颜色、窗口和退出。 |
-| 通过 Vulkan 冒烟运行就宣布旧链回收安全 | 任务 3 分别记录冒烟结果与正式生命周期能力。 |
+| 将 Vulkan 冒烟结果当作完整窗口生命周期覆盖 | 任务 3 按实际执行的窗口场景记录结果。 |
 
 ### 任务 1 · Application 迁入 Runtime
 
@@ -40,7 +40,7 @@
 - [x] 从正式编译图移除自制 D3D12/Vulkan 渲染路径、Metal 功能桥及只用于这些路径的注入测试。撤掉 `0003-d3d12-open-rollback.patch`、`VulkanWsi.patch`、`MetalCompletion.patch`，更新 Forge CMake 与 README。剩余配置适配限于目标工具链与依赖裁剪。
 - [x] Windows 正式 Release Modular 的 Renderer 测试 23/23，Forge 链接探针通过。正式编译图只将共享 Forge 接线编入 Renderer。单次返回的呈现调用只计一次，独立 Project 用公开 Application 接口编译。
 
-任务 2 已完成，提交 `2666f27`、`cf5ccfa`、`f451b0d`。Vulkan 在设备初始化和窗口借用前报告 `kOpen/kPresentationUnavailable`，等待上游公开接口补齐发布所需的生命周期能力。
+任务 2 已完成，提交 `2666f27`、`cf5ccfa`、`f451b0d`。该阶段的 Vulkan 路径在设备初始化和窗口借用前报告 `kOpen/kPresentationUnavailable`。后续启用预览后的运行结果见下文。
 
 ### 任务 3 · 新路径消费及平台验证
 
@@ -96,7 +96,7 @@ Windows 最终回到 Release Modular。移动端恢复 Release Monolithic、`BUI
 
 入口迁移、共享 IGraphics 后端和可用宿主上的新路径验收已完成。Windows `kPresentRequested` 计数表示 Forge 的呈现调用返回，窗口颜色由客户端像素单独核对。
 
-Vulkan v1.63 的公开接口仍缺有界取图及可证明的旧链呈现退休。Linux 和 Android 的原生窗口撤销、安全重挂接、关闭与物理呈现继续作为发布门槛。macOS 的像素、resize 与关闭需有可用 Metal 设备。Android NativeActivity 与 iOS UIKit 图形入口、设备运行和签名安装待验收。
+任务 3 当时的覆盖限于已执行的宿主验证和最终链接。后续的 Linux Wayland 和 Android NativeActivity 运行结果见下文。macOS 的像素、resize 与关闭需有可用 Metal 设备。
 
 Windows Debug 的 `PanguRendererTests.Host.RendererOwnedByExactHost` 曾报 `0xc0000005`，在最终评审基线 `83fee69` 的同一正式构建根重现。Forge 工具文件系统模式未挂载 `RD_LOG`，内存跟踪却在退出时尝试打开泄漏报告。改用 Forge 工具的无文件初始化方式后，Host 定向用例通过，Debug Modular 的 23 项 Renderer 测试全部通过。Release 两种链接模式的 GPU 证据仍归上表所列提交。当前 Windows 宿主只有一块 GPU，混合 GPU 的 Debug 路径待设备验证。
 
@@ -136,7 +136,7 @@ done
 
 日志保存在 Ubuntu 的 `~/PanguEngineBuild/Linux/Tests/Results/Wayland-2026-11-24-QPXC69`，按模式记录 CTest 日志和 JUnit、ELF 依赖及 Mutter 协议日志。独立首帧部署分别位于 `Tests/Work/Renderer.DesktopFrame/ccad07460cfe` 和 `Tests/Work/Renderer.DesktopFrame/8fc729f55763`（相对于 Linux BuildRoot）。结束后恢复 Release / Modular、预览 OFF、源码锁覆盖 OFF 和测试构建预算 2。
 
-此次补齐 Linux 的双模式开发预览与隔离部署验收。有界取图、取图期间的原生窗口撤销，以及旧交换链的呈现退休仍属于正式发布门槛。[Renderer 接入规格](../specs/2026-11-20-renderer-forge-igraphics-design.md#验收口径)
+此次补齐 Linux 的双模式开发预览与隔离部署验收。
 
 ## 2026-11-24 各平台补充验证
 
@@ -161,4 +161,32 @@ Android 生命周期用 `android-arm64` preset 分别构建两种模式的 `Pang
 
 迁移阶段已通过整分支评审和本轮约定的五平台验收。最终复评确认 `b1dfdf6` 解决了三项评审发现。各阶段的关键提交、通过范围和原始验收日志位置记录于本计划。
 
-Linux 和 Android 的 Vulkan 正式发布仍待验证有界取图、呈现期间的原生窗口撤销，以及旧交换链的呈现退休。后续发布验收按 [Renderer 接入规格](../specs/2026-11-20-renderer-forge-igraphics-design.md#验收口径) 跟踪。
+各平台以 Forge v1.63 公开接口可观察的结果验收。PanguEngine 已撤销有界取图、单独证明旧交换链呈现完成、逐帧原生错误保真、Forge 内部异步首错，以及 D3D12 只枚举到软件适配器时由 Pangu 完整回滚 Forge 内部资源的要求。[Renderer 接入规格](../specs/2026-11-20-renderer-forge-igraphics-design.md#验收口径)
+
+## Vulkan 有界取图预验证
+
+2026-11-24 从 `d00bec5` 建立验证分支。Linux 复用 `e6eef0d` 的 Release Modular Wayland 预览部署，Android 核对 `9472991` 验收时的 Debug Monolithic `agdkDebug` 包。这两个提交到验证基线的变更均为 Markdown。两平台都使用 Forge v1.63，gitlink 为 `7443530ef7e888771f307de74b7872becfd64450`。
+
+Forge 的 Fence 和 Semaphore 两条取图路径均向 `vkAcquireNextImageKHR` 传 `UINT64_MAX`，即无限超时。下表保留当时的实际运行与故障注入结果。[Vulkan WSI 取图契约](https://docs.vulkan.org/spec/latest/chapters/VK_KHR_surface/wsi.html#swapchain-acquire-next-image)
+
+| 场景 | 观察结果 |
+| --- | --- |
+| Ubuntu 真机，GTX 1050 Ti、NVIDIA 580.178.04，正常预览 | `ObserveWayland.py` 使用独立部署 `8fc729f55763/Deploy/FirstFrame` 完成换色、调整尺寸和合成器关闭。用 Vulkan SDK 1.4.363.1 的 `VK_LAYER_LUNARG_api_dump` 记录到 121 次 `VK_SUCCESS`，每次 `timeout` 都是 `18446744073709551615`。 |
+| Ubuntu 暂停嵌套 Sway | 单独暂停测试合成器三轮。暂停后 0.5 秒和 2.5 秒的取图完成计数分别持平在 21、23 和 22。GDB 三次都抓到主线程停在 `vkQueuePresentKHR` 内的 Wayland 事件等待。恢复合成器后，取图继续完成，收到窗口关闭事件后三轮均退出 0。这组实验只复现了呈现阻塞。 |
+| Ubuntu 注入取图超时 | 在 `vkAcquireNextImageKHR<(ApiDumpFormat)0>` 的入口用 GDB 确认原始 `timeout=UINT64_MAX`，随后直接返回 `(VkResult)2`，保留调用方原有的图像索引。Forge 记录失败，Pangu 报告 `kAcquire` 失败，FirstFrame 退出 1。 |
+| Android ARM64 预览产物 | 23127PN0CC 真机已安装 APK 与本地 APK 的 SHA-256 均为 `39621554e440496db30beda50f34f671e6b04a031e64eb4ff9e306eb5c0a4db9`。用 NDK `llvm-readelf -n` 确认调试库与打包库的 Build ID 一致，再用 `llvm-objdump -d --disassemble-symbols=acquireNextImage` 看到两条路径都将第三个参数寄存器 `x2` 设为全 1。 |
+| Android 真机前台复跑 | 用 `ObserveSwappy.ps1 -Runs 1` 启动已安装的预览包。首轮锁屏触发 Activity 暂停和窗口撤销，观察器等待第 120 次呈现请求超时。解锁后复跑通过，421 次呈现请求、零跳帧、126 个实际呈现时间戳，Activity 销毁和宿主关闭完成。该轮覆盖正常前台呈现，尚未测量图像不可用时的取图耗时。 |
+
+Linux 原始记录在 `~/PanguEngineBuild/Linux/Tests/Results/` 下的 `VulkanAcquire-ftenlP`、`VulkanAcquirePause-DxmS6d` 和 `VulkanAcquireTimeout-kvYLWS`。Android 原始记录和反汇编在 `Build/Android/Tests/NativeActivity/Results/VulkanAcquire-2026-11-24`，解锁后的结果在其 `awake-retry/` 子目录。
+
+## 常规图形应用采用 Forge Vulkan
+
+- [x] **Linux Wayland**　用关闭预览的 Renderer 库运行 `ObserveWayland.py` 确认首帧验收失败。移除 Renderer 和 Wayland 图形入口的预览分支，使 `Renderer.DesktopFrame` 直接使用现有 Wayland 观察器并声明窗口和 GPU 前置条件。两种链接模式均核对颜色、调整窗口尺寸和退出。
+- [x] **Android NativeActivity**　常规图形入口复用 JNI、窗口事件和 Forge 呈现路径。Gradle 测试 APK 支持 Monolithic 和 Modular，核对实际 APK 原生库。用正处理图形帧的 APK 验证同一 Activity 后台切换、窗口代次变化、恢复呈现和销毁。
+- [x] **接线和说明**　移除预览的 CMake/Gradle 参数、启动拒绝验收与独立的原生生命周期 APK 打包入口。更新构建、运行和验收说明。
+
+Linux 在 `21a9e73` 上的实施工作区使用 Clang 23.1.0、`linux` preset、Release 和本地 Engine 源码锁覆盖。按链接模式构建 `PanguRendererTests` 并运行 `ctest --preset linux --no-tests=error -L '^area[.]renderer$' --output-on-failure`，Modular 19/19、Monolithic 18/18，均包含独立无图形 Project。嵌套 Sway 中两种模式均采到尺寸变化前后的 `#3F99C8` 和 `#FF0000`，Modular 完成 122 次、Monolithic 完成 121 次呈现请求，两者均正常退出。原始记录在 Ubuntu 的 `~/PanguEngineBuild/Linux/Tests/Results/VulkanDefault-qf27tM`。
+
+Android 在 `21a9e73` 上的实施工作区使用 `android-arm64` preset 构建了两种 Release 链接模式的 `PanguForgeLinkCheck`。Gradle 9.6.0 离线使用 Swappy 2.1.3 AAR，分别通过 `:app:assembleAgdkDebug -PpanguLinkMode=Modular` 和 `-PpanguLinkMode=Monolithic` 构建并检查 APK。Modular APK 带独立的 `libPanguRenderer.so`。
+
+两种 APK 在 23127PN0CC 上分别安装，运行 `Observe.ps1` 及 `ObserveSwappy.ps1 -Runs 1`。生命周期观察记录同一 Activity 两代窗口各自的 SurfaceFlinger 图层和实际呈现时间戳，两种模式均完成 420 次呈现请求、零跳帧、Activity 销毁和宿主关闭。独立节奏采样在 Modular 和 Monolithic 分别记录 126 和 127 个实际呈现时间戳。原始记录位于 `Build/Android/Tests/NativeActivity/Results/VulkanDefault`。

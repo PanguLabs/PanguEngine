@@ -28,9 +28,6 @@ target_link_libraries(
         Pangu::EngineHost
         ThirdParty::TheForge
 )
-if(PANGU_ENABLE_VULKAN_PREVIEW AND (ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))
-    target_compile_definitions(PanguRenderer PRIVATE PG_RENDERER_VULKAN_PREVIEW)
-endif()
 if(WIN32)
     target_compile_definitions(
         PanguRenderer

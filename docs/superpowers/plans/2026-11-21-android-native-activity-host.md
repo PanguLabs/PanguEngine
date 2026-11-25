@@ -6,7 +6,7 @@
 
 **架构**采用 NDK native app glue 和 `ALooper_pollOnce()`。Android 宿主复用图形应用的 EngineHost 启动与关闭流程，验证 Renderer 在借用窗口前报告 `kPresentationUnavailable`，然后独立推进窗口事件。
 
-设计边界见 [Renderer 首版接入 The Forge IGraphics](../specs/2026-11-20-renderer-forge-igraphics-design.md)。正式构建使用根目录 `android-arm64` preset 与 NDK r30。Android 窗口绘制仍以原版 Forge 的有界取图和可验证呈现回收为发布条件。
+正式构建使用根目录 `android-arm64` preset 与 NDK r30。启用 Vulkan 时，窗口绘制按原版 Forge 的公开接口接入。[Renderer 首版接入 The Forge IGraphics](../specs/2026-11-20-renderer-forge-igraphics-design.md)
 
 ## 应用入口和双模式链接
 
@@ -26,4 +26,4 @@
 - 新验证目标首次配置可复现缺少 Android 图形入口。接入后，NDK r30、API 29 的 ARM64 双模式均通过最终链接、`ANativeActivity_onCreate` 导出检查和 APK 签名检查。Modular APK 按实际 ELF 依赖打包 Pangu 运行库。
 - Windows Renderer 定向回归 25 项通过，Linux 22 项通过。最终 Android 静态检查保留 Foundation 已有的三个 `ModuleIdentity.h` 诊断，Android Application 改动无新增诊断。
 - 在 Adreno 750 真机上，通过系统安装器安装 Monolithic APK，设备包的 SHA-256 与本机产物一致。观察脚本通过系统 HOME Intent 切到后台，恢复原 Activity 后清除其任务，按同一个 NDK 工作线程核对 `presentation-unavailable → window-ready 1 → window-retired 1 → window-ready 2 → window-retired 2 → activity-destroyed → host-closed`。原始日志在 `Build/Android/Tests/NativeActivity/Monolithic/device.log`。设备不允许 ADB 注入按键，验收使用 Android 任务切换命令。
-- 持续图形呈现继续受 Forge Vulkan 有界取图和交换链回收能力约束。
+- 真机持续图形呈现另由 `agdkDebug` APK 复验。[Android Vulkan 呈现与退出记录](2026-11-21-android-studio-renderer-check.md#主动退出复验)

@@ -1,7 +1,5 @@
 include_guard(GLOBAL)
 
-option(PANGU_ENABLE_VULKAN_PREVIEW "Enable stock Forge Vulkan window presentation for development builds" OFF)
-
 macro(_pangu_enable_apple_graphics_languages)
     if(NOT CMAKE_OBJC_COMPILER_ID OR NOT CMAKE_OBJCXX_COMPILER_ID)
         set(CMAKE_OBJC_COMPILER "${CMAKE_C_COMPILER}")
@@ -198,9 +196,6 @@ function(_pangu_add_application)
                 "${applicationSource}/Public"
                 "${rendererSource}/Private"
         )
-        if((ANDROID OR LINUX) AND PANGU_ENABLE_VULKAN_PREVIEW)
-            target_compile_definitions("${entryTarget}" PRIVATE PG_RENDERER_VULKAN_PREVIEW)
-        endif()
         if(WIN32)
             target_compile_definitions(
                 "${entryTarget}"

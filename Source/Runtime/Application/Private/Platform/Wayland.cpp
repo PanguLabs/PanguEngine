@@ -35,7 +35,6 @@ struct WaylandDeleter
 class WaylandWindow final : public DesktopWindow
 {
 public:
-#ifdef PG_RENDERER_VULKAN_PREVIEW
     [[nodiscard]] Status Run(renderer::RendererSession& session) noexcept override
     {
         if (const auto created = Create(); !created)
@@ -45,7 +44,6 @@ public:
         const auto native = NativeWindow();
         return RunGraphicsSession(session, *this, {.PresentationSurface = &native});
     }
-#endif
 
     [[nodiscard]] Result<std::optional<Drawable>> Poll() noexcept override
     {

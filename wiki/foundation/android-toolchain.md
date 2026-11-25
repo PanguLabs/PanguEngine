@@ -27,7 +27,7 @@ Android 使用选定 NDK 自带 Clang 与 NDK `libc++`，采用 C++23、禁用�
 | Gradle Wrapper | 9.6.0（来自 CppDemo） |
 | 已验证 ABI 范围 | arm64-v8a、armeabi-v7a、x86、x86_64 |
 
-参考工程中的 `app/build.gradle.kts` 定义 SDK/NDK/CMake，`gradle/libs.versions.toml` 定义 AGP，`gradle/wrapper/gradle-wrapper.properties` 定义 Gradle。PanguEngine 的 [Android Studio Vulkan 预览测试工程](../../Tests/Renderer/NativeActivity/AndroidStudio/README.md) 通过 `externalNativeBuild` 使用引擎的 C++23 配置。
+参考工程中的 `app/build.gradle.kts` 定义 SDK/NDK/CMake，`gradle/libs.versions.toml` 定义 AGP，`gradle/wrapper/gradle-wrapper.properties` 定义 Gradle。PanguEngine 的 [Android Studio Vulkan 真机测试工程](../../Tests/Renderer/NativeActivity/AndroidStudio/README.md) 通过 `externalNativeBuild` 使用引擎的 C++23 配置。
 
 ## Android 编译器政策
 
@@ -63,6 +63,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 ## 尚未验证
 
-其余 ABI 的 APK 打包和设备运行、模拟器运行、完整 Engine Runtime 的多 Module ABI/Allocator 边界及 Sanitizer。Android Vulkan 的发布门槛见 [Renderer 接入规格](../../docs/superpowers/specs/2026-11-20-renderer-forge-igraphics-design.md#验收口径)。
+其余 ABI 的 APK 打包和设备运行、模拟器运行、完整 Engine Runtime 的多 Module ABI/Allocator 边界及 Sanitizer。Android Vulkan 的接入与验收口径见 [Renderer 接入规格](../../docs/superpowers/specs/2026-11-20-renderer-forge-igraphics-design.md#验收口径)。
 
 本规范冻结范围为上文“已确定的工具链政策”；探针配置与结果不代表整个 Android Engine Runtime 已完成。

@@ -25,7 +25,7 @@ macOS 和 iOS Sources。Linux 与 Android 核对 `Common_3/OS/{Linux,Android}`�
 
 Linux x86-64 的 Forge 目标使用私有 `-mavx2` 编译选项，运行链接该归档的图形程序需要 AVX2。
 
-Android 启用 Forge Vulkan 的 Swappy。独立 CMake 构建链接固定子模块随附的 ARM64 `libswappy_static.a`，Android Studio Vulkan 预览通过 Prefab 链接官方 AndroidX AAR。`android` 和 `log` 由 Forge 的 Android 接线声明，`dl` 和 `m` 由 NDK 工具链提供。
+Android 启用 Forge Vulkan 的 Swappy。独立 CMake 构建链接固定子模块随附的 ARM64 `libswappy_static.a`，Android Studio 真机测试通过 Prefab 链接官方 AndroidX AAR。`android` 和 `log` 由 Forge 的 Android 接线声明，`dl` 和 `m` 由 NDK 工具链提供。
 `AndroidSwappy.c` 为 Forge 提供 Activity 和 JNI 线程接入符号，调用方负责 Activity 与线程的生命周期。
 Linux 和 Android 的 Forge 源清单仅保留 Vulkan 及所需的基础实现。原生窗口接入属于 Pangu 的 Application 层。
 Windows D3D12 的设备丢失路径引用 Forge `requestReset`，Apple 的文件系统通过计时函数引用 Forge 平台基础代码。

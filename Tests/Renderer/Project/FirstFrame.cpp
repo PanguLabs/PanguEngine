@@ -9,9 +9,7 @@
 #ifdef __ANDROID__
 #include <android/log.h>
 
-#include <chrono>
 #include <format>
-#include <optional>
 #endif
 
 namespace pg::app
@@ -26,7 +24,7 @@ Result<LoopControl> OnFrame(GraphicsContext& graphics) noexcept
     constexpr LinearColor kColorB{.R = 1.0F, .G = 0.0F, .B = 0.0F, .A = 1.0F};
 
 #ifdef __ANDROID__
-    static std::optional<std::chrono::steady_clock::time_point> stopAt;
+    constexpr unsigned kStopAfterPresentRequests = 420;
 #else
     if (!usingSecondColor)
     {
@@ -46,8 +44,7 @@ Result<LoopControl> OnFrame(GraphicsContext& graphics) noexcept
 #ifdef __ANDROID__
         if (presentRequests == kMinimumPresentRequests)
         {
-            __android_log_write(ANDROID_LOG_INFO, "PanguFirstFrame", "vulkan-preview-present-requests=120");
-            stopAt = std::chrono::steady_clock::now() + std::chrono::seconds{5};
+            __android_log_write(ANDROID_LOG_INFO, "PanguFirstFrame", "vulkan-present-requests=120");
         }
 #else
         std::println("first-frame present-request-progress={}", presentRequests);
@@ -59,11 +56,10 @@ Result<LoopControl> OnFrame(GraphicsContext& graphics) noexcept
         ++skipped;
     }
 #ifdef __ANDROID__
-    if (stopAt && std::chrono::steady_clock::now() >= *stopAt)
+    if (presentRequests == kStopAfterPresentRequests)
     {
-        __android_log_write(
-            ANDROID_LOG_INFO, "PanguFirstFrame",
-            std::format("vulkan-preview-finished presents={} skipped={}", presentRequests, skipped).c_str());
+        __android_log_write(ANDROID_LOG_INFO, "PanguFirstFrame",
+                            std::format("vulkan-finished presents={} skipped={}", presentRequests, skipped).c_str());
         return LoopControl::kStop;
     }
 #else
