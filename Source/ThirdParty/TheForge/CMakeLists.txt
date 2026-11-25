@@ -23,6 +23,7 @@ pangu_apply_third_party_patch(
 
 set(forgeSources
     Graphics/GraphicsConfig.cpp
+    Resources/ResourceLoader/ResourceLoader.cpp
     Utilities/FileSystem/FileSystem.c
     Utilities/Log/Log.c
     Utilities/Math/StbDs.c

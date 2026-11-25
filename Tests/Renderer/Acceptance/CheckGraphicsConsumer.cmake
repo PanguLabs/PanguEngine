@@ -11,7 +11,7 @@ foreach(index RANGE 0 "${lastEntry}")
         "${index}"
         file
     )
-    if(source MATCHES "[/\\\\]Project[/\\\\]FirstFrame[.]cpp$")
+    if(source MATCHES "[/\\\\]Project[/\\\\]${target}[.]cpp$")
         math(EXPR callbackCount "${callbackCount} + 1")
         string(
             JSON command
@@ -24,10 +24,10 @@ foreach(index RANGE 0 "${lastEntry}")
                 MATCHES
                 "D3D12_AGILITY_SDK|EXTERNAL_CONFIG_FILEPATH|TheForge|Renderer[/\\\\]Private|VK_USE_PLATFORM|PG_RENDERER_TEST"
         )
-            message(FATAL_ERROR "FirstFrame callback received a private renderer compile setting:\n${command}")
+            message(FATAL_ERROR "${target} callback received a private renderer compile setting:\n${command}")
         endif()
     endif()
 endforeach()
 if(NOT callbackCount EQUAL 1)
-    message(FATAL_ERROR "Expected exactly one FirstFrame callback compile command, got ${callbackCount}")
+    message(FATAL_ERROR "Expected exactly one ${target} callback compile command, got ${callbackCount}")
 endif()

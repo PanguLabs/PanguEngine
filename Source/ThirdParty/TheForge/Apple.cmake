@@ -51,6 +51,7 @@ endif()
 # 上游 Apple 工程将共享 .cpp 文件作为 Objective-C++ 编译。
 set_source_files_properties(
     "${forgeCommon}/Graphics/GraphicsConfig.cpp"
+    "${forgeCommon}/Resources/ResourceLoader/ResourceLoader.cpp"
     "${forgeCommon}/OS/CPUConfig.cpp"
     "${forgeCommon}/OS/WindowSystem/WindowSystem.cpp"
     PROPERTIES

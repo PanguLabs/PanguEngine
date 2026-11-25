@@ -1,8 +1,12 @@
 cmake_minimum_required(VERSION 4.0)
 
 include("${CMAKE_CURRENT_LIST_DIR}/BuildProject.cmake")
-_pangu_build_renderer_project(FirstFrame)
-include("${rendererProjectBuild}/FirstFrameArtifacts.cmake")
+set(target FirstFrame)
+if(DEFINED PANGU_RENDERER_TEST_TARGET)
+    set(target "${PANGU_RENDERER_TEST_TARGET}")
+endif()
+_pangu_build_renderer_project("${target}")
+include("${rendererProjectBuild}/${target}Artifacts.cmake")
 set(compileDatabase "${rendererProjectBuild}/compile_commands.json")
 include("${CMAKE_CURRENT_LIST_DIR}/CheckGraphicsConsumer.cmake")
 
@@ -23,6 +27,7 @@ if(CMAKE_HOST_LINUX)
         "${pythonInterpreter}"
         "${CMAKE_CURRENT_LIST_DIR}/ObserveWayland.py"
         "${deploy}/${executableName}"
+        "${target}"
     )
     if(NOT exitCode STREQUAL "0")
         message(
@@ -51,7 +56,7 @@ elseif(CMAKE_HOST_APPLE)
         "${output}"
     )
     message(STATUS "${summary}")
-else()
+elseif(target STREQUAL "FirstFrame")
     # 正常部署支持当前 GPU，覆盖后的配置使其低于 Forge 可用档位。
     set(office "${rendererProjectRunRoot}/Office")
     file(COPY "${deploy}/" DESTINATION "${office}")
@@ -76,19 +81,42 @@ else()
         TIMEOUT 15
     )
     if(
-        NOT rejected STREQUAL "1"
-        OR NOT error MATCHES "Pangu Application: error domain=70672e72656e64 code=261"
-        OR NOT output MATCHES "Preset: office"
-        OR "${output}${error}" MATCHES "first-frame |Adding D3D12 swapchain"
+        NOT rejected
+            STREQUAL
+            "1"
+        OR NOT error
+            MATCHES
+            "Pangu Application: error domain=70672e72656e64 code=261"
+        OR NOT output
+            MATCHES
+            "Preset: office"
+        OR "${output}${error}"
+            MATCHES
+            "first-frame |Adding D3D12 swapchain"
     )
         message(FATAL_ERROR "Office preset must fail during Open (exit=${rejected}):\n${output}${error}")
     endif()
     message(STATUS "Office preset rejected during Open")
+endif()
+if(CMAKE_HOST_WIN32)
+    if(target STREQUAL "FirstTriangle" AND PANGU_LINK_MODE STREQUAL "Monolithic")
+        execute_process(
+            COMMAND
+                "$ENV{LLVM_ROOT}/bin/llvm-readobj.exe" --coff-imports "${deploy}/${executableName}"
+            OUTPUT_VARIABLE imports
+            COMMAND_ERROR_IS_FATAL ANY
+        )
+        string(TOLOWER "${imports}" imports)
+        if(imports MATCHES "[ \t]name: [^\r\n]*pangurenderer[.]dll")
+            message(FATAL_ERROR "Monolithic ${target} imports the Renderer DLL")
+        endif()
+        message(STATUS "Monolithic ${target} has no Renderer DLL import")
+    endif()
     execute_process(
         COMMAND
             powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File
             "${CMAKE_CURRENT_LIST_DIR}/ObserveWin32.ps1" -Executable "${deploy}/${executableName}" -LinkMode
-            "${PANGU_LINK_MODE}"
+            "${PANGU_LINK_MODE}" -Target "${target}"
         WORKING_DIRECTORY "${deploy}"
         COMMAND_ERROR_IS_FATAL ANY
     )

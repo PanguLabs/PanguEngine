@@ -147,6 +147,37 @@ if(APPLE AND NOT IOS AND PANGU_LINK_MODE STREQUAL "Modular")
     )
 endif()
 
+if(APPLE AND NOT IOS)
+    pangu_register_test(
+        NAME Renderer.TriangleLink
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}"
+            "-DPANGU_TEST_ROOT:PATH=${CMAKE_BINARY_DIR}/Tests/Work/Renderer.TriangleLink"
+            "-DPANGU_TEST_BUILD_JOBS:STRING=${PANGU_TEST_BUILD_JOBS}"
+            "-DPANGU_RENDERER_TEST_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}"
+            "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
+            "-DPANGU_LINK_MODE:STRING=${PANGU_LINK_MODE}"
+            "-DCMAKE_TOOLCHAIN_FILE:FILEPATH=${CMAKE_TOOLCHAIN_FILE}"
+            "-DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}"
+            "-DCMAKE_CXX_COMPILER:FILEPATH=${CMAKE_CXX_COMPILER}"
+            "-DllvmNm:FILEPATH=${CMAKE_NM}"
+            -P
+            "${CMAKE_CURRENT_SOURCE_DIR}/Acceptance/CheckTriangleLink.cmake"
+        BOUNDARY integration
+        AREA renderer
+        TIER full
+        TYPES
+            contract
+            regression
+        REQUIRES
+            subprocess
+            nested-build
+        PROCESSORS "${PANGU_TEST_BUILD_JOBS}"
+        TIMEOUT 900
+    )
+endif()
+
 if(WIN32 OR LINUX OR (APPLE AND NOT IOS))
     set(observerArgs)
     if(APPLE AND NOT IOS)
@@ -173,41 +204,49 @@ if(WIN32 OR LINUX OR (APPLE AND NOT IOS))
         pangu_test_build_dependencies(TIER full TARGETS PanguMacWindowSampler)
         set(observerArgs "-DPANGU_MAC_WINDOW_SAMPLER:FILEPATH=$<TARGET_FILE:PanguMacWindowSampler>")
     endif()
-    pangu_register_test(
-        NAME Renderer.DesktopFrame
-        COMMAND
-            "${CMAKE_COMMAND}"
-            "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}"
-            "-DPANGU_TEST_ROOT:PATH=${CMAKE_BINARY_DIR}/Tests/Work/Renderer.DesktopFrame"
-            "-DPANGU_TEST_BUILD_JOBS:STRING=${PANGU_TEST_BUILD_JOBS}"
-            "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
-            "-DPANGU_LINK_MODE:STRING=${PANGU_LINK_MODE}"
-            "-DCMAKE_TOOLCHAIN_FILE:FILEPATH=${CMAKE_TOOLCHAIN_FILE}"
-            "-DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}"
-            "-DCMAKE_CXX_COMPILER:FILEPATH=${CMAKE_CXX_COMPILER}"
-            ${observerArgs}
-            -P
-            "${CMAKE_CURRENT_SOURCE_DIR}/Acceptance/RunDesktop.cmake"
-        BOUNDARY system
-        AREA renderer
-        TIER full
-        TYPES
-            contract
-            regression
-        REQUIRES
-            subprocess
-            nested-build
-            gpu
-            window
-        PROCESSORS "${PANGU_TEST_BUILD_JOBS}"
-        TIMEOUT 900
-    )
-    set_tests_properties(
-        Renderer.DesktopFrame
-        PROPERTIES
-            RESOURCE_LOCK
-                RendererDesktop
-    )
+    set(desktopFixtures Frame)
+    if((WIN32 OR LINUX) AND PANGU_BUILD_TRIANGLE_SHADER_CHECK)
+        list(APPEND desktopFixtures Triangle)
+    endif()
+    foreach(fixture IN LISTS desktopFixtures)
+        pangu_register_test(
+            NAME "Renderer.Desktop${fixture}"
+            COMMAND
+                "${CMAKE_COMMAND}"
+                "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}"
+                "-DPANGU_TEST_ROOT:PATH=${CMAKE_BINARY_DIR}/Tests/Work/Renderer.Desktop${fixture}"
+                "-DPANGU_TEST_BUILD_JOBS:STRING=${PANGU_TEST_BUILD_JOBS}"
+                "-DPANGU_RENDERER_TEST_TARGET:STRING=First${fixture}"
+                "-DPANGU_RENDERER_TEST_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}"
+                "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
+                "-DPANGU_LINK_MODE:STRING=${PANGU_LINK_MODE}"
+                "-DCMAKE_TOOLCHAIN_FILE:FILEPATH=${CMAKE_TOOLCHAIN_FILE}"
+                "-DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}"
+                "-DCMAKE_CXX_COMPILER:FILEPATH=${CMAKE_CXX_COMPILER}"
+                ${observerArgs}
+                -P
+                "${CMAKE_CURRENT_SOURCE_DIR}/Acceptance/RunDesktop.cmake"
+            BOUNDARY system
+            AREA renderer
+            TIER full
+            TYPES
+                contract
+                regression
+            REQUIRES
+                subprocess
+                nested-build
+                gpu
+                window
+            PROCESSORS "${PANGU_TEST_BUILD_JOBS}"
+            TIMEOUT 900
+        )
+        set_tests_properties(
+            "Renderer.Desktop${fixture}"
+            PROPERTIES
+                RESOURCE_LOCK
+                    RendererDesktop
+        )
+    endforeach()
     if(APPLE AND NOT IOS)
         set_tests_properties(
             Renderer.DesktopFrame

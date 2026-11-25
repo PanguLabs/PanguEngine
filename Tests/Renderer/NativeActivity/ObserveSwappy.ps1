@@ -2,7 +2,8 @@
     [Parameter(Mandatory)][string]$LogDirectory,
     [ValidateRange(1, 10)][int]$Runs = 3,
     [string]$AndroidSdk = $env:ANDROID_HOME,
-    [string]$Serial
+    [string]$Serial,
+    [switch]$ClearFrame
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,6 +11,7 @@ $adb = Join-Path $AndroidSdk 'platform-tools/adb.exe'
 $device = if ($Serial) { @('-s', $Serial) } else { @() }
 $package = 'com.pangulabs.nativeactivitycheck.gradle.agdk'
 $activity = "$package/android.app.NativeActivity"
+$frameTag = if ($ClearFrame) { 'PanguFirstFrame' } else { 'PanguFirstTriangle' }
 . (Join-Path $PSScriptRoot 'SurfaceFlinger.ps1')
 $swappyEmbeddedDex = 'SwappyDisplayManager.*from dex bytes'
 $swappyJavaWarning = 'SwappyDisplayManager.*(couldn.t find|UnsatisfiedLinkError)'
@@ -26,7 +28,7 @@ function Wait-VulkanLog([string]$pattern) {
     do {
         $messages = @(Invoke-Device logcat -b main -b system -b crash -b events -d -v threadtime --pid=$activityPid)
         $messages | Set-Content -LiteralPath $runLog -Encoding utf8
-        if ($messages -match 'host-failed|Fatal signal') {
+        if ($messages -match 'host-failed|vulkan-failed|Fatal signal') {
             throw "Vulkan 呈现失败，见 $runLog"
         }
         if ($messages -match "$swappyEmbeddedDex|$swappyJavaWarning") {
@@ -44,13 +46,13 @@ $results = @(for ($run = 1; $run -le $Runs; $run++) {
     Invoke-Device shell am start -W -n $activity | Out-Null
     $activityPid = (Invoke-Device shell pidof $package | Select-Object -First 1).Trim()
     if ($activityPid -notmatch '^\d+$') { throw 'Vulkan 测试进程启动失败。' }
-    Wait-VulkanLog 'vulkan-present-requests=120'
+    Wait-VulkanLog "${frameTag}:\s+vulkan-present-requests=120$"
     Start-Sleep -Milliseconds 1400
 
     $timestampLog = Join-Path $LogDirectory "swappy-$run-surfaceflinger.log"
     $presentation = Get-ActivityPresentation $activity
     if (!$presentation) { throw '未找到唯一的 Vulkan 测试 SurfaceFlinger 图层。' }
-    $presentation.Latency | Set-Content -LiteralPath $timestampLog -Encoding utf8
+    @($presentation.Layer) + $presentation.Latency | Set-Content -LiteralPath $timestampLog -Encoding utf8
     $refreshMs = $presentation.RefreshMs
     $presentTimes = $presentation.PresentTimes
     if ($presentTimes.Count -lt 101) { throw "实际呈现时间戳不足，见 $timestampLog" }
@@ -64,7 +66,7 @@ $results = @(for ($run = 1; $run -le $Runs; $run++) {
     $median = $sorted[[int][Math]::Ceiling($sorted.Count / 2) - 1]
     $p95 = $sorted[[int][Math]::Ceiling($sorted.Count * 0.95) - 1]
 
-    Wait-VulkanLog 'PanguFirstFrame:\s+vulkan-finished '
+    Wait-VulkanLog "${frameTag}:\s+vulkan-finished "
     Wait-VulkanLog 'PanguApplication:\s+host-closed$'
     if (-not (Select-String -LiteralPath $runLog -Pattern 'PanguApplication:\s+activity-destroyed$' -Quiet)) {
         throw "宿主关闭前未处理 Activity 销毁，见 $runLog"

@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <array>
 #include <optional>
 #include <thread>
 
@@ -165,6 +166,62 @@ TEST(Session, AttachFailureRollsBackSurfaceWithoutClosingDevice)
     EXPECT_TRUE(session.Close());
 }
 
+TEST(Session, TriangleUpdatesWithinGenerationAndResumesAfterReattach)
+{
+    constexpr auto kInitial = std::to_array<TriangleVertex>({
+        {.X = -0.75F, .Y = -0.25F, .Color = {.R = 1.0F}},
+        {.X = -0.25F, .Y = -0.25F, .Color = {.G = 1.0F}},
+        {.X = -0.5F, .Y = 0.75F, .Color = {.B = 1.0F}},
+    });
+    auto updated = kInitial;
+    updated.front().X = 0.25F;
+    updated.front().Color = {.B = 1.0F};
+
+    SessionRig rig;
+    auto& session = rig.Session();
+    const auto& backend = rig.Backend();
+    ASSERT_TRUE(session.Open());
+    ASSERT_TRUE(session.Attach(kIdA, kWindow, kSize));
+    ASSERT_TRUE(session.SetPaused(true));
+    EXPECT_EQ(session.PresentTriangle(kColor, kInitial), FrameResult::kSkipped);
+    EXPECT_EQ(Calls(backend, BackendCall::kPrepareTriangle), 0);
+    EXPECT_EQ(Calls(backend, BackendCall::kAcquire), 0);
+
+    ASSERT_TRUE(session.SetPaused(false));
+    EXPECT_EQ(session.PresentTriangle(kColor, kInitial), FrameResult::kPresentRequested);
+    const auto initialSubmission = backend.Observations().LastTriangle;
+    if (!initialSubmission)
+    {
+        FAIL() << "No initial triangle reached the backend";
+    }
+    EXPECT_EQ(initialSubmission->front().X, -0.75F);
+    EXPECT_EQ(session.PresentTriangle(kColor, updated), FrameResult::kPresentRequested);
+    const auto updatedSubmission = backend.Observations().LastTriangle;
+    if (!updatedSubmission)
+    {
+        FAIL() << "No updated triangle reached the backend";
+    }
+    EXPECT_EQ(updatedSubmission->front().X, 0.25F);
+    EXPECT_EQ(updatedSubmission->front().Color.B, 1.0F);
+    EXPECT_EQ(Calls(backend, BackendCall::kAttach), 1);
+    EXPECT_EQ(Calls(backend, BackendCall::kRetireSurface), 0);
+
+    session.RequestDetach(kIdA);
+    EXPECT_EQ(session.PresentTriangle(kColor, updated), FrameResult::kReattach);
+    EXPECT_EQ(Calls(backend, BackendCall::kAcquire), 2);
+    ASSERT_TRUE(session.Attach(kIdB, kWindow, kSize));
+    updated.front().X = 0.5F;
+    EXPECT_EQ(session.PresentTriangle(kColor, updated), FrameResult::kPresentRequested);
+    const auto reattachedSubmission = backend.Observations().LastTriangle;
+    if (!reattachedSubmission)
+    {
+        FAIL() << "No triangle reached the backend after reattaching";
+    }
+    EXPECT_EQ(reattachedSubmission->front().X, 0.5F);
+    EXPECT_EQ(backend.Observations().Events.back().Surface, kIdB);
+    EXPECT_TRUE(session.Close());
+}
+
 TEST(Session, RevocationDuringAttachReportsAnUnusableSurface)
 {
     SessionRig rig;
@@ -288,6 +345,26 @@ TEST(Session, AcquireFailureDoesNotSubmit)
     ExpectError(session.Close(), RendererStage::kAcquire, RendererError::kNativeFailure, kNativeFault);
     EXPECT_EQ(Calls(backend, BackendCall::kRetireSurface), 1);
     EXPECT_TRUE(session.Close());
+}
+
+TEST(Session, TrianglePreparationFailureDoesNotAcquire)
+{
+    SessionRig rig;
+    auto& session = rig.Session();
+    auto& backend = rig.Backend();
+    ASSERT_TRUE(session.Open());
+    ASSERT_TRUE(session.Attach(kIdA, kWindow, kSize));
+    backend.Controls().NextTrianglePreparationError =
+        MakeRendererError(RendererStage::kSubmit, RendererError::kShaderUnavailable);
+
+    ExpectError(session.PresentTriangle(kColor, {}), RendererStage::kSubmit, RendererError::kShaderUnavailable);
+    EXPECT_EQ(Calls(backend, BackendCall::kPrepareTriangle), 1);
+    EXPECT_EQ(Calls(backend, BackendCall::kAcquire), 0);
+    EXPECT_EQ(Calls(backend, BackendCall::kSubmit), 0);
+    EXPECT_EQ(Calls(backend, BackendCall::kPresent), 0);
+    ExpectError(session.Close(), RendererStage::kSubmit, RendererError::kShaderUnavailable);
+    EXPECT_EQ(Calls(backend, BackendCall::kRetireSurface), 1);
+    EXPECT_EQ(Calls(backend, BackendCall::kClose), 1);
 }
 
 TEST(Session, AcquireSkipAndReattachDoNotSubmit)

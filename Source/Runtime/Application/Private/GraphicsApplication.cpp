@@ -35,7 +35,8 @@ public:
     }
 
     [[nodiscard]] Status Run(DesktopWindow& window) noexcept;
-    [[nodiscard]] Result<FrameResult> Present(LinearColor color) noexcept;
+    [[nodiscard]] Result<FrameResult> Present(LinearColor color,
+                                              const std::array<TriangleVertex, 3>* triangle) noexcept;
     [[nodiscard]] Status Reopen() noexcept;
     [[nodiscard]] Status RetireDrawable() noexcept;
 
@@ -109,7 +110,8 @@ Status GraphicsApplication::RetireDrawable() noexcept
     return {};
 }
 
-Result<FrameResult> GraphicsApplication::Present(LinearColor color) noexcept
+Result<FrameResult> GraphicsApplication::Present(LinearColor color,
+                                                 const std::array<TriangleVertex, 3>* triangle) noexcept
 {
     if (FrameFailure)
     {
@@ -124,10 +126,15 @@ Result<FrameResult> GraphicsApplication::Present(LinearColor color) noexcept
         FrameFailure = ready.error();
         return std::unexpected(*FrameFailure);
     }
-    const auto frame = Session.Present(color);
+    const auto frame = triangle != nullptr ? Session.PresentTriangle(color, *triangle) : Session.Present(color);
     if (!frame)
     {
-        FrameFailure = frame.error();
+        const auto error = frame.error();
+        if (error !=
+            renderer::MakeRendererError(renderer::RendererStage::kSubmit, renderer::RendererError::kInvalidVertex))
+        {
+            FrameFailure = error;
+        }
     }
     else if (*frame == FrameResult::kReattach)
     {
@@ -269,6 +276,11 @@ GraphicsContext::GraphicsContext(detail::GraphicsApplication& app) noexcept
 {
 }
 
-Result<FrameResult> GraphicsContext::Present(LinearColor color) noexcept { return App.Present(color); }
+Result<FrameResult> GraphicsContext::Present(LinearColor color) noexcept { return App.Present(color, nullptr); }
+Result<FrameResult> GraphicsContext::PresentTriangle(LinearColor clearColor,
+                                                     const std::array<TriangleVertex, 3>& vertices) noexcept
+{
+    return App.Present(clearColor, &vertices);
+}
 Status GraphicsContext::ReopenGraphics() noexcept { return App.Reopen(); }
 } // namespace pg::app

@@ -23,6 +23,7 @@ enum class BackendCall : std::uint8_t
 {
     kOpen,
     kAttach,
+    kPrepareTriangle,
     kAcquire,
     kSubmit,
     kPresent,
@@ -62,12 +63,14 @@ struct BackendControls
     BackendGate* SubmitGate{};
     BackendGate* PresentGate{};
     AcquireResult NextAcquire = AcquireResult::kReady;
+    std::optional<Error> NextTrianglePreparationError;
 };
 
 struct BackendObservations
 {
     std::uint64_t SuccessfulSubmissions{};
     LinearColor LastColor;
+    std::optional<std::array<TriangleVertex, 3>> LastTriangle;
     bool SawRevocationDuringAcquire{};
     std::vector<BackendEvent> Events;
 };
@@ -104,6 +107,13 @@ public:
         return TakeFailure(RendererStage::kAttach);
     }
 
+    [[nodiscard]] Status PrepareTriangle() noexcept override
+    {
+        Record(BackendCall::kPrepareTriangle);
+        const auto error = std::exchange(Script.NextTrianglePreparationError, std::nullopt);
+        return error ? Status{std::unexpected(*error)} : Status{};
+    }
+
     [[nodiscard]] Result<AcquireResult> Acquire() noexcept override
     {
         Record(BackendCall::kAcquire);
@@ -119,7 +129,7 @@ public:
         return Script.NextAcquire;
     }
 
-    [[nodiscard]] Status Submit(LinearColor color) noexcept override
+    [[nodiscard]] Status Submit(LinearColor color, const std::array<TriangleVertex, 3>* triangle) noexcept override
     {
         if (Script.SubmitGate != nullptr)
         {
@@ -127,6 +137,7 @@ public:
         }
         Record(BackendCall::kSubmit);
         History.LastColor = color;
+        History.LastTriangle = triangle != nullptr ? std::optional{*triangle} : std::nullopt;
         if (const auto status = TakeFailure(RendererStage::kSubmit); !status)
         {
             return status;

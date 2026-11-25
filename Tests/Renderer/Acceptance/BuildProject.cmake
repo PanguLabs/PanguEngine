@@ -8,8 +8,20 @@ endif()
 
 function(_pangu_build_renderer_project target)
     set(graphics OFF)
+    set(triangle OFF)
+    set(triangleLink OFF)
+    set(buildType Release)
     if(target STREQUAL "FirstFrame")
         set(graphics ON)
+    elseif(target STREQUAL "FirstTriangle")
+        if(PANGU_RENDERER_TEST_TRIANGLE_LINK)
+            set(triangleLink ON)
+        else()
+            set(triangle ON)
+        endif()
+        if(PANGU_RENDERER_TEST_BUILD_TYPE)
+            set(buildType "${PANGU_RENDERER_TEST_BUILD_TYPE}")
+        endif()
     endif()
     string(RANDOM LENGTH 12 ALPHABET 0123456789abcdef runId)
     set(runRoot "${PANGU_TEST_ROOT}/${runId}")
@@ -35,17 +47,19 @@ function(_pangu_build_renderer_project target)
     if(CMAKE_HOST_APPLE OR CMAKE_HOST_LINUX)
         list(APPEND platformArgs "-DCMAKE_TOOLCHAIN_FILE:FILEPATH=${CMAKE_TOOLCHAIN_FILE}")
     endif()
-    if(graphics)
-        list(APPEND platformArgs "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE:PATH=${projectBuild}/ReleaseBin")
+    if(graphics OR triangle OR triangleLink)
+        string(TOUPPER "${buildType}" config)
+        list(APPEND platformArgs "-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_${config}:PATH=${projectBuild}/${buildType}Bin")
     endif()
     execute_process(
         COMMAND
             "${CMAKE_COMMAND}" -S "${projectSource}" -B "${projectBuild}" -G Ninja
             "-DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}" "-DCMAKE_CXX_COMPILER:FILEPATH=${CMAKE_CXX_COMPILER}"
-            -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=OFF
+            "-DCMAKE_BUILD_TYPE:STRING=${buildType}" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBUILD_TESTING=OFF
             "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PANGU_ENGINE_SOURCE_DIR}"
             "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
             "-DPANGU_LINK_MODE:STRING=${PANGU_LINK_MODE}" "-DPANGU_RENDERER_TEST_GRAPHICS:BOOL=${graphics}"
+            "-DPANGU_RENDERER_TEST_TRIANGLE:BOOL=${triangle}" "-DPANGU_RENDERER_TEST_TRIANGLE_LINK:BOOL=${triangleLink}"
             ${platformArgs}
         COMMAND_ERROR_IS_FATAL ANY
     )

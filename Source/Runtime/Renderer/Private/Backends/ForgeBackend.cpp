@@ -7,22 +7,19 @@
 #include <RendererTypes.h>
 #include <Result.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <expected>
+#include <format>
 #include <limits>
 #include <memory>
-#include <optional>
-#include <ranges>
-#include <span>
 #include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
 
-#ifndef __ANDROID__
-#include <array>
-#endif
 #ifdef _WIN32
 #include <iterator>
 #endif
@@ -33,7 +30,6 @@
 #import <Foundation/Foundation.h>
 #import <QuartzCore/CAMetalLayer.h>
 #include <TargetConditionals.h>
-#include <cstring>
 #if TARGET_OS_IPHONE
 #import <UIKit/UIView.h>
 #else
@@ -41,12 +37,16 @@
 #endif
 #elifndef __ANDROID__
 #include <filesystem>
+#include <optional>
+#include <ranges>
+#include <span>
 #include <system_error>
 #endif
 
 #include <Common_3/Graphics/GraphicsConfig.h>
 #include <Common_3/Graphics/Interfaces/IGraphics.h>
 #include <Common_3/OS/Interfaces/IOperatingSystem.h>
+#include <Common_3/Resources/ResourceLoader/Interfaces/IResourceLoader.h>
 #include <Common_3/Resources/ResourceLoader/ThirdParty/OpenSource/tinyimageformat/tinyimageformat_base.h>
 #include <Common_3/Utilities/Interfaces/IFileSystem.h>
 #include <Common_3/Utilities/Interfaces/ILog.h> // IWYU pragma: keep
@@ -76,6 +76,9 @@ extern "C" WindowDesc gWindow;
 #undef Status
 #endif
 
+// Forge v1.63 资源加载器的外部入口，当前未在 IResourceLoader.h 声明。
+const char* getShaderPlatformName(); // NOLINT(readability-identifier-naming)
+
 namespace pg::renderer::detail
 {
 namespace
@@ -90,10 +93,100 @@ constexpr auto* kAppName = "PanguRenderer";
 
 constexpr auto* kGpuDataFile = "gpu.data";
 constexpr auto* kGpuConfigFile = "gpu.cfg";
+constexpr auto* kVertexShaderFile = "Graph.vert";
+constexpr auto* kFragmentShaderFile = "Graph.frag";
+#ifdef DIRECT3D12
+constexpr auto* kGraphicsRootFile = "default.rootsig";
+#endif
+#ifdef METAL
+constexpr auto* kShaderSuffix = ".metal";
+#else
+constexpr auto* kShaderSuffix = "";
+#endif
+
+// 固定 Forge v1.63 的 FSL 头和变体记录。Vulkan 最多生成两套描述符索引变体。
+struct FslHeader
+{
+    std::array<char, 4> Magic;
+    std::uint32_t VariantCount;
+    std::array<std::uint32_t, 7> Metadata;
+};
+
+struct FslVariant
+{
+    std::uint64_t Hash;
+    std::uint64_t Offset;
+    std::uint64_t Size;
+};
+
+static_assert(sizeof(FslHeader) == 36 && sizeof(FslVariant) == 24);
+
+[[nodiscard]] bool ValidateShaderContainer(FileStream& stream, std::uint64_t requiredVariant) noexcept
+{
+    constexpr std::array kMagic{'@', 'F', 'S', 'L'};
+    constexpr auto kMaximumVariantCount = 2U;
+    const auto fileSize = fsGetStreamFileSize(&stream);
+    FslHeader header{};
+    if (std::cmp_less(fileSize, sizeof(header)) ||
+        fsReadFromStream(&stream, &header, sizeof(header)) != sizeof(header) || header.Magic != kMagic ||
+        header.VariantCount == 0 || header.VariantCount > kMaximumVariantCount)
+    {
+        return false;
+    }
+
+    const auto size = static_cast<std::uint64_t>(fileSize);
+    std::uint64_t nextPayload = sizeof(header) + (sizeof(FslVariant) * header.VariantCount);
+    bool found = header.VariantCount == 1;
+    for (std::uint32_t index = 0; index < header.VariantCount; ++index)
+    {
+        FslVariant variant{};
+        if (fsReadFromStream(&stream, &variant, sizeof(variant)) != sizeof(variant) || variant.Offset != nextPayload ||
+            variant.Offset > size || variant.Size == 0 || variant.Size > size - variant.Offset ||
+            variant.Size > std::numeric_limits<std::uint32_t>::max())
+        {
+            return false;
+        }
+        found |= variant.Hash == requiredVariant;
+        nextPayload = variant.Offset + variant.Size;
+    }
+    return found && nextPayload == size;
+}
+
+[[nodiscard]] bool ShaderBinaryAvailable(const char* name, std::uint64_t requiredVariant) noexcept
+{
+    std::array<char, FS_MAX_PATH> path{};
+    constexpr auto kMaxPathLength = FS_MAX_PATH - 1;
+    const auto bytes =
+        std::format_to_n(path.begin(), kMaxPathLength, "{}/{}{}", getShaderPlatformName(), name, kShaderSuffix).size;
+    FileStream stream{.pIO = nullptr, .mMode = FM_READ, .mUser = {}};
+    if (bytes > kMaxPathLength || !fsOpenStreamFromPath(RD_SHADER_BINARIES, path.data(), FM_READ, &stream))
+    {
+        return false;
+    }
+    const bool valid = ValidateShaderContainer(stream, requiredVariant);
+    return fsCloseStream(&stream) && valid;
+}
+
+struct GpuTriangleVertex
+{
+    std::array<float, 2> Position;
+    std::array<float, 4> Color;
+};
+
+static_assert(sizeof(GpuTriangleVertex) == sizeof(float) * 6);
+constexpr std::uint32_t kTriangleVertexCount = 3;
+constexpr std::uint32_t kTriangleVertexStride = sizeof(GpuTriangleVertex);
 
 #ifndef __ANDROID__
+#ifdef DIRECT3D12
+constexpr std::string_view kLongestShaderFile = kGraphicsRootFile;
+#else
+constexpr std::string_view kLongestShaderFile = kFragmentShaderFile;
+#endif
 constexpr auto kGpuDataFileBytes = std::string_view{kGpuDataFile}.size() + 1;
 static_assert(kGpuDataFileBytes > std::string_view{kGpuConfigFile}.size());
+static_assert(kLongestShaderFile.size() >= std::string_view{kVertexShaderFile}.size() &&
+              kLongestShaderFile.size() >= std::string_view{kFragmentShaderFile}.size());
 
 [[nodiscard]] constexpr bool ForgeResourcePathFits(std::size_t prefixBytes) noexcept
 {
@@ -253,8 +346,9 @@ class ForgeBackend final : public FrameBackend
 public:
     [[nodiscard]] Status Open(RendererOpenDesc desc) noexcept override;
     [[nodiscard]] Status Attach(NativeSurface surface, PixelSize size) noexcept override;
+    [[nodiscard]] Status PrepareTriangle() noexcept override;
     [[nodiscard]] Result<AcquireResult> Acquire() noexcept override;
-    [[nodiscard]] Status Submit(LinearColor color) noexcept override;
+    [[nodiscard]] Status Submit(LinearColor color, const std::array<TriangleVertex, 3>* triangle) noexcept override;
     void PresentImage() noexcept override;
     void RetireSurface() noexcept override;
     void Close() noexcept override;
@@ -271,6 +365,9 @@ private:
 
     [[nodiscard]] Status OpenRuntime(RendererOpenDesc desc) noexcept;
     [[nodiscard]] Status OpenCommands() noexcept;
+    [[nodiscard]] Status OpenTriangleResources() noexcept;
+    void RecordTriangle(const RenderTarget& target, const std::array<TriangleVertex, 3>& triangle) noexcept;
+    void CloseTriangleResources() noexcept;
 
     RuntimeState Runtime = RuntimeState::kClosed;
 #if defined(DIRECT3D12) || defined(METAL) || (defined(VULKAN) && !defined(__ANDROID__))
@@ -285,6 +382,12 @@ private:
     SwapChain* Chain{};
     std::vector<Semaphore*> ReadyToPresent;
     std::uint32_t Image{};
+    Shader* TriangleShader{};
+    Buffer* TriangleBuffer{};
+    Pipeline* TrianglePipeline{};
+    bool ShaderDirectoryAvailable{};
+    bool RootSignatureReady{};
+    bool ResourceLoaderReady{};
 };
 
 Status ForgeBackend::OpenRuntime(RendererOpenDesc desc) noexcept
@@ -321,6 +424,20 @@ Status ForgeBackend::OpenRuntime(RendererOpenDesc desc) noexcept
     }
     fsSetPathForResourceDir(pSystemFileIO, RD_OTHER_FILES, directory.data());
     fsSetPathForResourceDir(pSystemFileIO, RD_GPU_CONFIG, directory.data());
+    constexpr std::string_view kShaderDirectory = "CompiledShaders/";
+    const auto shaderOffset = std::string_view{directory.data()}.size();
+    const auto shaderRelativeBytes = std::string_view{getShaderPlatformName()}.size() + 1 + kLongestShaderFile.size() +
+                                     std::string_view{kShaderSuffix}.size() + 1;
+    if (shaderOffset + kShaderDirectory.size() <= directory.size() - shaderRelativeBytes)
+    {
+        kShaderDirectory.copy(&directory.at(shaderOffset), kShaderDirectory.size());
+        directory.at(shaderOffset + kShaderDirectory.size()) = '\0';
+        fsSetPathForResourceDir(pSystemFileIO, RD_SHADER_BINARIES, directory.data());
+        ShaderDirectoryAvailable = true;
+    }
+#else
+    // Android 的打包应用由 Forge PathStatement 挂载 APK 内的资源目录。
+    ShaderDirectoryAvailable = true;
 #endif
 
     FileStream stream{.pIO = nullptr, .mMode = FM_READ, .mUser = {}};
@@ -529,7 +646,167 @@ Result<AcquireResult> ForgeBackend::Acquire() noexcept
     return AcquireResult::kReady;
 }
 
-Status ForgeBackend::Submit(LinearColor color) noexcept
+Status ForgeBackend::OpenTriangleResources() noexcept
+{
+    std::uint64_t variant = 0;
+#ifdef VULKAN
+    variant = Device->pGpu->mDescriptorIndexingExtension;
+#endif
+    if (!ShaderDirectoryAvailable || !ShaderBinaryAvailable(kVertexShaderFile, variant) ||
+        !ShaderBinaryAvailable(kFragmentShaderFile, variant)
+#ifdef DIRECT3D12
+        || !ShaderBinaryAvailable(kGraphicsRootFile, variant)
+#endif
+    )
+    {
+        return Failure(RendererStage::kSubmit, RendererError::kShaderUnavailable);
+    }
+
+    RootSignatureDesc root{};
+#ifdef DIRECT3D12
+    root.pGraphicsFileName = kGraphicsRootFile;
+#endif
+    initRootSignature(Device, &root);
+#ifdef DIRECT3D12
+    RootSignatureReady = Device->mDx.pGraphicsRootSignature != nullptr;
+#elifdef VULKAN
+    RootSignatureReady = Device->mVk.pEmptyStaticSamplerDescriptorSet != nullptr;
+#else
+    RootSignatureReady = true;
+#endif
+    if (!RootSignatureReady)
+    {
+        return Failure(RendererStage::kSubmit, RendererError::kShaderUnavailable);
+    }
+
+    ShaderLoadDesc shader{};
+    shader.mVert.pFileName = kVertexShaderFile;
+    shader.mFrag.pFileName = kFragmentShaderFile;
+    addShader(Device, &shader, &TriangleShader);
+    if (TriangleShader == nullptr)
+    {
+        return Failure(RendererStage::kSubmit, RendererError::kShaderUnavailable);
+    }
+
+    // 顶点直接写入映射内存，此处只需支持资源加载器的最小 staging 配置。
+    constexpr std::uint64_t kStagingBytes = 4096;
+    ResourceLoaderDesc loader{.mBufferSize = kStagingBytes, .mBufferCount = 1, .mSingleThreaded = true};
+    initResourceLoaderInterface(Device, &loader);
+    ResourceLoaderReady = true;
+
+    BufferLoadDesc vertexBuffer{};
+    vertexBuffer.ppBuffer = &TriangleBuffer;
+    vertexBuffer.mDesc.mSize = sizeof(GpuTriangleVertex) * kTriangleVertexCount;
+    vertexBuffer.mDesc.mMemoryUsage = RESOURCE_MEMORY_USAGE_CPU_TO_GPU;
+    vertexBuffer.mDesc.mFlags = BUFFER_CREATION_FLAG_PERSISTENT_MAP_BIT;
+#ifdef VULKAN
+    vertexBuffer.mDesc.mFlags |= BUFFER_CREATION_FLAG_HOST_COHERENT;
+#endif
+    vertexBuffer.mDesc.mStartState = RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    vertexBuffer.mDesc.mDescriptors = DESCRIPTOR_TYPE_VERTEX_BUFFER;
+    vertexBuffer.mDesc.pName = "Triangle vertices";
+    addResource(&vertexBuffer, nullptr);
+    return TriangleBuffer != nullptr && TriangleBuffer->pCpuMappedAddress != nullptr ? Status{}
+                                                                                     : Failure(RendererStage::kSubmit);
+}
+
+Status ForgeBackend::PrepareTriangle() noexcept
+{
+    if (TrianglePipeline != nullptr)
+    {
+        return {};
+    }
+    // 交换链图像采用同一颜色格式与采样配置，创建 Pipeline 无须提前取图。
+    const auto* target = *Chain->ppRenderTargets;
+    if (target == nullptr)
+    {
+        return Failure(RendererStage::kSubmit);
+    }
+    if (TriangleShader == nullptr)
+    {
+        if (const auto opened = OpenTriangleResources(); !opened)
+        {
+            return opened;
+        }
+    }
+    VertexLayout vertexLayout{};
+    vertexLayout.mBindingCount = 1;
+    vertexLayout.mBindings[0].mStride = kTriangleVertexStride;
+    vertexLayout.mAttribCount = 2;
+    auto& position = vertexLayout.mAttribs[0];
+    position.mSemantic = SEMANTIC_POSITION;
+    position.mFormat = TinyImageFormat_R32G32_SFLOAT;
+    position.mOffset = offsetof(GpuTriangleVertex, Position);
+    auto& color = vertexLayout.mAttribs[1];
+    color.mSemantic = SEMANTIC_COLOR;
+    color.mFormat = TinyImageFormat_R32G32B32A32_SFLOAT;
+    color.mLocation = 1;
+    color.mOffset = offsetof(GpuTriangleVertex, Color);
+
+    RasterizerStateDesc rasterizer{};
+    rasterizer.mCullMode = CULL_MODE_NONE;
+    rasterizer.mScissor = true;
+    auto format = target->mFormat;
+    // Forge 没有零值 SampleCount，提交前使用颜色附件的采样数。
+    GraphicsPipelineDesc graphics{}; // NOLINT(bugprone-invalid-enum-default-initialization)
+    graphics.pShaderProgram = TriangleShader;
+    graphics.pVertexLayout = &vertexLayout;
+    graphics.pRasterizerState = &rasterizer;
+    graphics.pColorFormats = &format;
+    graphics.mRenderTargetCount = 1;
+    graphics.mSampleCount = target->mSampleCount;
+    graphics.mSampleQuality = target->mSampleQuality;
+    graphics.mDepthStencilFormat = TinyImageFormat_UNDEFINED;
+    graphics.mPrimitiveTopo = PRIMITIVE_TOPO_TRI_LIST;
+    const PipelineDesc pipeline{
+        .mGraphicsDesc = graphics,
+        .pCache = nullptr,
+        .pPipelineExtensions = nullptr,
+        .pName = "Triangle",
+        .mType = PIPELINE_TYPE_GRAPHICS,
+        .mExtensionCount = 0,
+#ifdef VULKAN
+        .pLayouts = nullptr,
+        .mLayoutCount = 0,
+#endif
+    };
+    addPipeline(Device, &pipeline, &TrianglePipeline);
+    // Forge 可能在原生创建失败后仍返回包装对象。会话关闭时由 RetireSurface 回收。
+    if (TrianglePipeline == nullptr
+#ifdef DIRECT3D12
+        // Forge 的 D3D12 图形 Pipeline 使用该 union 成员。
+        || TrianglePipeline->mDx.pPipelineState == nullptr // NOLINT(cppcoreguidelines-pro-type-union-access)
+#elifdef VULKAN
+        || TrianglePipeline->mVk.pPipeline == VK_NULL_HANDLE
+#endif
+    )
+    {
+        return Failure(RendererStage::kSubmit);
+    }
+    return {};
+}
+
+void ForgeBackend::RecordTriangle(const RenderTarget& target, const std::array<TriangleVertex, 3>& triangle) noexcept
+{
+    std::array<GpuTriangleVertex, kTriangleVertexCount> vertices{};
+    for (std::size_t index = 0; index < vertices.size(); ++index)
+    {
+        const auto& vertex = triangle.at(index);
+        vertices.at(index) = {
+            .Position = {vertex.X, vertex.Y},
+            .Color = {vertex.Color.R, vertex.Color.G, vertex.Color.B, vertex.Color.A},
+        };
+    }
+    // Acquire 已等待持有这块缓冲区的上一帧命令 Fence。
+    std::memcpy(TriangleBuffer->pCpuMappedAddress, vertices.data(), sizeof(vertices));
+    cmdSetViewport(Command, 0, 0, static_cast<float>(target.mWidth), static_cast<float>(target.mHeight), 0, 1);
+    cmdSetScissor(Command, 0, 0, target.mWidth, target.mHeight);
+    cmdBindPipeline(Command, TrianglePipeline);
+    cmdBindVertexBuffer(Command, 1, &TriangleBuffer, &kTriangleVertexStride, nullptr);
+    cmdDraw(Command, kTriangleVertexCount, 0);
+}
+
+Status ForgeBackend::Submit(LinearColor color, const std::array<TriangleVertex, 3>* triangle) noexcept
 {
     // Acquire 已按交换链公布的图像数校验索引。
     auto* const target = Chain->ppRenderTargets[Image]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -537,7 +814,6 @@ Status ForgeBackend::Submit(LinearColor color) noexcept
     {
         return Failure(RendererStage::kSubmit);
     }
-
     resetCmdPool(Device, CommandPool);
     beginCmd(Command);
     RenderTargetBarrier barrier{};
@@ -555,6 +831,10 @@ Status ForgeBackend::Submit(LinearColor color) noexcept
     attachment.mClearValue = {.r = color.R, .g = color.G, .b = color.B, .a = color.A};
     attachment.mOverrideClearValue = 1;
     cmdBindRenderTargets(Command, &bind);
+    if (triangle != nullptr)
+    {
+        RecordTriangle(*target, *triangle);
+    }
     cmdBindRenderTargets(Command, nullptr);
 
     std::swap(barrier.mCurrentState, barrier.mNewState);
@@ -595,6 +875,10 @@ void ForgeBackend::RetireSurface() noexcept
     }
 
     waitQueueIdle(GraphicsQueue);
+    if (TrianglePipeline != nullptr)
+    {
+        removePipeline(Device, std::exchange(TrianglePipeline, nullptr));
+    }
 #ifdef METAL
     // 上游 removeSwapChain 不清理这两个 ARC 强引用，由窗口层继续管理 View 与 Layer。
     Chain->mMTKDrawable = nil;
@@ -615,8 +899,30 @@ void ForgeBackend::RetireSurface() noexcept
     }
 }
 
+void ForgeBackend::CloseTriangleResources() noexcept
+{
+    if (TriangleBuffer != nullptr)
+    {
+        removeResource(std::exchange(TriangleBuffer, nullptr));
+    }
+    if (TriangleShader != nullptr)
+    {
+        removeShader(Device, std::exchange(TriangleShader, nullptr));
+    }
+    if (std::exchange(RootSignatureReady, false))
+    {
+        exitRootSignature(Device);
+    }
+    if (std::exchange(ResourceLoaderReady, false))
+    {
+        exitResourceLoaderInterface(Device);
+    }
+}
+
 void ForgeBackend::Close() noexcept
 {
+    CloseTriangleResources();
+    ShaderDirectoryAvailable = false;
     if (CommandFence != nullptr)
     {
         exitFence(Device, std::exchange(CommandFence, nullptr));

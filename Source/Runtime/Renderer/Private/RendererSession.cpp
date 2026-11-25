@@ -7,7 +7,10 @@
 #include <RendererTypes.h>
 #include <Result.h>
 
+#include <algorithm>
+#include <array>
 #include <atomic>
+#include <cmath>
 #include <expected>
 #include <memory>
 #include <mutex>
@@ -28,6 +31,13 @@ namespace
 [[nodiscard]] std::unexpected<Error> Reject(RendererStage stage, RendererError cause) noexcept
 {
     return std::unexpected(MakeRendererError(stage, cause));
+}
+
+[[nodiscard]] bool IsFinite(const TriangleVertex& vertex) noexcept
+{
+    const auto& color = vertex.Color;
+    return std::isfinite(vertex.X) && std::isfinite(vertex.Y) && std::isfinite(color.R) && std::isfinite(color.G) &&
+           std::isfinite(color.B) && std::isfinite(color.A);
 }
 } // namespace
 
@@ -152,7 +162,16 @@ Status RendererSession::SetPaused(bool paused) noexcept
     return {};
 }
 
-Result<FrameResult> RendererSession::Present(LinearColor color) noexcept
+Result<FrameResult> RendererSession::Present(LinearColor color) noexcept { return PresentFrame(color, nullptr); }
+
+Result<FrameResult> RendererSession::PresentTriangle(LinearColor clearColor,
+                                                     const std::array<TriangleVertex, 3>& vertices) noexcept
+{
+    return PresentFrame(clearColor, &vertices);
+}
+
+Result<FrameResult> RendererSession::PresentFrame(LinearColor color,
+                                                  const std::array<TriangleVertex, 3>* triangle) noexcept
 {
     if (const auto ready = CanRender(RendererStage::kAcquire); !ready)
     {
@@ -165,6 +184,17 @@ Result<FrameResult> RendererSession::Present(LinearColor color) noexcept
     if (Paused || Attachment != AttachmentState::kAttached)
     {
         return FrameResult::kSkipped;
+    }
+    if (triangle != nullptr)
+    {
+        if (!std::ranges::all_of(*triangle, IsFinite))
+        {
+            return Reject(RendererStage::kSubmit, RendererError::kInvalidVertex);
+        }
+        if (const auto prepared = Backend->PrepareTriangle(); !prepared)
+        {
+            return FailFrame(prepared.error());
+        }
     }
 
     const auto acquired = Backend->Acquire();
@@ -181,7 +211,7 @@ Result<FrameResult> RendererSession::Present(LinearColor color) noexcept
         return RetireForReattach();
     }
 
-    const auto submitted = Backend->Submit(color);
+    const auto submitted = Backend->Submit(color, triangle);
     FinishSubmission();
     if (!submitted)
     {

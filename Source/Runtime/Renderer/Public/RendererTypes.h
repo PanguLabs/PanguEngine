@@ -30,6 +30,13 @@ struct LinearColor
     float A{};
 };
 
+struct TriangleVertex
+{
+    float X{};
+    float Y{};
+    LinearColor Color{};
+};
+
 struct PixelSize
 {
     std::uint32_t Width{};
@@ -78,6 +85,8 @@ enum class RendererError : std::uint8_t
     kNoDevice = 5,
     kNativeFailure = 6,
     kPresentationUnavailable = 9,
+    kInvalidVertex = 10,
+    kShaderUnavailable = 11,
 };
 
 inline constexpr ErrorDomainId kRendererErrorDomain = ErrorDomainId::Constant<0x70672e72656e64ULL>();

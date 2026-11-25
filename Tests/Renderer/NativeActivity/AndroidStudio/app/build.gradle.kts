@@ -1,3 +1,4 @@
+import com.android.build.api.artifact.SingleArtifact
 import javax.inject.Inject
 
 plugins {
@@ -17,6 +18,10 @@ abstract class StageForgeAssets : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val gpuConfig: RegularFileProperty
 
+    @get:InputDirectory
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val compiledShaders: DirectoryProperty
+
     @get:OutputDirectory
     abstract val outputDirectory: DirectoryProperty
 
@@ -32,6 +37,9 @@ abstract class StageForgeAssets : DefaultTask() {
                 from(gpuData) { rename { "gpu.data" } }
                 from(gpuConfig)
             }
+            into("CompiledShaders") {
+                from(compiledShaders)
+            }
         }
     }
 }
@@ -43,16 +51,10 @@ require(panguLinkMode == "Monolithic" || panguLinkMode == "Modular") {
 
 val nativeActivity = rootProject.layout.projectDirectory.dir("..")
 val engine = rootProject.layout.projectDirectory.dir("../../../..")
-val gradleBuildRoot = engine.dir("Build/Android/Tests/NativeActivity/Gradle")
+val gradleBuildRoot = engine.dir("Build/Android/Tests/NativeActivity/Gradle/$panguLinkMode")
 layout.buildDirectory.set(gradleBuildRoot.dir("app"))
 
 val forge = engine.dir("Source/ThirdParty/TheForge/Repo")
-val stageForgeAssets = tasks.register<StageForgeAssets>("stageForgeAssets") {
-    pathStatement.set(nativeActivity.file("PathStatement.txt"))
-    gpuData.set(forge.file("Common_3/OS/Android/android_gpu.data"))
-    gpuConfig.set(nativeActivity.file("GPUCfg/gpu.cfg"))
-    outputDirectory.set(layout.buildDirectory.dir("generated/forgeAssets"))
-}
 
 android {
     namespace = "com.pangulabs.nativeactivitycheck.gradle"
@@ -74,6 +76,8 @@ android {
                 "-DBUILD_TESTING=ON",
                 "-DPANGU_BUILD_ENGINE_TESTS=ON",
                 "-DPANGU_BUILD_FORGE_LINK_CHECK=ON",
+                "-DPANGU_BUILD_NATIVE_ACTIVITY_TRIANGLE=ON",
+                "-DPANGU_BUILD_TRIANGLE_SHADER_CHECK=ON",
                 "-DPANGU_FORGE_USE_PREFAB_SWAPPY=ON",
                 "-DPANGU_LINK_MODE=$panguLinkMode",
             )
@@ -99,6 +103,19 @@ android {
 }
 
 androidComponents.onVariants { variant ->
+    val nativeShaderRoot = gradleBuildRoot.dir("NativeShaders/${variant.name}")
+    checkNotNull(variant.externalNativeBuild).arguments.add(
+        "-DPANGU_NATIVE_ACTIVITY_SHADER_OUTPUT_ROOT:PATH=${nativeShaderRoot.asFile.invariantSeparatorsPath}",
+    )
+    val stageForgeAssets = tasks.register<StageForgeAssets>(variant.computeTaskName("stage", "ForgeAssets")) {
+        // 合并原生库的产物依赖该变体的 CMake 目标，后者同时生成着色器。
+        dependsOn(variant.artifacts.get(SingleArtifact.MERGED_NATIVE_LIBS))
+        pathStatement.set(nativeActivity.file("PathStatement.txt"))
+        gpuData.set(forge.file("Common_3/OS/Android/android_gpu.data"))
+        gpuConfig.set(nativeActivity.file("GPUCfg/gpu.cfg"))
+        compiledShaders.set(nativeShaderRoot.dir("CompiledShaders"))
+        outputDirectory.set(layout.buildDirectory.dir("generated/forgeAssets/${variant.name}"))
+    }
     variant.sources.assets?.addGeneratedSourceDirectory(stageForgeAssets, StageForgeAssets::outputDirectory)
 }
 

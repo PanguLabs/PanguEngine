@@ -3,6 +3,7 @@
 #include <RendererTypes.h> // IWYU pragma: export
 #include <Result.h>        // IWYU pragma: export
 
+#include <array>
 #include <cstdint>
 
 namespace pg::engine
@@ -14,6 +15,7 @@ namespace pg::app
 {
 using renderer::FrameResult;
 using renderer::LinearColor;
+using renderer::TriangleVertex;
 
 enum class LoopControl : std::uint8_t
 {
@@ -38,6 +40,9 @@ public:
 
     // kPresentRequested 表示 Forge 的呈现调用已返回。
     [[nodiscard]] Result<FrameResult> Present(LinearColor color) noexcept;
+    // 顶点使用 X 向右、Y 向上的裁剪空间及线性 RGBA，调用返回后可立即修改。
+    [[nodiscard]] Result<FrameResult> PresentTriangle(LinearColor clearColor,
+                                                      const std::array<TriangleVertex, 3>& vertices) noexcept;
     // 清理现有会话后显式重开。成功后下一次 Present 重新挂接当前 Surface。
     [[nodiscard]] Status ReopenGraphics() noexcept;
 

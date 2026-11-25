@@ -1,4 +1,5 @@
 include_guard(GLOBAL)
+include("${CMAKE_CURRENT_LIST_DIR}/PanguTriangleShaders.cmake")
 
 macro(_pangu_enable_apple_graphics_languages)
     if(NOT CMAKE_OBJC_COMPILER_ID OR NOT CMAKE_OBJCXX_COMPILER_ID)
@@ -87,7 +88,7 @@ endfunction()
 # Apple 语言须在应用入口和 Forge 的共同目录作用域启用。
 if(APPLE AND NOT IOS)
     macro(pangu_add_application)
-        cmake_parse_arguments(panguApplication "" "KIND;TARGET" "SOURCES" ${ARGN})
+        cmake_parse_arguments(panguApplication "TRIANGLE_SHADERS" "KIND;TARGET" "SOURCES" ${ARGN})
         if(panguApplication_KIND STREQUAL "GRAPHICS")
             _pangu_enable_apple_graphics_languages()
         endif()
@@ -95,13 +96,13 @@ if(APPLE AND NOT IOS)
     endmacro()
 else()
     function(pangu_add_application)
-        cmake_parse_arguments(PARSE_ARGV 0 arg "" "TARGET;KIND" "SOURCES")
+        cmake_parse_arguments(PARSE_ARGV 0 arg "TRIANGLE_SHADERS" "TARGET;KIND" "SOURCES")
         _pangu_add_application()
     endfunction()
 endif()
 
 function(_pangu_parse_application)
-    cmake_parse_arguments(PARSE_ARGV 0 arg "" "TARGET;KIND" "SOURCES")
+    cmake_parse_arguments(PARSE_ARGV 0 arg "TRIANGLE_SHADERS" "TARGET;KIND" "SOURCES")
     _pangu_add_application()
 endfunction()
 
@@ -122,6 +123,9 @@ function(_pangu_add_application)
     endif()
     if(NOT arg_KIND MATCHES "^(HEADLESS|GRAPHICS)$")
         message(FATAL_ERROR "Unsupported Pangu Application KIND '${arg_KIND}'; expected HEADLESS or GRAPHICS")
+    endif()
+    if(arg_TRIANGLE_SHADERS AND NOT arg_KIND STREQUAL "GRAPHICS")
+        message(FATAL_ERROR "pangu_add_application TRIANGLE_SHADERS requires KIND GRAPHICS")
     endif()
     if(NOT TARGET Pangu::EngineHost)
         message(FATAL_ERROR "Call pangu_initialize before adding a Pangu Application")
@@ -145,12 +149,13 @@ function(_pangu_add_application)
     )
 
     pangu_owned_build_root(projectBuildRoot project)
+    set(applicationOutputDirectory "${projectBuildRoot}/Bin/${arg_TARGET}")
     # 运行库按目录部署，应用使用独立目录以避免将同一 Project 的其他应用依赖合入。
     set_target_properties(
         "${arg_TARGET}"
         PROPERTIES
             "${applicationOutputProperty}"
-                "${projectBuildRoot}/Bin/${arg_TARGET}"
+                "${applicationOutputDirectory}"
     )
     if(arg_KIND STREQUAL "GRAPHICS")
         set(entryTarget "${arg_TARGET}EngineEntry")
@@ -239,6 +244,20 @@ function(_pangu_add_application)
                 "${entryTarget}"
                 Pangu::Renderer
         )
+        if(arg_TRIANGLE_SHADERS)
+            set(shaderTarget "${arg_TARGET}TriangleShaders")
+            if(ANDROID)
+                pangu_add_triangle_shaders(TARGET "${shaderTarget}" BUILD_ROOT "${projectBuildRoot}")
+            else()
+                _pangu_runtime_output_directory(runtimeDirectory "${arg_TARGET}")
+                pangu_add_triangle_shaders(
+                    TARGET "${shaderTarget}"
+                    BUILD_ROOT "${projectBuildRoot}"
+                    DEPLOY_DIRECTORY "${runtimeDirectory}/CompiledShaders"
+                )
+            endif()
+            add_dependencies("${arg_TARGET}" "${shaderTarget}")
+        endif()
     else()
         target_sources("${arg_TARGET}" PRIVATE "${applicationSource}/Private/HeadlessMain.cpp")
         target_include_directories("${arg_TARGET}" PRIVATE "${rendererSource}/Public")

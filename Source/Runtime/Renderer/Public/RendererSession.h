@@ -4,6 +4,7 @@
 #include <RendererTypes.h>
 #include <Result.h>
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -40,6 +41,8 @@ public:
     void RequestDetach(SurfaceId id) noexcept;
     [[nodiscard]] Status SetPaused(bool paused) noexcept;
     [[nodiscard]] Result<FrameResult> Present(LinearColor color) noexcept;
+    [[nodiscard]] Result<FrameResult> PresentTriangle(LinearColor clearColor,
+                                                      const std::array<TriangleVertex, 3>& vertices) noexcept;
     // 会话线程同步清理并释放进程占用，返回已记录的首个错误。
     [[nodiscard]] Status Close() noexcept;
 
@@ -77,6 +80,8 @@ private:
     [[nodiscard]] bool TryAdmitSubmission() noexcept;
     void FinishSubmission() noexcept;
     [[nodiscard]] Status CanRender(RendererStage stage) const noexcept;
+    [[nodiscard]] Result<FrameResult> PresentFrame(LinearColor color,
+                                                   const std::array<TriangleVertex, 3>* triangle) noexcept;
     void RetireAttachment() noexcept;
     [[nodiscard]] FrameResult RetireForReattach() noexcept;
     [[nodiscard]] Result<FrameResult> FailFrame(Error error) noexcept;

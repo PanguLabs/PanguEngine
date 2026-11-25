@@ -24,14 +24,18 @@ ctest --preset windows-full -R '^ToolchainLibraryLink$' --output-on-failure
 
 完整验证可用 `cmake --workflow --preset windows-full`；普通 ALL 构建不保证独立宿主测试已准备。Linux/macOS 改用相应 preset。Android/iOS 默认 `BUILD_TESTING=OFF`；要检查上述编译型 target，可在 configure 时显式追加 `-DBUILD_TESTING=ON`。这不验证设备执行或独立预编译 SDK 的 ABI 兼容。
 
+macOS 的 `Renderer.TriangleLink` 使用 Engine Git 锁构建独立 `FirstTriangle` Project，检查同一绘制回调和 Renderer 入口的最终链接。该用例通过 `ctest --preset macos --no-tests=error -R '^Renderer[.]TriangleLink$'` 选取，无需 Metal 着色器编译器和窗口。
+
 ## 现行移动端真实 Module 最终链接
 
 移动端显式启用 `PANGU_BUILD_FORGE_LINK_CHECK=ON` 后，构建 `PanguForgeLinkCheck` 同时触发独立的 Renderer 链接探针。Android 的 `PanguVulkanRendererLinkCheck` 和 iOS 的 `PanguMetalRendererLinkCheck` 通过 `Pangu::Renderer` 调用公开 Module Query。最终可执行文件用于宿主链接检查，设备启动和图形呈现另行验收。
 
+iOS 探针还通过真实的冷 `RendererSession` 调用 `PresentTriangle`，以便检查最终 Mach-O 中的三角形代码。显式启用 `PANGU_BUILD_TRIANGLE_SHADER_CHECK` 并构建 `PanguTriangleShaders` 时，iOS 着色器部署到探针 `.app` 内的 `CompiledShaders/IOS/`。
+
 Android 的 `PanguAndroidJniThreadCheck` 目标生成可执行文件 `PanguJniThreadCheck`。它使用 NDK 的 JNI 调用表验证线程已附加、需要附加及两种失败路径。在 Android ARM64 设备上运行该检查可核对原始 JNI 状态码和线程分离责任。
 
 Android 通过 `pangu_add_application(KIND GRAPHICS)` 构建 `PanguNativeActivityCheck`，经 `Pangu::Renderer` 使用 Forge 的 Vulkan 取图和呈现。
-使用 `agdkDebug` 打包 ARM64 真机测试 APK，可选择 Monolithic 或 Modular。此 APK 链接官方 Swappy 2.1.3 AAR 的原生库，并编译对应版本的官方 Java 源码。[Android Studio 测试工程](../Renderer/NativeActivity/AndroidStudio/README.md)
+用 `PANGU_BUILD_NATIVE_ACTIVITY_TRIANGLE=ON` 配置 Android preset 可检查三角形夹具最终链接，字节码检查由 `PANGU_BUILD_TRIANGLE_SHADER_CHECK` 控制。`agdkDebug` 打包同一绘制夹具及 Forge 资源的 ARM64 APK，支持 Monolithic 和 Modular。此 APK 链接官方 Swappy 2.1.3 AAR 的原生库，并编译对应版本的官方 Java 源码。[Android Studio 测试工程](../Renderer/NativeActivity/AndroidStudio/README.md)
 
 安装对应链接模式的 APK 后，生命周期脚本在前台呈现后把 Activity 切到后台并恢复，核对窗口撤销、同一 Activity 的窗口重建、继续呈现和宿主主动关闭。[生命周期观察脚本](../Renderer/NativeActivity/Observe.ps1)
 
@@ -47,6 +51,8 @@ ctest --preset linux --no-tests=error -R '^Renderer[.]DesktopFrame$' --output-on
 ```
 
 `Renderer.DesktopFrame` 构建、搬移并运行独立 Project。[Wayland 观察器](../Renderer/Acceptance/ObserveWayland.py) 清除 X11 显示入口，在隔离的嵌套桌面按 PID 定位窗口。它先采样 720×480 窗口的中心像素 `#3F99C8`，调整到 560×360 后触发换色，确认 `#FF0000` 与至少 120 次呈现请求，再由合成器关闭窗口并检查进程成功退出。该轮的像素与退出摘要保存在测试运行目录的 `deployment.log`，逐帧计数在 `Deploy/first-frame.stdout`。[Renderer 接入规格](../../docs/superpowers/specs/2026-11-20-renderer-forge-igraphics-design.md)
+
+配置 Linux preset 时传入 `-DPANGU_BUILD_TRIANGLE_SHADER_CHECK=ON` 注册 `Renderer.DesktopTriangle`。它复用搬移部署和合成器关窗，在同一 Sway 窗口的四个采样点验证初始三角形、同交换链代次换位和 resize 后的绘制。`deployment.log` 记录三阶段尺寸、view ID、RGB 和呈现请求汇总，`Deploy/first-triangle.stdout` 保留原始交换链与逐帧记录。[首个三角形验收](../../docs/superpowers/plans/2026-11-25-renderer-first-triangle.md#首轮平台验收)
 
 2026-11-23 在 `moozen-ubuntu` 验证了 `f2d551d` 加本轮未提交修复的 Release / Modular 工作区。独立 Project 使用本地源码锁覆盖。上述预览 CTest 在嵌套 Sway 中采到两种指定颜色和尺寸，并由合成器关闭成功。原生 Ubuntu v6 桌面运行了 120 次呈现请求，零跳帧。另用隔离的 Mutter 46 虚拟显示器最小化窗口，稳定后一秒内计数保持 98，恢复后增长至 160，随后收到关闭事件并正常退出。预览关闭的独立 Project 在无显示服务时通过 Open 拒绝检查。恢复预览和本地覆盖为 OFF 后，16 项 Renderer 单测及 Vulkan 导出符号检查通过，其中无可用呈现队列与查询失败由单测覆盖。
 
