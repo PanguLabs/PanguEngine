@@ -1,0 +1,16 @@
+#include "../../Source/ThirdParty/TheForge/Repo/Common_3/Graphics/FSL/defaults.h"
+
+#rootsig default.rootsig
+#end
+
+#vert Graph.vert
+#include "Graph.vert.fsl"
+#end
+
+#frag Graph.frag
+#include "Graph.frag.fsl"
+#end
+
+#vert MeshTransform.vert
+#include "MeshTransform.vert.fsl"
+#end

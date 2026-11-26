@@ -41,6 +41,12 @@ struct TriangleVertex
     LinearColor Color{};
 };
 
+// 局部坐标到裁剪空间。每列连续存储四个元素。
+struct MeshTransform
+{
+    std::array<float, 16> Elements{};
+};
+
 struct IndexedQuad
 {
     std::array<TriangleVertex, 4> Vertices{};

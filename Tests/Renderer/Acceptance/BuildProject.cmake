@@ -11,13 +11,17 @@ function(_pangu_build_renderer_project target)
     set(triangle OFF)
     set(triangleLink OFF)
     set(buildType Release)
+    set(meshTransform OFF)
+    if(target STREQUAL "MeshTransform")
+        set(meshTransform ON)
+    endif()
     set(indexedMesh OFF)
     if(target STREQUAL "IndexedMesh")
         set(indexedMesh ON)
     endif()
     if(target STREQUAL "FirstFrame")
         set(graphics ON)
-    elseif(target STREQUAL "FirstTriangle" OR indexedMesh)
+    elseif(target STREQUAL "FirstTriangle" OR indexedMesh OR meshTransform)
         if(PANGU_RENDERER_TEST_TRIANGLE_LINK)
             set(triangleLink ON)
         else()
@@ -64,7 +68,8 @@ function(_pangu_build_renderer_project target)
             "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
             "-DPANGU_LINK_MODE:STRING=${PANGU_LINK_MODE}" "-DPANGU_RENDERER_TEST_GRAPHICS:BOOL=${graphics}"
             "-DPANGU_RENDERER_TEST_TRIANGLE:BOOL=${triangle}" "-DPANGU_RENDERER_TEST_TRIANGLE_LINK:BOOL=${triangleLink}"
-            "-DPANGU_RENDERER_TEST_INDEXED_MESH:BOOL=${indexedMesh}" ${platformArgs}
+            "-DPANGU_RENDERER_TEST_INDEXED_MESH:BOOL=${indexedMesh}"
+            "-DPANGU_RENDERER_TEST_MESH_TRANSFORM:BOOL=${meshTransform}" ${platformArgs}
         COMMAND_ERROR_IS_FATAL ANY
     )
     execute_process(

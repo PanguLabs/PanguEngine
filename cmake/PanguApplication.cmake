@@ -88,7 +88,13 @@ endfunction()
 # Apple 语言须在应用入口和 Forge 的共同目录作用域启用。
 if(APPLE AND NOT IOS)
     macro(pangu_add_application)
-        cmake_parse_arguments(panguApplication "TRIANGLE_SHADERS;INDEXED_MESH" "KIND;TARGET" "SOURCES" ${ARGN})
+        cmake_parse_arguments(
+            panguApplication
+            "TRIANGLE_SHADERS;INDEXED_MESH;MESH_TRANSFORM_SHADERS"
+            "KIND;TARGET"
+            "SOURCES"
+            ${ARGN}
+        )
         if(panguApplication_KIND STREQUAL "GRAPHICS")
             _pangu_enable_apple_graphics_languages()
         endif()
@@ -96,13 +102,25 @@ if(APPLE AND NOT IOS)
     endmacro()
 else()
     function(pangu_add_application)
-        cmake_parse_arguments(PARSE_ARGV 0 arg "TRIANGLE_SHADERS;INDEXED_MESH" "TARGET;KIND" "SOURCES")
+        cmake_parse_arguments(
+            PARSE_ARGV 0
+            arg
+            "TRIANGLE_SHADERS;INDEXED_MESH;MESH_TRANSFORM_SHADERS"
+            "TARGET;KIND"
+            "SOURCES"
+        )
         _pangu_add_application()
     endfunction()
 endif()
 
 function(_pangu_parse_application)
-    cmake_parse_arguments(PARSE_ARGV 0 arg "TRIANGLE_SHADERS;INDEXED_MESH" "TARGET;KIND" "SOURCES")
+    cmake_parse_arguments(
+        PARSE_ARGV 0
+        arg
+        "TRIANGLE_SHADERS;INDEXED_MESH;MESH_TRANSFORM_SHADERS"
+        "TARGET;KIND"
+        "SOURCES"
+    )
     _pangu_add_application()
 endfunction()
 
@@ -126,6 +144,9 @@ function(_pangu_add_application)
     endif()
     if(arg_TRIANGLE_SHADERS AND NOT arg_KIND STREQUAL "GRAPHICS")
         message(FATAL_ERROR "pangu_add_application TRIANGLE_SHADERS requires KIND GRAPHICS")
+    endif()
+    if(arg_MESH_TRANSFORM_SHADERS AND NOT arg_KIND STREQUAL "GRAPHICS")
+        message(FATAL_ERROR "MESH_TRANSFORM_SHADERS requires KIND GRAPHICS")
     endif()
     if(arg_INDEXED_MESH AND NOT arg_KIND STREQUAL "GRAPHICS")
         message(FATAL_ERROR "pangu_add_application INDEXED_MESH requires KIND GRAPHICS")
@@ -250,16 +271,21 @@ function(_pangu_add_application)
                 "${entryTarget}"
                 Pangu::Renderer
         )
-        if(arg_TRIANGLE_SHADERS)
+        if(arg_TRIANGLE_SHADERS OR arg_MESH_TRANSFORM_SHADERS)
+            set(shaderOptions)
+            if(arg_MESH_TRANSFORM_SHADERS)
+                set(shaderOptions MESH_TRANSFORM_SHADERS)
+            endif()
             set(shaderTarget "${arg_TARGET}TriangleShaders")
             if(ANDROID)
-                pangu_add_triangle_shaders(TARGET "${shaderTarget}" BUILD_ROOT "${projectBuildRoot}")
+                pangu_add_triangle_shaders(TARGET "${shaderTarget}" BUILD_ROOT "${projectBuildRoot}" ${shaderOptions})
             else()
                 _pangu_runtime_output_directory(runtimeDirectory "${arg_TARGET}")
                 pangu_add_triangle_shaders(
                     TARGET "${shaderTarget}"
                     BUILD_ROOT "${projectBuildRoot}"
                     DEPLOY_DIRECTORY "${runtimeDirectory}/CompiledShaders"
+                    ${shaderOptions}
                 )
             endif()
             add_dependencies("${arg_TARGET}" "${shaderTarget}")

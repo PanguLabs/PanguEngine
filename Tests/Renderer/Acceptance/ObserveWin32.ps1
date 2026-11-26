@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$Executable,
     [Parameter(Mandatory = $true)][ValidateSet('Modular', 'Monolithic')][string]$LinkMode,
-    [ValidateSet('FirstFrame', 'FirstTriangle', 'IndexedMesh')][string]$Target = 'FirstFrame'
+    [ValidateSet('FirstFrame', 'FirstTriangle', 'IndexedMesh', 'MeshTransform')][string]$Target = 'FirstFrame'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -71,7 +71,7 @@ public static class RendererDesktop
         return Capture(window, new int[] { 125, 125, 275, 275, 20, 20 }, 400);
     }
 
-    private static string Capture(IntPtr window, int[] positions, int denominator = 100)
+    public static string Capture(IntPtr window, int[] positions, int denominator = 100)
     {
         Rect bounds;
         if (!GetClientRect(window, out bounds) || bounds.Right <= 0 || bounds.Bottom <= 0)
@@ -182,13 +182,14 @@ function Wait-For([scriptblock]$Observation, [string]$Condition) {
     throw "Timed out waiting for $Condition (client=$([RendererDesktop]::ClientSize($handle)), pixels=$sample, present-requests=$($run.Frames))"
 }
 
-function Read-TrianglePixels([string]$Phase, [string[]]$Expected) {
+function Read-TrianglePixels([string]$Phase, [string[]]$Expected, [int[]]$Positions) {
     $captureState = @{ Pixels = '' }
     Wait-For {
-        $captureState.Pixels = if ($isIndexed) { [RendererDesktop]::CaptureIndexedMesh($window) }
+        $captureState.Pixels = if ($Positions) { [RendererDesktop]::Capture($window, $Positions, 400) }
+                               elseif ($isIndexed) { [RendererDesktop]::CaptureIndexedMesh($window) }
                                else { [RendererDesktop]::CaptureTriangle($window) }
         $actual = $captureState.Pixels.Split(',')
-        if ($actual.Length -ne $Expected.Length) { return $false }
+        if (!$captureState.Pixels -or $actual.Length -ne $Expected.Length) { return $false }
         for ($pixel = 0; $pixel -lt $Expected.Length; ++$pixel) {
             for ($channel = 1; $channel -lt 7; $channel += 2) {
                 $value = [Convert]::ToInt32($actual[$pixel].Substring($channel, 2), 16)
@@ -228,7 +229,8 @@ function Test-ShaderRejection([string]$Case, [string]$Shader, [scriptblock]$Chan
 
 $Executable = (Resolve-Path -LiteralPath $Executable).Path
 $isTriangle = $Target -eq 'FirstTriangle'
-$isIndexed = $Target -eq 'IndexedMesh'
+$transform = $Target -eq 'MeshTransform'
+$isIndexed = $Target -eq 'IndexedMesh' -or $transform
 $frameLabel = if ($isTriangle) { 'first-triangle' } elseif ($isIndexed) { 'indexed-mesh' } else { 'first-frame' }
 [RendererDesktop]::UsePhysicalPixels()
 if ($isTriangle) {
@@ -254,6 +256,16 @@ try {
     if ($isIndexed) {
         $quadColors = '#00BC00', '#BC0000', '#000000'
         Write-Output (Read-TrianglePixels 'initial quad' $quadColors)
+        if ($transform) {
+            $dir = $run.App.StartInfo.WorkingDirectory
+            [IO.File]::WriteAllText((Join-Path $dir 'rotate'), '')
+            Write-Output (Read-TrianglePixels 'rotation after scale' @('#CB0000') @(220,150))
+            [IO.File]::WriteAllText((Join-Path $dir 'perspective'), '')
+            Write-Output (Read-TrianglePixels 'homogeneous w' @('#000000','#9C0000') @(330,200,280,200))
+            [IO.File]::WriteAllText((Join-Path $dir 'left'), '')
+            $translationPoints = @(130,230,330,230)
+            Write-Output (Read-TrianglePixels 'left' @('#BC0000','#000000') $translationPoints)
+        }
     }
     elseif ($isTriangle) {
         $initialColors = '#6C6CDA', '#A0A095', '#000000', '#000000'
@@ -282,10 +294,14 @@ try {
     if ($isIndexed) {
         $beforeResizePresent = $run.Frames
         Wait-For { $run.Frames -ge ($beforeResizePresent + 2) } 'indexed presents after resize'
-        Write-Output (Read-TrianglePixels 'resized quad' $quadColors)
+        if ($transform) {
+            [IO.File]::WriteAllText((Join-Path $dir 'right'), '')
+            $quadColors = '#000000', '#BC0000'
+        }
+        Write-Output (Read-TrianglePixels 'resized quad' $quadColors $translationPoints)
         [IO.File]::WriteAllText((Join-Path $run.App.StartInfo.WorkingDirectory 'reopen'), '')
         Wait-For { $run.Output.Contains('indexed-mesh reopened') } 'indexed present on the reopened device'
-        Write-Output (Read-TrianglePixels 'reopened quad' $quadColors)
+        Write-Output (Read-TrianglePixels 'reopened quad' @('#00BC00','#BC0000','#000000'))
     }
     elseif ($isTriangle) {
         $beforeResizePresent = $run.Frames

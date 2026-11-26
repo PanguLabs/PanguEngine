@@ -70,3 +70,20 @@ cmake -DPANGU_ENGINE_SOURCE_DIR=<共享源码根> -DPANGU_TEST_ROOT=<本平台Bu
 Android Windows 宿主根为 `D:/Git/PanguEngine`，iOS 在 `ssh -o BatchMode=yes moozen-macos` 的 `/Users/moozen/WindowsGit/PanguEngine` 执行，源码不能复制到临时目录。夹具只在平台 BuildRoot 生成可变 Project；Engine 仍指共享源码。Monolithic 真归档进入 Android 原生宿主 .so/iOS Mach-O executable；Modular 真实 Foundation/Module/业务库、固定 Query、Runtime 依赖及最小宿主最终链接均需宿主工具断言。Android 确认 ELF/AArch64，iOS 确认 ARM64/platform 2。精确命令、结果、原始路径见[验收记录](../../docs/superpowers/plans/2026-11-06-module-manager-link-modes-validation.md)。完成恢复移动 Monolithic、benchmark OFF。只做编译/链接/宿主检查，不是设备运行、打包、签名或设备级卸载证据。
 
 正式 `mobile-link` 同时准备 ECS 业务夹具。Android 构建 SHARED `MyGameEcsHost` 和导入 `PanguEcsHostCheck` 的可执行 `MyGameEcsHostCaller`，检查 ELF AArch64 和 Android ELF note。iOS 构建同源 `MyGameEcsHost` 可执行文件，检查 arm64 与 iPhoneOS Load Command。Modular 核对实际 ECS/flecs 动态依赖和各业务库唯一的 Module Query，Monolithic 核对最终镜像中的业务 Query 与静态 flecs。交叉目标不构建 GoogleTest，宿主 Meta 工具与目标链接隔离。验收后恢复移动 Monolithic、`BUILD_TESTING=OFF`、`PANGU_BUILD_BENCHMARKS=OFF`。[ECS 测试入口](../ECS/README.md) · [ECS 最终验收](../../docs/superpowers/plans/2026-11-18-ecs-world.md#ecs-交付验收)
+
+## 索引网格变换的 Linux 桌面验收
+
+`Renderer.DesktopIndexedMesh` 和 `Renderer.DesktopMeshTransform` 分别构建独立应用并在嵌套 Sway 中取色。变换目标还验证透视除法、非等比缩放后的旋转、resize 后右移以及设备重开后回到原位。
+
+若当前 GNOME 会话中的嵌套窗口长时间收不到呈现事件，可在 Ubuntu 真机启动独立 Mutter 虚拟显示。以下命令在第一个 SSH 终端运行，使用同一桌面用户的 `XDG_RUNTIME_DIR`。它打印独立 Wayland socket 的绝对路径。
+
+```sh
+runtime=$(mktemp -d "$XDG_RUNTIME_DIR/pg-mutter-XXXXXX")
+printf '%s\n' "$runtime/pangu-wayland"
+XDG_RUNTIME_DIR="$runtime" XDG_CONFIG_HOME="$runtime/config" XDG_CACHE_HOME="$runtime/cache" \
+    XDG_DATA_HOME="$runtime/data" GSETTINGS_BACKEND=memory \
+    dbus-run-session -- gnome-shell --wayland --headless --no-x11 \
+    --virtual-monitor 1280x720@60 --wayland-display pangu-wayland
+```
+
+在第二个终端将 `WAYLAND_DISPLAY` 设为上述路径，保留该终端原有的 `XDG_RUNTIME_DIR`，从共享源码目录运行 `WLR_RENDERER=vulkan ctest --preset linux -R '^Renderer[.]Desktop(IndexedMesh|MeshTransform)$' --no-tests=error --output-on-failure`。测试结束后在第一个终端以 Ctrl+C 关闭独立桌面。该流程使用真实 Vulkan 设备和原生 Wayland 窗口，画面证据取自合成器的虚拟输出。[网格变换实施与验收](../../docs/superpowers/plans/2026-11-26-renderer-mesh-transform.md)

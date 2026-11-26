@@ -52,8 +52,14 @@ require(panguLinkMode == "Monolithic" || panguLinkMode == "Modular") {
 val nativeActivity = rootProject.layout.projectDirectory.dir("..")
 val engine = rootProject.layout.projectDirectory.dir("../../../..")
 val indexedMesh = providers.gradleProperty("panguIndexedMesh").orElse("false").get().toBooleanStrict()
+val meshTransform = providers.gradleProperty("panguMeshTransform").orElse("false").get().toBooleanStrict()
+require(!(meshTransform && indexedMesh)) { "Choose one indexed mesh fixture" }
 val modeBuildRoot = engine.dir("Build/Android/Tests/NativeActivity/Gradle/$panguLinkMode")
-val gradleBuildRoot = if (indexedMesh) modeBuildRoot.dir("IndexedMesh") else modeBuildRoot
+val gradleBuildRoot = when {
+    meshTransform -> modeBuildRoot.dir("MeshTransform")
+    indexedMesh -> modeBuildRoot.dir("IndexedMesh")
+    else -> modeBuildRoot
+}
 layout.buildDirectory.set(gradleBuildRoot.dir("app"))
 
 val forge = engine.dir("Source/ThirdParty/TheForge/Repo")
@@ -80,6 +86,7 @@ android {
                 "-DPANGU_BUILD_FORGE_LINK_CHECK=ON",
                 "-DPANGU_BUILD_NATIVE_ACTIVITY_TRIANGLE=ON",
                 "-DPANGU_BUILD_NATIVE_ACTIVITY_INDEXED_MESH=${if (indexedMesh) "ON" else "OFF"}",
+                "-DPANGU_BUILD_NATIVE_ACTIVITY_MESH_TRANSFORM=${if (meshTransform) "ON" else "OFF"}",
                 "-DPANGU_BUILD_TRIANGLE_SHADER_CHECK=ON",
                 "-DPANGU_FORGE_USE_PREFAB_SWAPPY=ON",
                 "-DPANGU_LINK_MODE=$panguLinkMode",

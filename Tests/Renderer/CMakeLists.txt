@@ -148,7 +148,7 @@ if(APPLE AND NOT IOS AND PANGU_LINK_MODE STREQUAL "Modular")
 endif()
 
 if(APPLE AND NOT IOS)
-    foreach(linkFixture IN ITEMS Triangle IndexedMesh)
+    foreach(linkFixture IN ITEMS Triangle IndexedMesh MeshTransform)
         pangu_register_test(
             NAME Renderer.${linkFixture}Link
             COMMAND
@@ -209,16 +209,35 @@ if(WIN32 OR LINUX OR (APPLE AND NOT IOS))
     endif()
     set(desktopFixtures Frame)
     if((WIN32 OR LINUX) AND PANGU_BUILD_TRIANGLE_SHADER_CHECK)
+        pangu_register_test(
+            NAME Renderer.MeshTransformShaders
+            COMMAND
+                "${CMAKE_COMMAND}"
+                "-DengineSource=${PROJECT_SOURCE_DIR}"
+                "-DtestRoot=${CMAKE_BINARY_DIR}/Tests/Work/Renderer.MeshTransformShaders"
+                "-Dcompiler=${CMAKE_C_COMPILER}"
+                -P
+                "${CMAKE_CURRENT_SOURCE_DIR}/Acceptance/CheckMeshTransformShaders.cmake"
+            BOUNDARY integration
+            AREA renderer
+            TIER full
+            TYPES
+                contract
+            REQUIRES
+                nested-build
+            PROCESSORS "${PANGU_TEST_BUILD_JOBS}"
+        )
         list(
             APPEND desktopFixtures
             Triangle
             IndexedMesh
+            MeshTransform
         )
     endif()
     foreach(fixture IN LISTS desktopFixtures)
         set(projectTarget "First${fixture}")
-        if(fixture STREQUAL "IndexedMesh")
-            set(projectTarget IndexedMesh)
+        if(fixture STREQUAL "IndexedMesh" OR fixture STREQUAL "MeshTransform")
+            set(projectTarget "${fixture}")
         endif()
         pangu_register_test(
             NAME "Renderer.Desktop${fixture}"

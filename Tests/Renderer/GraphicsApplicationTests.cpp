@@ -40,7 +40,8 @@ Result<LoopControl> OnFrame(GraphicsContext& graphics) noexcept
         {
             return std::unexpected(reopened.error());
         }
-        const auto frame = graphics.PresentIndexedMesh(kBackground);
+        const renderer::MeshTransform transform{.Elements = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0.5F, 0, 0, 1}};
+        const auto frame = graphics.PresentIndexedMesh(kBackground, transform);
         return frame ? Result<LoopControl>{LoopControl::kStop} : std::unexpected(frame.error());
     }
     if (gTriangleBackend != nullptr)
@@ -129,6 +130,12 @@ TEST(Application, ReopenUsesProjectQuad)
     ASSERT_TRUE(completed);
     EXPECT_EQ(backend->Observations().QuadOpens, 2U);
     EXPECT_EQ(backend->Observations().IndexedSubmissions, 1U);
+    const auto& transform = backend->Observations().LastTransform;
+    if (!transform)
+    {
+        FAIL() << "No transform reached the backend";
+    }
+    EXPECT_EQ(transform->Elements.at(12), 0.5F);
 }
 
 TEST(Application, InvalidTriangleCanBeCorrectedInSameFrame)

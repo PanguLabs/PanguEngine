@@ -65,7 +65,9 @@
 #include <winuser.h>
 #endif
 // Forge 的分配宏要求此头在标准库头之后引入。
+#include <Common_3/Graphics/FSL/defaults.h>
 #include <Common_3/Utilities/Interfaces/IMemory.h>
+#include <MeshTransform.srt.h>
 
 #ifdef __ANDROID__
 extern "C" WindowDesc gWindow;
@@ -93,6 +95,7 @@ constexpr auto* kAppName = "PanguRenderer";
 constexpr auto* kGpuDataFile = "gpu.data";
 constexpr auto* kGpuConfigFile = "gpu.cfg";
 constexpr auto* kVertexShaderFile = "Graph.vert";
+constexpr auto* kTransformShaderFile = "MeshTransform.vert";
 constexpr auto* kFragmentShaderFile = "Graph.frag";
 #ifdef DIRECT3D12
 constexpr auto* kGraphicsRootFile = "default.rootsig";
@@ -353,7 +356,7 @@ class ForgeBackend final : public FrameBackend
 public:
     [[nodiscard]] Status Open(RendererOpenDesc desc) noexcept override;
     [[nodiscard]] Status Attach(NativeSurface surface, PixelSize size) noexcept override;
-    [[nodiscard]] Status PrepareTriangle(bool indexed) noexcept override;
+    [[nodiscard]] Status PrepareGeometry(FrameDraw draw) noexcept override;
     [[nodiscard]] Result<AcquireResult> Acquire() noexcept override;
     [[nodiscard]] Status Submit(LinearColor color, FrameDraw draw) noexcept override;
     void PresentImage() noexcept override;
@@ -372,7 +375,8 @@ private:
 
     [[nodiscard]] Status OpenRuntime(RendererOpenDesc desc) noexcept;
     [[nodiscard]] Status OpenCommands() noexcept;
-    [[nodiscard]] Status OpenTriangleResources() noexcept;
+    [[nodiscard]] Status OpenGeometryShader(bool transformed) noexcept;
+    [[nodiscard]] Status OpenTransformBuffer() noexcept;
     void OpenLoader() noexcept;
     [[nodiscard]] Status OpenIndexedMesh(const IndexedQuad& quad) noexcept;
     [[nodiscard]] Status OpenTriangleBuffer() noexcept;
@@ -393,6 +397,11 @@ private:
     std::vector<Semaphore*> ReadyToPresent;
     std::uint32_t Image{};
     Shader* TriangleShader{};
+    Shader* TransformShader{};
+    Pipeline* TransformPipeline{};
+    Buffer* TransformBuffer{};
+    DescriptorSet* TransformDescriptors{};
+    bool TransformDirectoryAvailable{};
     Buffer* TriangleBuffer{};
     Buffer* QuadVertices{};
     Buffer* QuadIndices{};
@@ -448,8 +457,12 @@ Status ForgeBackend::OpenRuntime(RendererOpenDesc desc) noexcept
         directory.at(shaderOffset + kShaderDirectory.size()) = '\0';
         fsSetPathForResourceDir(pSystemFileIO, RD_SHADER_BINARIES, directory.data());
         ShaderDirectoryAvailable = true;
+        TransformDirectoryAvailable = shaderOffset + kShaderDirectory.size() + shaderRelativeBytes -
+                                          kLongestShaderFile.size() + std::string_view{kTransformShaderFile}.size() <=
+                                      directory.size();
     }
 #else
+    TransformDirectoryAvailable = true;
     // Android 的打包应用由 Forge PathStatement 挂载 APK 内的资源目录。
     ShaderDirectoryAvailable = true;
 #endif
@@ -661,14 +674,15 @@ Result<AcquireResult> ForgeBackend::Acquire() noexcept
     return AcquireResult::kReady;
 }
 
-Status ForgeBackend::OpenTriangleResources() noexcept
+Status ForgeBackend::OpenGeometryShader(bool transformed) noexcept
 {
     std::uint64_t variant = 0;
 #ifdef VULKAN
     variant = Device->pGpu->mDescriptorIndexingExtension;
 #endif
-    if (!ShaderDirectoryAvailable || !ShaderBinaryAvailable(kVertexShaderFile, variant) ||
-        !ShaderBinaryAvailable(kFragmentShaderFile, variant)
+    const auto* vertexFile = transformed ? kTransformShaderFile : kVertexShaderFile;
+    if (!(transformed ? TransformDirectoryAvailable : ShaderDirectoryAvailable) ||
+        !ShaderBinaryAvailable(vertexFile, variant) || !ShaderBinaryAvailable(kFragmentShaderFile, variant)
 #ifdef DIRECT3D12
         || !ShaderBinaryAvailable(kGraphicsRootFile, variant)
 #endif
@@ -677,28 +691,33 @@ Status ForgeBackend::OpenTriangleResources() noexcept
         return Failure(RendererStage::kSubmit, RendererError::kShaderUnavailable);
     }
 
-    RootSignatureDesc root{};
-#ifdef DIRECT3D12
-    root.pGraphicsFileName = kGraphicsRootFile;
-#endif
-    initRootSignature(Device, &root);
-#ifdef DIRECT3D12
-    RootSignatureReady = Device->mDx.pGraphicsRootSignature != nullptr;
-#elifdef VULKAN
-    RootSignatureReady = Device->mVk.pEmptyStaticSamplerDescriptorSet != nullptr;
-#else
-    RootSignatureReady = true;
-#endif
     if (!RootSignatureReady)
     {
-        return Failure(RendererStage::kSubmit, RendererError::kShaderUnavailable);
+#ifdef DIRECT3D12
+        const RootSignatureDesc root{.pGraphicsFileName = kGraphicsRootFile, .pComputeFileName = nullptr};
+#else
+        const RootSignatureDesc root{};
+#endif
+        initRootSignature(Device, &root);
+#ifdef DIRECT3D12
+        RootSignatureReady = Device->mDx.pGraphicsRootSignature != nullptr;
+#elifdef VULKAN
+        RootSignatureReady = Device->mVk.pEmptyStaticSamplerDescriptorSet != nullptr;
+#else
+        RootSignatureReady = true;
+#endif
+        if (!RootSignatureReady)
+        {
+            return Failure(RendererStage::kSubmit, RendererError::kShaderUnavailable);
+        }
     }
 
     ShaderLoadDesc shader{};
-    shader.mVert.pFileName = kVertexShaderFile;
+    shader.mVert.pFileName = vertexFile;
     shader.mFrag.pFileName = kFragmentShaderFile;
-    addShader(Device, &shader, &TriangleShader);
-    if (TriangleShader == nullptr)
+    auto& program = transformed ? TransformShader : TriangleShader;
+    addShader(Device, &shader, &program);
+    if (program == nullptr)
     {
         return Failure(RendererStage::kSubmit, RendererError::kShaderUnavailable);
     }
@@ -816,16 +835,53 @@ Status ForgeBackend::OpenTriangleBuffer() noexcept
                                                                                      : Failure(RendererStage::kSubmit);
 }
 
-Status ForgeBackend::PrepareTriangle(bool indexed) noexcept
+Status ForgeBackend::OpenTransformBuffer() noexcept
 {
-    if (!indexed && TriangleBuffer == nullptr)
+    BufferLoadDesc uniform{};
+    uniform.ppBuffer = &TransformBuffer;
+    uniform.mDesc.mSize = sizeof(MeshTransform);
+    uniform.mDesc.mDescriptors = DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    uniform.mDesc.mMemoryUsage = RESOURCE_MEMORY_USAGE_CPU_TO_GPU;
+    uniform.mDesc.mFlags = BUFFER_CREATION_FLAG_PERSISTENT_MAP_BIT;
+#ifdef VULKAN
+    uniform.mDesc.mFlags |= BUFFER_CREATION_FLAG_HOST_COHERENT;
+#endif
+    uniform.mDesc.mStartState = RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    uniform.mDesc.pName = "Mesh transform";
+    addResource(&uniform, nullptr);
+    if (!HasNativeBuffer(TransformBuffer) || TransformBuffer->pCpuMappedAddress == nullptr)
+    {
+        return Failure(RendererStage::kSubmit);
+    }
+    // defaults.h 依后端提供 SRT 宏，描述符的资源种类决定 Forge union 成员。
+    // NOLINTNEXTLINE(misc-include-cleaner)
+    const DescriptorSetDesc desc = SRT_SET_DESC(MeshTransformSrt, PerFrame, 1, 0);
+    addDescriptorSet(Device, &desc, &TransformDescriptors);
+    if (TransformDescriptors == nullptr)
+    {
+        return Failure(RendererStage::kSubmit);
+    }
+    DescriptorData binding{};
+    // NOLINTNEXTLINE(misc-include-cleaner)
+    binding.mIndex = SRT_RES_IDX(MeshTransformSrt, PerFrame, gMeshTransform);
+    binding.ppBuffers = &TransformBuffer; // NOLINT(cppcoreguidelines-pro-type-union-access)
+    updateDescriptorSet(Device, 0, TransformDescriptors, 1, &binding);
+    return {};
+}
+
+Status ForgeBackend::PrepareGeometry(FrameDraw draw) noexcept
+{
+    if (!draw.Indexed && TriangleBuffer == nullptr)
     {
         if (const auto status = OpenTriangleBuffer(); !status)
         {
             return status;
         }
     }
-    if (TrianglePipeline != nullptr)
+    const bool transformed = draw.Transform != nullptr;
+    auto& selectedPipeline = transformed ? TransformPipeline : TrianglePipeline;
+    auto& program = transformed ? TransformShader : TriangleShader;
+    if (selectedPipeline != nullptr)
     {
         return {};
     }
@@ -835,11 +891,18 @@ Status ForgeBackend::PrepareTriangle(bool indexed) noexcept
     {
         return Failure(RendererStage::kSubmit);
     }
-    if (TriangleShader == nullptr)
+    if (program == nullptr)
     {
-        if (const auto opened = OpenTriangleResources(); !opened)
+        if (const auto opened = OpenGeometryShader(transformed); !opened)
         {
             return opened;
+        }
+    }
+    if (transformed && TransformBuffer == nullptr)
+    {
+        if (const auto resources = OpenTransformBuffer(); !resources)
+        {
+            return resources;
         }
     }
     VertexLayout vertexLayout{};
@@ -862,7 +925,7 @@ Status ForgeBackend::PrepareTriangle(bool indexed) noexcept
     auto format = target->mFormat;
     // Forge 没有零值 SampleCount，提交前使用颜色附件的采样数。
     GraphicsPipelineDesc graphics{}; // NOLINT(bugprone-invalid-enum-default-initialization)
-    graphics.pShaderProgram = TriangleShader;
+    graphics.pShaderProgram = program;
     graphics.pVertexLayout = &vertexLayout;
     graphics.pRasterizerState = &rasterizer;
     graphics.pColorFormats = &format;
@@ -871,26 +934,32 @@ Status ForgeBackend::PrepareTriangle(bool indexed) noexcept
     graphics.mSampleQuality = target->mSampleQuality;
     graphics.mDepthStencilFormat = TinyImageFormat_UNDEFINED;
     graphics.mPrimitiveTopo = PRIMITIVE_TOPO_TRI_LIST;
+#ifdef VULKAN
+    // Vulkan 通过 defaults.h 选择相应的 SRT 布局定义。
+    // NOLINTNEXTLINE(misc-include-cleaner)
+    const auto* perFrameLayout = SRT_LAYOUT_DESC(MeshTransformSrt, PerFrame);
+    std::array layouts{&gStaticSamplerLayout, perFrameLayout};
+#endif
     const PipelineDesc pipeline{
         .mGraphicsDesc = graphics,
         .pCache = nullptr,
         .pPipelineExtensions = nullptr,
-        .pName = "Triangle",
+        .pName = transformed ? "Mesh transform" : "Triangle",
         .mType = PIPELINE_TYPE_GRAPHICS,
         .mExtensionCount = 0,
 #ifdef VULKAN
-        .pLayouts = nullptr,
-        .mLayoutCount = 0,
+        .pLayouts = transformed ? layouts.data() : nullptr,
+        .mLayoutCount = transformed ? 2U : 0U,
 #endif
     };
-    addPipeline(Device, &pipeline, &TrianglePipeline);
+    addPipeline(Device, &pipeline, &selectedPipeline);
     // Forge 可能在原生创建失败后仍返回包装对象。会话关闭时由 RetireSurface 回收。
-    if (TrianglePipeline == nullptr
+    if (selectedPipeline == nullptr
 #ifdef DIRECT3D12
         // Forge 的 D3D12 图形 Pipeline 使用该 union 成员。
-        || TrianglePipeline->mDx.pPipelineState == nullptr // NOLINT(cppcoreguidelines-pro-type-union-access)
+        || selectedPipeline->mDx.pPipelineState == nullptr // NOLINT(cppcoreguidelines-pro-type-union-access)
 #elifdef VULKAN
-        || TrianglePipeline->mVk.pPipeline == VK_NULL_HANDLE
+        || selectedPipeline->mVk.pPipeline == VK_NULL_HANDLE
 #endif
     )
     {
@@ -903,7 +972,11 @@ void ForgeBackend::RecordGeometry(const RenderTarget& target, FrameDraw draw) no
 {
     cmdSetViewport(Command, 0, 0, static_cast<float>(target.mWidth), static_cast<float>(target.mHeight), 0, 1);
     cmdSetScissor(Command, 0, 0, target.mWidth, target.mHeight);
-    cmdBindPipeline(Command, TrianglePipeline);
+    cmdBindPipeline(Command, draw.Transform != nullptr ? TransformPipeline : TrianglePipeline);
+    if (draw.Transform != nullptr)
+    {
+        cmdBindDescriptorSet(Command, 0, TransformDescriptors);
+    }
     if (draw.Indexed)
     {
         cmdBindVertexBuffer(Command, 1, &QuadVertices, &kTriangleVertexStride, nullptr);
@@ -926,6 +999,19 @@ Status ForgeBackend::Submit(LinearColor color, FrameDraw draw) noexcept
     if (target == nullptr)
     {
         return Failure(RendererStage::kSubmit);
+    }
+    if (draw.Transform != nullptr)
+    {
+        // Acquire 已等待上一次读取矩阵的命令 Fence。
+        BufferUpdateDesc update{};
+        update.pBuffer = TransformBuffer;
+        beginUpdateResource(&update);
+        if (update.pMappedData == nullptr)
+        {
+            return Failure(RendererStage::kSubmit);
+        }
+        std::memcpy(update.pMappedData, draw.Transform->Elements.data(), sizeof(draw.Transform->Elements));
+        endUpdateResource(&update);
     }
     resetCmdPool(Device, CommandPool);
     beginCmd(Command);
@@ -990,6 +1076,10 @@ void ForgeBackend::RetireSurface() noexcept
     }
 
     waitQueueIdle(GraphicsQueue);
+    if (TransformPipeline != nullptr)
+    {
+        removePipeline(Device, std::exchange(TransformPipeline, nullptr));
+    }
     if (TrianglePipeline != nullptr)
     {
         removePipeline(Device, std::exchange(TrianglePipeline, nullptr));
@@ -1017,6 +1107,18 @@ void ForgeBackend::RetireSurface() noexcept
 void ForgeBackend::CloseTriangleResources() noexcept
 {
     QuadUploadReady = nullptr;
+    if (TransformDescriptors != nullptr)
+    {
+        removeDescriptorSet(Device, std::exchange(TransformDescriptors, nullptr));
+    }
+    if (TransformBuffer != nullptr)
+    {
+        removeResource(std::exchange(TransformBuffer, nullptr));
+    }
+    if (TransformShader != nullptr)
+    {
+        removeShader(Device, std::exchange(TransformShader, nullptr));
+    }
     if (QuadIndices != nullptr)
     {
         removeResource(std::exchange(QuadIndices, nullptr));
@@ -1047,6 +1149,7 @@ void ForgeBackend::Close() noexcept
 {
     CloseTriangleResources();
     ShaderDirectoryAvailable = false;
+    TransformDirectoryAvailable = false;
     if (CommandFence != nullptr)
     {
         exitFence(Device, std::exchange(CommandFence, nullptr));

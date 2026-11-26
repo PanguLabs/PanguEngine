@@ -93,6 +93,38 @@ TEST(Session, BusyAndRollback)
     EXPECT_EQ(Calls(second.Backend(), BackendCall::kClose), 1);
 }
 
+TEST(Session, IndexedMeshUsesEachSubmittedTransform)
+{
+    constexpr IndexedQuad kQuad{.Indices = {0, 1, 2, 0, 2, 3}};
+    SessionRig rig;
+    auto& session = rig.Session();
+    ASSERT_TRUE(session.Open({.Quad = &kQuad}));
+    ASSERT_TRUE(session.Attach(kIdA, kWindow, kSize));
+    MeshTransform transform{.Elements = {1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1}};
+    const auto first = transform.Elements;
+    ASSERT_EQ(session.PresentIndexedMesh(kColor, transform), FrameResult::kPresentRequested);
+    const auto& observations = rig.Backend().Observations();
+    if (!observations.LastTransform)
+    {
+        FAIL() << "No transform reached the backend";
+    }
+    EXPECT_EQ(observations.LastTransform->Elements, first);
+    transform.Elements.at(12) = 0.5F;
+    const auto second = transform.Elements;
+    ASSERT_EQ(session.PresentIndexedMesh(kColor, transform), FrameResult::kPresentRequested);
+    transform.Elements.fill(0);
+    if (!observations.LastTransform)
+    {
+        FAIL() << "No transform reached the backend";
+    }
+    EXPECT_EQ(observations.LastTransform->Elements, second);
+    ASSERT_EQ(session.PresentIndexedMesh(kColor), FrameResult::kPresentRequested);
+    EXPECT_FALSE(observations.LastTransform);
+    ASSERT_TRUE(session.SetPaused(true));
+    EXPECT_EQ(session.PresentIndexedMesh(kColor, transform), FrameResult::kSkipped);
+    EXPECT_EQ(observations.IndexedSubmissions, 3U);
+}
+
 TEST(Session, IndexedMeshSurvivesSurfaceChanges)
 {
     constexpr IndexedQuad kQuad{.Indices = {0, 1, 2, 0, 2, 3}};

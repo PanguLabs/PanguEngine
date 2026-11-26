@@ -281,6 +281,13 @@ Result<FrameResult> GraphicsContext::Present(LinearColor color) noexcept
 {
     return App.Present([color](auto& session) { return session.Present(color); });
 }
+Result<FrameResult> GraphicsContext::PresentIndexedMesh(LinearColor clearColor,
+                                                        const renderer::MeshTransform& transform) noexcept
+{
+    return App.Present([clearColor, &transform](auto& session)
+                       { return session.PresentIndexedMesh(clearColor, transform); });
+}
+
 Result<FrameResult> GraphicsContext::PresentIndexedMesh(LinearColor clearColor) noexcept
 {
     return App.Present([clearColor](auto& session) { return session.PresentIndexedMesh(clearColor); });

@@ -1,7 +1,7 @@
 include_guard(GLOBAL)
 
 function(pangu_add_triangle_shaders)
-    cmake_parse_arguments(PARSE_ARGV 0 arg "" "TARGET;BUILD_ROOT;DEPLOY_DIRECTORY" "")
+    cmake_parse_arguments(PARSE_ARGV 0 arg "MESH_TRANSFORM_SHADERS" "TARGET;BUILD_ROOT;DEPLOY_DIRECTORY" "")
     if(NOT arg_TARGET OR NOT arg_BUILD_ROOT OR arg_UNPARSED_ARGUMENTS OR arg_KEYWORDS_MISSING_VALUES)
         message(FATAL_ERROR "pangu_add_triangle_shaders requires TARGET <name> BUILD_ROOT <directory>")
     endif()
@@ -61,6 +61,21 @@ function(pangu_add_triangle_shaders)
         message(FATAL_ERROR "Forge triangle shaders have no target platform for ${CMAKE_SYSTEM_NAME}")
     endif()
 
+    set(shaderList "${shaderSource}/shaders.list")
+    set(extraInputs)
+    if(arg_MESH_TRANSFORM_SHADERS)
+        set(shaderList "${shaderSource}/mesh-transform.list")
+        list(
+            APPEND extraInputs
+            "${shaderSource}/MeshTransform.vert.fsl"
+            "${shaderSource}/MeshTransform.srt.h"
+        )
+        if(APPLE)
+            list(APPEND shaderNames MeshTransform.vert.metal)
+        else()
+            list(APPEND shaderNames MeshTransform.vert)
+        endif()
+    endif()
     if(APPLE)
         find_program(xcrun NAMES xcrun NO_CMAKE_FIND_ROOT_PATH NO_CACHE)
         if(xcrun)
@@ -196,12 +211,14 @@ function(pangu_add_triangle_shaders)
         COMMAND
             "${CMAKE_COMMAND}" -E env ${fslEnvironment} "${Python3_EXECUTABLE}" -B "${fslDirectory}/fsl.py" --compile
             --mp 0 --language "${shaderPlatform}" --destination "${workDirectory}/Source" --binaryDestination
-            "${binaryDirectory}" "${shaderSource}/shaders.list"
+            "${binaryDirectory}" "${shaderList}"
         # Forge 已将载荷写入容器，部署目录只保留加载器所需文件。
         COMMAND
             "${CMAKE_COMMAND}" -E rm -f ${looseDerivatives}
         DEPENDS
             "${shaderSource}/shaders.list"
+            "${shaderList}"
+            ${extraInputs}
             "${shaderSource}/Graph.vert.fsl"
             "${shaderSource}/Graph.frag.fsl"
             ${fslInputs}
@@ -220,28 +237,26 @@ function(pangu_add_triangle_shaders)
         if(CMAKE_HOST_WIN32)
             string(TOLOWER "${deployKey}" deployKey)
         endif()
-        string(SHA256 deployKey "${deployKey}")
-        set(producer "PanguTriangleShaderDeployment_${deployKey}")
-        # 各目标仍独立生成，使用同一平台部署目录的目标共用文件级复制规则。
-        if(NOT TARGET "${producer}")
-            set(deployedOutputs)
-            foreach(shaderName IN LISTS shaderNames)
-                list(APPEND deployedOutputs "${deployDirectory}/${shaderName}")
-            endforeach()
-            add_custom_command(
-                OUTPUT
-                    ${deployedOutputs}
-                COMMAND
-                    "${CMAKE_COMMAND}" -E make_directory "${deployDirectory}"
-                COMMAND
-                    "${CMAKE_COMMAND}" -E copy ${outputs} "${deployDirectory}"
-                DEPENDS
-                    ${outputs}
-                COMMENT "Deploying Forge triangle shaders for ${shaderPlatform}"
-                VERBATIM
-            )
-            add_custom_target("${producer}" DEPENDS ${deployedOutputs})
-        endif()
-        add_dependencies("${arg_TARGET}" "${producer}")
+        foreach(shaderName IN LISTS shaderNames)
+            string(SHA256 fileKey "${deployKey}/${shaderName}")
+            set(producer "PanguShaderDeployment_${fileKey}")
+            if(NOT TARGET "${producer}")
+                set(deployed "${deployDirectory}/${shaderName}")
+                set(compiled "${platformBinaries}/${shaderName}")
+                add_custom_command(
+                    OUTPUT
+                        "${deployed}"
+                    COMMAND
+                        "${CMAKE_COMMAND}" -E make_directory "${deployDirectory}"
+                    COMMAND
+                        "${CMAKE_COMMAND}" -E copy "${compiled}" "${deployed}"
+                    DEPENDS
+                        "${compiled}"
+                    VERBATIM
+                )
+                add_custom_target("${producer}" DEPENDS "${deployed}")
+            endif()
+            add_dependencies("${arg_TARGET}" "${producer}")
+        endforeach()
     endif()
 endfunction()

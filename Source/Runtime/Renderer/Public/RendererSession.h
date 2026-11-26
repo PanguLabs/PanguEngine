@@ -43,6 +43,8 @@ public:
     [[nodiscard]] Status SetPaused(bool paused) noexcept;
     [[nodiscard]] Result<FrameResult> Present(LinearColor color) noexcept;
     [[nodiscard]] Result<FrameResult> PresentIndexedMesh(LinearColor clearColor) noexcept;
+    [[nodiscard]] Result<FrameResult> PresentIndexedMesh(LinearColor clearColor,
+                                                         const MeshTransform& transform) noexcept;
     [[nodiscard]] Result<FrameResult> PresentTriangle(LinearColor clearColor,
                                                       const std::array<TriangleVertex, 3>& vertices) noexcept;
     // 会话线程同步清理并释放进程占用，返回已记录的首个错误。

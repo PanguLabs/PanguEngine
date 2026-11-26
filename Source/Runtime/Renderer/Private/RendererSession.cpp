@@ -177,6 +177,11 @@ Result<FrameResult> RendererSession::PresentIndexedMesh(LinearColor clearColor) 
     return PresentFrame(clearColor, {.Indexed = true});
 }
 
+Result<FrameResult> RendererSession::PresentIndexedMesh(LinearColor clearColor, const MeshTransform& transform) noexcept
+{
+    return PresentFrame(clearColor, {.Indexed = true, .Transform = &transform});
+}
+
 Result<FrameResult> RendererSession::PresentTriangle(LinearColor clearColor,
                                                      const std::array<TriangleVertex, 3>& vertices) noexcept
 {
@@ -207,7 +212,7 @@ Result<FrameResult> RendererSession::PresentFrame(LinearColor color, detail::Fra
         {
             return Reject(RendererStage::kSubmit, RendererError::kInvalidVertex);
         }
-        if (const auto prepared = Backend->PrepareTriangle(draw.Indexed); !prepared)
+        if (const auto prepared = Backend->PrepareGeometry(draw); !prepared)
         {
             return FailFrame(prepared.error());
         }

@@ -43,6 +43,8 @@ public:
     // kPresentRequested 表示 Forge 的呈现调用已返回。
     [[nodiscard]] Result<FrameResult> Present(LinearColor color) noexcept;
     [[nodiscard]] Result<FrameResult> PresentIndexedMesh(LinearColor clearColor) noexcept;
+    [[nodiscard]] Result<FrameResult> PresentIndexedMesh(LinearColor clearColor,
+                                                         const renderer::MeshTransform& transform) noexcept;
     // 顶点使用 X 向右、Y 向上的裁剪空间及线性 RGBA，调用返回后可立即修改。
     [[nodiscard]] Result<FrameResult> PresentTriangle(LinearColor clearColor,
                                                       const std::array<TriangleVertex, 3>& vertices) noexcept;

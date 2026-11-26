@@ -1,5 +1,7 @@
 # Android Studio Vulkan 真机测试
 
+变换四边形使用 `-PpanguMeshTransform=true` 构建，并用 `Observe.ps1 -MeshTransform` 验证窗口撤销前的左移和恢复后的右移。产物在对应链接模式的 `MeshTransform/` 子目录。
+
 索引四边形与桌面共用 `IndexedMesh.cpp`。在下列 Gradle 命令附加 `-PpanguIndexedMesh=true` 选择该夹具，APK 和 CMake 缓存进入对应链接模式的 `IndexedMesh/` 子目录。安装该 APK 后，给 `Observe.ps1` 加 `-IndexedMesh`，验证同一 Activity 两代窗口中的绿色、红色三角区域和黑色背景。
 
 打开本目录，在 Android Studio 中选择 `agdkDebug`。它构建引擎的 `PanguNativeActivityCheck`，使用与桌面相同的 `FirstTriangle` 夹具，从 `NativeActivity` 经 `Pangu::Renderer` 调用 The Forge Graphics。调试 APK 使用原生 Debug、ARM64 和 API 29，链接模式默认为 Monolithic。Gradle 与 CMake 中间产物放在 `Build/Android/Tests/NativeActivity/Gradle/<链接模式>`。

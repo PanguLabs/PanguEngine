@@ -19,7 +19,13 @@ add_library(
 )
 add_library(Pangu::Renderer ALIAS PanguRenderer)
 pangu_configure_module(PanguRenderer EXPORT_MACRO PG_RENDERER_API)
-target_include_directories(PanguRenderer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/Public")
+target_include_directories(
+    PanguRenderer
+    PUBLIC
+        "${CMAKE_CURRENT_SOURCE_DIR}/Public"
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../../Shaders/FSL"
+)
 target_link_libraries(
     PanguRenderer
     PUBLIC

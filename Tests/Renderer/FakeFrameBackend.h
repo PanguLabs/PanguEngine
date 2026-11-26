@@ -72,6 +72,7 @@ struct BackendObservations
     std::uint64_t QuadOpens{};
     std::uint64_t SuccessfulSubmissions{};
     LinearColor LastColor;
+    std::optional<MeshTransform> LastTransform;
     std::optional<std::array<TriangleVertex, 3>> LastTriangle;
     bool SawRevocationDuringAcquire{};
     std::vector<BackendEvent> Events;
@@ -113,7 +114,7 @@ public:
         return TakeFailure(RendererStage::kAttach);
     }
 
-    [[nodiscard]] Status PrepareTriangle(bool /*indexed*/) noexcept override
+    [[nodiscard]] Status PrepareGeometry(FrameDraw /*draw*/) noexcept override
     {
         Record(BackendCall::kPrepareTriangle);
         const auto error = std::exchange(Script.NextTrianglePreparationError, std::nullopt);
@@ -143,6 +144,7 @@ public:
         }
         Record(BackendCall::kSubmit);
         History.LastColor = color;
+        History.LastTransform = draw.Transform != nullptr ? std::optional{*draw.Transform} : std::nullopt;
         History.LastTriangle = draw.Triangle != nullptr ? std::optional{*draw.Triangle} : std::nullopt;
         if (draw.Indexed)
         {

@@ -15,3 +15,7 @@ Windows D3D12 和 Linux Wayland Vulkan 使用独立 Project 验证同一交换�
 ## 静态索引四边形
 
 图形 Project 可通过 `pangu_add_application(... INDEXED_MESH TRIANGLE_SHADERS ...)` 接入静态索引四边形，在 Project 中定义 `pg::app::kIndexedQuad` 提供四个顶点和六个 16 位索引。Renderer 在设备打开时上传这对缓冲。`GraphicsContext::PresentIndexedMesh` 逐帧绑定缓冲并呈现；普通 resize 保留几何，完整重开设备时从同一份 Project 数据重新上传。[索引绘制规格](../../docs/superpowers/specs/2026-11-25-renderer-indexed-mesh-design.md)
+
+## 索引网格逐帧变换
+
+应用目标用 `INDEXED_MESH MESH_TRANSFORM_SHADERS` 启用几何和变换着色器，在每帧调用 `PresentIndexedMesh(clearColor, transform)`。传入的 `pg::renderer::MeshTransform::Elements` 以列为序保存 16 个有限浮点数，作用于列向量 `(x,y,0,1)ᵀ`，输出包含齐次 w。Renderer 在上一条 GPU 命令完成后更新矩阵缓冲，继续使用设备上的静态顶点及索引。单参数入口仍使用原有 Graph 着色器。运行时 API 尚未冻结。[设计规格](../../docs/superpowers/specs/2026-11-26-renderer-mesh-transform-design.md) · [平台验收进度](../../docs/superpowers/plans/2026-11-26-renderer-mesh-transform.md)

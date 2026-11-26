@@ -26,6 +26,7 @@ struct FrameDraw
 {
     const std::array<TriangleVertex, 3>* Triangle{};
     bool Indexed{};
+    const MeshTransform* Transform{};
 };
 
 class FrameBackend
@@ -40,7 +41,7 @@ public:
     [[nodiscard]] virtual Status Open(RendererOpenDesc desc) noexcept = 0;
     [[nodiscard]] virtual Status Attach(NativeSurface surface, PixelSize size) noexcept = 0;
     // 绘制资源在获得图像及其信号量之前完成准备，失败按提交阶段报告。
-    [[nodiscard]] virtual Status PrepareTriangle(bool indexed) noexcept = 0;
+    [[nodiscard]] virtual Status PrepareGeometry(FrameDraw draw) noexcept = 0;
     // 取图结果返回会话后，由会话检查撤销并决定是否提交。
     [[nodiscard]] virtual Result<AcquireResult> Acquire() noexcept = 0;
     // 会话与撤销在同一个同步点仲裁。取得授权即成为在途提交，撤销发布不等待驱动调用。

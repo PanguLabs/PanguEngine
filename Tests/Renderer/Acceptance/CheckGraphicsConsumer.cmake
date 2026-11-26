@@ -12,6 +12,12 @@ foreach(index RANGE 0 "${lastEntry}")
         file
     )
     if(source MATCHES "[/\\\\]Project[/\\\\]${target}[.]cpp$")
+        string(
+            JSON callbackObject
+            GET "${commands}"
+            "${index}"
+            output
+        )
         math(EXPR callbackCount "${callbackCount} + 1")
         string(
             JSON command

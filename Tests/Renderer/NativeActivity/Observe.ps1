@@ -3,7 +3,8 @@
     [string]$AndroidSdk = $env:ANDROID_HOME,
     [string]$Serial,
     [switch]$ClearFrame,
-    [switch]$IndexedMesh
+    [switch]$IndexedMesh,
+    [switch]$MeshTransform
 )
 
 $ErrorActionPreference = 'Stop'
@@ -11,7 +12,7 @@ $adb = Join-Path $AndroidSdk 'platform-tools/adb.exe'
 $device = if ($Serial) { @('-s', $Serial) } else { @() }
 $package = 'com.pangulabs.nativeactivitycheck.gradle.agdk'
 $activity = "$package/android.app.NativeActivity"
-$frameTag = if ($IndexedMesh) { 'PanguIndexedMesh' } elseif ($ClearFrame) { 'PanguFirstFrame' } else { 'PanguFirstTriangle' }
+$frameTag = if ($IndexedMesh -or $MeshTransform) { 'PanguIndexedMesh' } elseif ($ClearFrame) { 'PanguFirstFrame' } else { 'PanguFirstTriangle' }
 . (Join-Path $PSScriptRoot 'SurfaceFlinger.ps1')
 
 function Invoke-Device {
@@ -68,14 +69,18 @@ function Save-GeometryScreenshot([string]$path, [int]$generation) {
 
     # 索引网格的期望值使用 sRGB，解码时应用设备截图内嵌的 ICC 配置。
     $bitmap = [System.Drawing.Bitmap]::new($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($path),
-                                          $IndexedMesh.IsPresent)
+                                          ($IndexedMesh.IsPresent -or $MeshTransform.IsPresent))
     try {
         $expected = if ($generation -eq 1) { @('6C6CDA', 'A0A095', '000000', '000000') }
                     else { @('000000', '000000', '6CDA6C', 'A095A0') }
         # Android 合成截图的高饱和色偏差较大，仍分别验证插值主色、混色和空白区域。
         $tolerances = if ($generation -eq 1) { @(32, 8, 4, 4) } else { @(4, 4, 32, 8) }
         $positions = @(@(25, 40), @(25, 60), @(75, 40), @(75, 60))
-        if ($IndexedMesh) {
+        if ($MeshTransform) {
+            $positions = @(@(32.5, 57.5), @(82.5, 57.5))
+            $expected = if ($generation -eq 1) { @('BC0000', '000000') } else { @('000000', 'BC0000') }
+            $tolerances = if ($generation -eq 1) { @(32, 4) } else { @(4, 32) }
+        } elseif ($IndexedMesh) {
             $positions = @(@(31.25, 31.25), @(68.75, 68.75), @(5, 50))
             $expected = @('00BC00', 'BC0000', '000000')
             $tolerances = @(32, 32, 4)
@@ -101,6 +106,7 @@ Add-Type -AssemblyName System.Drawing
 Invoke-Device shell pm path $package | Out-Null
 Invoke-Device shell am force-stop $package | Out-Null
 try {
+    if ($MeshTransform) { Invoke-Device shell setprop debug.pangu.mesh_pose L }
     Invoke-Device shell am start -W -n $activity | Out-Null
     $activityPid = (Invoke-Device shell pidof $package | Select-Object -First 1)
     if ($activityPid -notmatch '^\d+$') { throw 'NativeActivity 进程启动失败。' }
@@ -111,9 +117,11 @@ try {
     Invoke-Device shell am start -W -a android.intent.action.MAIN -c android.intent.category.HOME | Out-Null
     Wait-ActivityLog 'activity-paused$'
     Wait-ActivityLog 'window-retired generation=1$'
+    if ($MeshTransform) { Invoke-Device shell setprop debug.pangu.mesh_pose R }
     Invoke-Device shell am start -W -n $activity | Out-Null
     Wait-ActivityLog 'window-ready generation=2$'
     $null = Wait-ActivityPresentation 2 $firstPresentation
+    if ($MeshTransform) { Invoke-Device shell setprop debug.pangu.mesh_pose D }
     Wait-ActivityLog 'host-closed$'
 
     $firstWindow = Select-String -LiteralPath $LogPath -Pattern "^\S+\s+\S+\s+$activityPid\s+(\d+)\s+I\s+PanguApplication:\s+window-ready generation=1$" |
@@ -126,5 +134,6 @@ try {
     }
     "NativeActivity and Vulkan presentation verified in process $activityPid on thread $activityThread"
 } finally {
+    if ($MeshTransform) { Invoke-Device shell setprop debug.pangu.mesh_pose idle }
     Invoke-Device shell am force-stop $package | Out-Null
 }

@@ -81,7 +81,8 @@ def verify_window(executable, target, tools, loader_debug):
     if loader_debug:
         app_env["LD_DEBUG"] = loader_debug
     triangle = target == "FirstTriangle"
-    indexed = target == "IndexedMesh"
+    transformed = target == "MeshTransform"
+    indexed = target == "IndexedMesh" or transformed
     label = "indexed-mesh" if indexed else "first-triangle" if triangle else "first-frame"
     initial = (720, 480)
     resized = (560, 360)
@@ -129,11 +130,27 @@ def verify_window(executable, target, tools, loader_debug):
                 colors = ("00BC00", "BC0000", "000000")
                 first, pixels = wait_for("indexed quad", lambda: sample(initial, positions, colors, 4))
                 print(f"Initial indexed quad: {pixels}")
+                if transformed:
+                    stages = (
+                        ("rotate", ((55, 37.5),), ("CB0000",)),
+                        ("perspective", ((82.5, 50), (70, 50)), ("000000", "9C0000")),
+                        ("left", ((32.5, 57.5), (82.5, 57.5)), ("BC0000", "000000")),
+                    )
+                    for signal, positions, colors in stages:
+                        Path(signal).touch()
+                        _, pixels = wait_for(signal, lambda: sample(initial, positions, colors, 4))
+                        print(f"{signal}: {pixels}")
                 resize()
+                if transformed:
+                    Path("right").touch()
+                    colors = ("000000", "BC0000")
                 second, pixels = wait_for("resized quad", lambda: sample(resized, positions, colors, 4))
                 print(f"Resized indexed quad: {pixels}")
                 Path("reopen").touch()
                 wait_for("reopened device", lambda: "indexed-mesh reopened" in progress.read_text())
+                if transformed:
+                    positions = ((31.25, 31.25), (68.75, 68.75), (5, 5))
+                    colors = ("00BC00", "BC0000", "000000")
                 third, pixels = wait_for("reopened quad", lambda: sample(resized, positions, colors, 4))
                 print(f"Reopened indexed quad: {pixels}")
                 if first != second or second != third:
