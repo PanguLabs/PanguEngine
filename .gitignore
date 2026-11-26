@@ -76,3 +76,6 @@ Testing/
 
 # Local experimental probes (not part of the tracked source)
 /.probe/
+
+# Local device credentials
+/.local/
