@@ -2,6 +2,8 @@
 
 图形与渲染功能以仓库固定的 The Forge v1.63 的公开接口和实现为准。PanguEngine 自定要求超出该版本的公开能力时，直接取消。接入验收依据公开接口可观察的结果和适用的平台契约。[Renderer 接入规格](../../docs/superpowers/specs/2026-11-20-renderer-forge-igraphics-design.md)
 
+接入前先查阅固定版本的 The Forge Samples，核对相关功能的接口用法、资源生命周期和平台处理。接入沿用 The Forge 已有机制，PanguEngine 只添加必要的适配。[The Forge Samples](../../Source/ThirdParty/TheForge/Repo/Examples_3)
+
 ## 首个三角形
 
 公开的 `GraphicsContext::PresentTriangle` 在同一帧清除颜色附件、使用 Project 提供的三个顶点绘制并请求呈现。顶点使用 X 向右、Y 向上的裁剪空间和线性 RGBA。借用持续到调用返回。位置或颜色包含 NaN 或无穷大时在取图前返回可恢复错误。`Present(LinearColor)` 继续提供清屏入口。图形接口尚未冻结。[设计规格](../../docs/superpowers/specs/2026-11-25-renderer-first-triangle-design.md)
