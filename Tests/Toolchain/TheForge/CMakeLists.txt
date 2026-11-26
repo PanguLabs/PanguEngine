@@ -63,6 +63,7 @@ target_link_libraries(PanguForgeLinkCheck PRIVATE ThirdParty::TheForge)
 if(ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
     if(ANDROID)
         option(PANGU_BUILD_NATIVE_ACTIVITY_TRIANGLE "Build the NativeActivity triangle fixture" OFF)
+        option(PANGU_BUILD_NATIVE_ACTIVITY_INDEXED_MESH "Build the NativeActivity indexed quad fixture" OFF)
         set(rendererLinkCheck PanguVulkanRendererLinkCheck)
         add_executable(
             PanguAndroidJniThreadCheck
@@ -89,12 +90,17 @@ if(ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "iOS")
         )
         add_dependencies(PanguForgeLinkCheck PanguAndroidJniThreadCheck)
         set(nativeActivityFixture FirstFrame)
-        if(PANGU_BUILD_NATIVE_ACTIVITY_TRIANGLE)
+        set(nativeActivityDrawOption)
+        if(PANGU_BUILD_NATIVE_ACTIVITY_INDEXED_MESH)
+            set(nativeActivityFixture IndexedMesh)
+            set(nativeActivityDrawOption INDEXED_MESH)
+        elseif(PANGU_BUILD_NATIVE_ACTIVITY_TRIANGLE)
             set(nativeActivityFixture FirstTriangle)
         endif()
         pangu_add_application(
             TARGET PanguNativeActivityCheck
             KIND GRAPHICS
+            ${nativeActivityDrawOption}
             SOURCES
                 "${PROJECT_SOURCE_DIR}/Tests/Renderer/Project/${nativeActivityFixture}.cpp"
         )

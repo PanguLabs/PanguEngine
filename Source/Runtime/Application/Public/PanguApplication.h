@@ -16,6 +16,8 @@ namespace pg::app
 using renderer::FrameResult;
 using renderer::LinearColor;
 using renderer::TriangleVertex;
+// 仅由选择 INDEXED_MESH 的消费目标定义，供设备打开及重开时借用。
+extern const renderer::IndexedQuad kIndexedQuad;
 
 enum class LoopControl : std::uint8_t
 {
@@ -40,6 +42,7 @@ public:
 
     // kPresentRequested 表示 Forge 的呈现调用已返回。
     [[nodiscard]] Result<FrameResult> Present(LinearColor color) noexcept;
+    [[nodiscard]] Result<FrameResult> PresentIndexedMesh(LinearColor clearColor) noexcept;
     // 顶点使用 X 向右、Y 向上的裁剪空间及线性 RGBA，调用返回后可立即修改。
     [[nodiscard]] Result<FrameResult> PresentTriangle(LinearColor clearColor,
                                                       const std::array<TriangleVertex, 3>& vertices) noexcept;

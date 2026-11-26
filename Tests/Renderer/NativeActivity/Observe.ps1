@@ -2,7 +2,8 @@
     [Parameter(Mandatory)][string]$LogPath,
     [string]$AndroidSdk = $env:ANDROID_HOME,
     [string]$Serial,
-    [switch]$ClearFrame
+    [switch]$ClearFrame,
+    [switch]$IndexedMesh
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,7 +11,7 @@ $adb = Join-Path $AndroidSdk 'platform-tools/adb.exe'
 $device = if ($Serial) { @('-s', $Serial) } else { @() }
 $package = 'com.pangulabs.nativeactivitycheck.gradle.agdk'
 $activity = "$package/android.app.NativeActivity"
-$frameTag = if ($ClearFrame) { 'PanguFirstFrame' } else { 'PanguFirstTriangle' }
+$frameTag = if ($IndexedMesh) { 'PanguIndexedMesh' } elseif ($ClearFrame) { 'PanguFirstFrame' } else { 'PanguFirstTriangle' }
 . (Join-Path $PSScriptRoot 'SurfaceFlinger.ps1')
 
 function Invoke-Device {
@@ -40,7 +41,7 @@ function Wait-ActivityPresentation([int]$generation, $previous = $null) {
                 ($previous.Layer -notmatch '#\d+$' -or $presentation.Layer -ne $previous.Layer)))) {
             @($presentation.Layer) + $presentation.Latency |
                 Set-Content -LiteralPath "$LogPath.surface-$generation" -Encoding utf8
-            if ($ClearFrame -or (Save-TriangleScreenshot "$LogPath.window-$generation.png" $generation)) {
+            if ($ClearFrame -or (Save-GeometryScreenshot "$LogPath.window-$generation.png" $generation)) {
                 return $presentation
             }
         }
@@ -49,7 +50,7 @@ function Wait-ActivityPresentation([int]$generation, $previous = $null) {
     throw "未验证第 $generation 代窗口的像素与实际呈现，见 $LogPath"
 }
 
-function Save-TriangleScreenshot([string]$path, [int]$generation) {
+function Save-GeometryScreenshot([string]$path, [int]$generation) {
     $info = New-Object System.Diagnostics.ProcessStartInfo
     $info.FileName = $adb
     $info.Arguments = ($device + @('exec-out', 'screencap', '-p')) -join ' '
@@ -65,13 +66,20 @@ function Save-TriangleScreenshot([string]$path, [int]$generation) {
         if ($process.ExitCode -ne 0) { throw "屏幕截图失败，见 $path" }
     } finally { $process.Dispose() }
 
-    $bitmap = New-Object System.Drawing.Bitmap($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($path))
+    # 索引网格的期望值使用 sRGB，解码时应用设备截图内嵌的 ICC 配置。
+    $bitmap = [System.Drawing.Bitmap]::new($ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($path),
+                                          $IndexedMesh.IsPresent)
     try {
         $expected = if ($generation -eq 1) { @('6C6CDA', 'A0A095', '000000', '000000') }
                     else { @('000000', '000000', '6CDA6C', 'A095A0') }
         # Android 合成截图的高饱和色偏差较大，仍分别验证插值主色、混色和空白区域。
         $tolerances = if ($generation -eq 1) { @(32, 8, 4, 4) } else { @(4, 4, 32, 8) }
         $positions = @(@(25, 40), @(25, 60), @(75, 40), @(75, 60))
+        if ($IndexedMesh) {
+            $positions = @(@(31.25, 31.25), @(68.75, 68.75), @(5, 50))
+            $expected = @('00BC00', 'BC0000', '000000')
+            $tolerances = @(32, 32, 4)
+        }
         $colors = @(foreach ($position in $positions) {
             $pixel = $bitmap.GetPixel([Math]::Floor($bitmap.Width * $position[0] / 100),
                                      [Math]::Floor($bitmap.Height * $position[1] / 100))

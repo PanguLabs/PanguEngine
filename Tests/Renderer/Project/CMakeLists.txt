@@ -41,15 +41,29 @@ if(PANGU_RENDERER_TEST_GRAPHICS)
 endif()
 option(PANGU_RENDERER_TEST_TRIANGLE "Build the graphical triangle consumer fixture and its shaders" OFF)
 option(PANGU_RENDERER_TEST_TRIANGLE_LINK "Build the graphical triangle consumer fixture for link verification" OFF)
+option(PANGU_RENDERER_TEST_INDEXED_MESH "Select indexed geometry for the graphical draw fixture" OFF)
 if(PANGU_RENDERER_TEST_TRIANGLE OR PANGU_RENDERER_TEST_TRIANGLE_LINK)
     set(triangleShaderOption)
     if(PANGU_RENDERER_TEST_TRIANGLE)
         set(triangleShaderOption TRIANGLE_SHADERS)
     endif()
-    pangu_add_application(TARGET FirstTriangle KIND GRAPHICS ${triangleShaderOption} SOURCES FirstTriangle.cpp)
+    set(drawTarget FirstTriangle)
+    set(drawOption)
+    if(PANGU_RENDERER_TEST_INDEXED_MESH)
+        set(drawTarget IndexedMesh)
+        set(drawOption INDEXED_MESH)
+    endif()
+    pangu_add_application(
+        TARGET ${drawTarget}
+        KIND GRAPHICS
+        ${drawOption}
+        ${triangleShaderOption}
+        SOURCES
+            ${drawTarget}.cpp
+    )
     file(
-        GENERATE OUTPUT "${CMAKE_BINARY_DIR}/FirstTriangleArtifacts.cmake"
-        CONTENT "set(executable [==[$<TARGET_FILE:FirstTriangle>]==])\n"
+        GENERATE OUTPUT "${CMAKE_BINARY_DIR}/${drawTarget}Artifacts.cmake"
+        CONTENT "set(executable [==[$<TARGET_FILE:${drawTarget}>]==])\n"
     )
 endif()
 file(

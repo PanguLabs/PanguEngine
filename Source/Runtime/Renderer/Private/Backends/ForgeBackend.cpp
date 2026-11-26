@@ -7,6 +7,7 @@
 #include <RendererTypes.h>
 #include <Result.h>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -24,9 +25,7 @@
 #include <iterator>
 #endif
 
-#ifdef _WIN32
-#include <algorithm>
-#elifdef __APPLE__
+#ifdef __APPLE__
 #import <Foundation/Foundation.h>
 #import <QuartzCore/CAMetalLayer.h>
 #include <TargetConditionals.h>
@@ -35,7 +34,7 @@
 #else
 #import <AppKit/NSView.h>
 #endif
-#elifndef __ANDROID__
+#elif !defined(__ANDROID__) && !defined(_WIN32)
 #include <filesystem>
 #include <optional>
 #include <ranges>
@@ -176,6 +175,14 @@ struct GpuTriangleVertex
 static_assert(sizeof(GpuTriangleVertex) == sizeof(float) * 6);
 constexpr std::uint32_t kTriangleVertexCount = 3;
 constexpr std::uint32_t kTriangleVertexStride = sizeof(GpuTriangleVertex);
+
+[[nodiscard]] GpuTriangleVertex PackVertex(const TriangleVertex& vertex) noexcept
+{
+    return {
+        .Position = {vertex.X, vertex.Y},
+        .Color = {vertex.Color.R, vertex.Color.G, vertex.Color.B, vertex.Color.A},
+    };
+}
 
 #ifndef __ANDROID__
 #ifdef DIRECT3D12
@@ -346,9 +353,9 @@ class ForgeBackend final : public FrameBackend
 public:
     [[nodiscard]] Status Open(RendererOpenDesc desc) noexcept override;
     [[nodiscard]] Status Attach(NativeSurface surface, PixelSize size) noexcept override;
-    [[nodiscard]] Status PrepareTriangle() noexcept override;
+    [[nodiscard]] Status PrepareTriangle(bool indexed) noexcept override;
     [[nodiscard]] Result<AcquireResult> Acquire() noexcept override;
-    [[nodiscard]] Status Submit(LinearColor color, const std::array<TriangleVertex, 3>* triangle) noexcept override;
+    [[nodiscard]] Status Submit(LinearColor color, FrameDraw draw) noexcept override;
     void PresentImage() noexcept override;
     void RetireSurface() noexcept override;
     void Close() noexcept override;
@@ -366,7 +373,10 @@ private:
     [[nodiscard]] Status OpenRuntime(RendererOpenDesc desc) noexcept;
     [[nodiscard]] Status OpenCommands() noexcept;
     [[nodiscard]] Status OpenTriangleResources() noexcept;
-    void RecordTriangle(const RenderTarget& target, const std::array<TriangleVertex, 3>& triangle) noexcept;
+    void OpenLoader() noexcept;
+    [[nodiscard]] Status OpenIndexedMesh(const IndexedQuad& quad) noexcept;
+    [[nodiscard]] Status OpenTriangleBuffer() noexcept;
+    void RecordGeometry(const RenderTarget& target, FrameDraw draw) noexcept;
     void CloseTriangleResources() noexcept;
 
     RuntimeState Runtime = RuntimeState::kClosed;
@@ -384,6 +394,10 @@ private:
     std::uint32_t Image{};
     Shader* TriangleShader{};
     Buffer* TriangleBuffer{};
+    Buffer* QuadVertices{};
+    Buffer* QuadIndices{};
+    // 加载器拥有此信号量。首次图形提交等待上传写入可见。
+    Semaphore* QuadUploadReady{};
     Pipeline* TrianglePipeline{};
     bool ShaderDirectoryAvailable{};
     bool RootSignatureReady{};
@@ -515,7 +529,8 @@ Status ForgeBackend::Open(RendererOpenDesc desc) noexcept
         Device->mDx.pDebugValidation != nullptr && Context->mGpuCount >= 2;
 #endif
     setupGPUConfigurationPlatformParameters(Device, settings.pExtendedSettings);
-    return OpenCommands();
+    const auto commands = OpenCommands();
+    return commands && desc.Quad != nullptr ? OpenIndexedMesh(*desc.Quad) : commands;
 }
 
 Status ForgeBackend::OpenCommands() noexcept
@@ -688,12 +703,103 @@ Status ForgeBackend::OpenTriangleResources() noexcept
         return Failure(RendererStage::kSubmit, RendererError::kShaderUnavailable);
     }
 
-    // 顶点直接写入映射内存，此处只需支持资源加载器的最小 staging 配置。
+    return {};
+}
+
+void ForgeBackend::OpenLoader() noexcept
+{
+    if (ResourceLoaderReady)
+    {
+        return;
+    }
     constexpr std::uint64_t kStagingBytes = 4096;
     ResourceLoaderDesc loader{.mBufferSize = kStagingBytes, .mBufferCount = 1, .mSingleThreaded = true};
     initResourceLoaderInterface(Device, &loader);
     ResourceLoaderReady = true;
+}
 
+[[nodiscard]] bool HasNativeBuffer(const Buffer* buffer) noexcept
+{
+    if (buffer == nullptr)
+    {
+        return false;
+    }
+#ifdef DIRECT3D12
+    return buffer->mDx.pResource != nullptr;
+#elifdef VULKAN
+    return buffer->mVk.pBuffer != VK_NULL_HANDLE && buffer->mVk.pAllocation != nullptr;
+#else
+    return buffer->pBuffer != nil;
+#endif
+}
+
+Status ForgeBackend::OpenIndexedMesh(const IndexedQuad& quad) noexcept
+{
+    OpenLoader();
+    std::array<GpuTriangleVertex, 4> vertices{};
+    std::ranges::transform(quad.Vertices, vertices.begin(), PackVertex);
+    const bool unified = getUmaFlags() != UMA_SUPPORT_NONE;
+    BufferLoadDesc vertex{};
+    vertex.ppBuffer = &QuadVertices;
+    vertex.mDesc.mSize = sizeof(vertices);
+    vertex.mDesc.mDescriptors = DESCRIPTOR_TYPE_VERTEX_BUFFER;
+    vertex.mDesc.mStartState = RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    vertex.mDesc.mMemoryUsage = unified ? RESOURCE_MEMORY_USAGE_CPU_TO_GPU : RESOURCE_MEMORY_USAGE_GPU_ONLY;
+#ifdef VULKAN
+    if (unified)
+    {
+        vertex.mDesc.mFlags = BUFFER_CREATION_FLAG_HOST_COHERENT;
+    }
+#endif
+    vertex.mDesc.pName = "Indexed quad vertices";
+    addResource(&vertex, nullptr);
+    if (!HasNativeBuffer(QuadVertices))
+    {
+        return Failure(RendererStage::kOpen);
+    }
+    BufferLoadDesc index = vertex;
+    index.ppBuffer = &QuadIndices;
+    index.mDesc.mSize = sizeof(quad.Indices);
+    index.mDesc.mDescriptors = DESCRIPTOR_TYPE_INDEX_BUFFER;
+    index.mDesc.mStartState = RESOURCE_STATE_INDEX_BUFFER;
+    index.mDesc.pName = "Indexed quad indices";
+    addResource(&index, nullptr);
+    if (!HasNativeBuffer(QuadIndices))
+    {
+        return Failure(RendererStage::kOpen);
+    }
+
+    // 两块资源就绪后再写入。Forge 的更新路径使用图形队列，避免独立传输队列族的所有权转移。
+    const auto upload = [](Buffer* buffer, const auto& data, ResourceState state)
+    {
+        BufferUpdateDesc update{};
+        update.pBuffer = buffer;
+        update.mSize = sizeof(data);
+        update.mCurrentState = state;
+        beginUpdateResource(&update);
+        if (update.pMappedData == nullptr)
+        {
+            return false;
+        }
+        std::memcpy(update.pMappedData, data.data(), sizeof(data));
+        endUpdateResource(&update);
+        return true;
+    };
+    const bool verticesWritten = upload(QuadVertices, vertices, RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+    const bool indicesWritten = verticesWritten && upload(QuadIndices, quad.Indices, RESOURCE_STATE_INDEX_BUFFER);
+    if (!unified && verticesWritten)
+    {
+        FlushResourceUpdateDesc flush{};
+        flushResourceUpdates(&flush);
+        waitForFences(Device, 1, &flush.pOutFence);
+        QuadUploadReady = flush.pOutSubmittedSemaphore;
+    }
+    return indicesWritten ? Status{} : Failure(RendererStage::kOpen);
+}
+
+Status ForgeBackend::OpenTriangleBuffer() noexcept
+{
+    OpenLoader();
     BufferLoadDesc vertexBuffer{};
     vertexBuffer.ppBuffer = &TriangleBuffer;
     vertexBuffer.mDesc.mSize = sizeof(GpuTriangleVertex) * kTriangleVertexCount;
@@ -710,8 +816,15 @@ Status ForgeBackend::OpenTriangleResources() noexcept
                                                                                      : Failure(RendererStage::kSubmit);
 }
 
-Status ForgeBackend::PrepareTriangle() noexcept
+Status ForgeBackend::PrepareTriangle(bool indexed) noexcept
 {
+    if (!indexed && TriangleBuffer == nullptr)
+    {
+        if (const auto status = OpenTriangleBuffer(); !status)
+        {
+            return status;
+        }
+    }
     if (TrianglePipeline != nullptr)
     {
         return {};
@@ -786,27 +899,27 @@ Status ForgeBackend::PrepareTriangle() noexcept
     return {};
 }
 
-void ForgeBackend::RecordTriangle(const RenderTarget& target, const std::array<TriangleVertex, 3>& triangle) noexcept
+void ForgeBackend::RecordGeometry(const RenderTarget& target, FrameDraw draw) noexcept
 {
-    std::array<GpuTriangleVertex, kTriangleVertexCount> vertices{};
-    for (std::size_t index = 0; index < vertices.size(); ++index)
-    {
-        const auto& vertex = triangle.at(index);
-        vertices.at(index) = {
-            .Position = {vertex.X, vertex.Y},
-            .Color = {vertex.Color.R, vertex.Color.G, vertex.Color.B, vertex.Color.A},
-        };
-    }
-    // Acquire 已等待持有这块缓冲区的上一帧命令 Fence。
-    std::memcpy(TriangleBuffer->pCpuMappedAddress, vertices.data(), sizeof(vertices));
     cmdSetViewport(Command, 0, 0, static_cast<float>(target.mWidth), static_cast<float>(target.mHeight), 0, 1);
     cmdSetScissor(Command, 0, 0, target.mWidth, target.mHeight);
     cmdBindPipeline(Command, TrianglePipeline);
+    if (draw.Indexed)
+    {
+        cmdBindVertexBuffer(Command, 1, &QuadVertices, &kTriangleVertexStride, nullptr);
+        cmdBindIndexBuffer(Command, QuadIndices, INDEX_TYPE_UINT16, 0);
+        cmdDrawIndexed(Command, 6, 0, 0);
+        return;
+    }
+    std::array<GpuTriangleVertex, kTriangleVertexCount> vertices{};
+    std::ranges::transform(*draw.Triangle, vertices.begin(), PackVertex);
+    // Acquire 已等待持有映射缓冲的上一帧命令 Fence。
+    std::memcpy(TriangleBuffer->pCpuMappedAddress, vertices.data(), sizeof(vertices));
     cmdBindVertexBuffer(Command, 1, &TriangleBuffer, &kTriangleVertexStride, nullptr);
     cmdDraw(Command, kTriangleVertexCount, 0);
 }
 
-Status ForgeBackend::Submit(LinearColor color, const std::array<TriangleVertex, 3>* triangle) noexcept
+Status ForgeBackend::Submit(LinearColor color, FrameDraw draw) noexcept
 {
     // Acquire 已按交换链公布的图像数校验索引。
     auto* const target = Chain->ppRenderTargets[Image]; // NOLINT(cppcoreguidelines-pro-bounds-pointer-arithmetic)
@@ -831,9 +944,9 @@ Status ForgeBackend::Submit(LinearColor color, const std::array<TriangleVertex, 
     attachment.mClearValue = {.r = color.R, .g = color.G, .b = color.B, .a = color.A};
     attachment.mOverrideClearValue = 1;
     cmdBindRenderTargets(Command, &bind);
-    if (triangle != nullptr)
+    if (draw.Triangle != nullptr || draw.Indexed)
     {
-        RecordTriangle(*target, *triangle);
+        RecordGeometry(*target, draw);
     }
     cmdBindRenderTargets(Command, nullptr);
 
@@ -841,17 +954,19 @@ Status ForgeBackend::Submit(LinearColor color, const std::array<TriangleVertex, 
     cmdResourceBarrier(Command, 0, nullptr, 0, nullptr, 1, &barrier);
     endCmd(Command);
 
+    std::array waits{ImageAvailable, QuadUploadReady};
     const QueueSubmitDesc submit{
         .ppCmds = &Command,
         .pSignalFence = CommandFence,
-        .ppWaitSemaphores = &ImageAvailable,
+        .ppWaitSemaphores = waits.data(),
         .ppSignalSemaphores = &ReadyToPresent.at(Image),
         .mCmdCount = 1,
-        .mWaitSemaphoreCount = 1,
+        .mWaitSemaphoreCount = QuadUploadReady != nullptr ? 2U : 1U,
         .mSignalSemaphoreCount = 1,
         .mSubmitDone = false,
     };
     queueSubmit(GraphicsQueue, &submit);
+    QuadUploadReady = nullptr;
     return {};
 }
 
@@ -901,6 +1016,15 @@ void ForgeBackend::RetireSurface() noexcept
 
 void ForgeBackend::CloseTriangleResources() noexcept
 {
+    QuadUploadReady = nullptr;
+    if (QuadIndices != nullptr)
+    {
+        removeResource(std::exchange(QuadIndices, nullptr));
+    }
+    if (QuadVertices != nullptr)
+    {
+        removeResource(std::exchange(QuadVertices, nullptr));
+    }
     if (TriangleBuffer != nullptr)
     {
         removeResource(std::exchange(TriangleBuffer, nullptr));

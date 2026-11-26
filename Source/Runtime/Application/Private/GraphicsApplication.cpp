@@ -35,8 +35,7 @@ public:
     }
 
     [[nodiscard]] Status Run(DesktopWindow& window) noexcept;
-    [[nodiscard]] Result<FrameResult> Present(LinearColor color,
-                                              const std::array<TriangleVertex, 3>* triangle) noexcept;
+    [[nodiscard]] Result<FrameResult> Present(auto draw) noexcept;
     [[nodiscard]] Status Reopen() noexcept;
     [[nodiscard]] Status RetireDrawable() noexcept;
 
@@ -110,8 +109,7 @@ Status GraphicsApplication::RetireDrawable() noexcept
     return {};
 }
 
-Result<FrameResult> GraphicsApplication::Present(LinearColor color,
-                                                 const std::array<TriangleVertex, 3>* triangle) noexcept
+Result<FrameResult> GraphicsApplication::Present(auto draw) noexcept
 {
     if (FrameFailure)
     {
@@ -126,7 +124,7 @@ Result<FrameResult> GraphicsApplication::Present(LinearColor color,
         FrameFailure = ready.error();
         return std::unexpected(*FrameFailure);
     }
-    const auto frame = triangle != nullptr ? Session.PresentTriangle(color, *triangle) : Session.Present(color);
+    const auto frame = draw(Session);
     if (!frame)
     {
         const auto error = frame.error();
@@ -195,6 +193,9 @@ Status GraphicsApplication::Run(DesktopWindow& window) noexcept
 Status RunGraphicsSession(renderer::RendererSession& session, DesktopWindow& window,
                           renderer::RendererOpenDesc desc) noexcept
 {
+#ifdef PG_APPLICATION_INDEXED_MESH
+    desc.Quad = &kIndexedQuad;
+#endif
     GraphicsApplication app(session, desc);
     window.ActiveApplication = &app;
     const auto result = app.Run(window);
@@ -276,11 +277,18 @@ GraphicsContext::GraphicsContext(detail::GraphicsApplication& app) noexcept
 {
 }
 
-Result<FrameResult> GraphicsContext::Present(LinearColor color) noexcept { return App.Present(color, nullptr); }
+Result<FrameResult> GraphicsContext::Present(LinearColor color) noexcept
+{
+    return App.Present([color](auto& session) { return session.Present(color); });
+}
+Result<FrameResult> GraphicsContext::PresentIndexedMesh(LinearColor clearColor) noexcept
+{
+    return App.Present([clearColor](auto& session) { return session.PresentIndexedMesh(clearColor); });
+}
 Result<FrameResult> GraphicsContext::PresentTriangle(LinearColor clearColor,
                                                      const std::array<TriangleVertex, 3>& vertices) noexcept
 {
-    return App.Present(clearColor, &vertices);
+    return App.Present([&](auto& session) { return session.PresentTriangle(clearColor, vertices); });
 }
 Status GraphicsContext::ReopenGraphics() noexcept { return App.Reopen(); }
 } // namespace pg::app

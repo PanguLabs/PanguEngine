@@ -148,34 +148,37 @@ if(APPLE AND NOT IOS AND PANGU_LINK_MODE STREQUAL "Modular")
 endif()
 
 if(APPLE AND NOT IOS)
-    pangu_register_test(
-        NAME Renderer.TriangleLink
-        COMMAND
-            "${CMAKE_COMMAND}"
-            "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}"
-            "-DPANGU_TEST_ROOT:PATH=${CMAKE_BINARY_DIR}/Tests/Work/Renderer.TriangleLink"
-            "-DPANGU_TEST_BUILD_JOBS:STRING=${PANGU_TEST_BUILD_JOBS}"
-            "-DPANGU_RENDERER_TEST_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}"
-            "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
-            "-DPANGU_LINK_MODE:STRING=${PANGU_LINK_MODE}"
-            "-DCMAKE_TOOLCHAIN_FILE:FILEPATH=${CMAKE_TOOLCHAIN_FILE}"
-            "-DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}"
-            "-DCMAKE_CXX_COMPILER:FILEPATH=${CMAKE_CXX_COMPILER}"
-            "-DllvmNm:FILEPATH=${CMAKE_NM}"
-            -P
-            "${CMAKE_CURRENT_SOURCE_DIR}/Acceptance/CheckTriangleLink.cmake"
-        BOUNDARY integration
-        AREA renderer
-        TIER full
-        TYPES
-            contract
-            regression
-        REQUIRES
-            subprocess
-            nested-build
-        PROCESSORS "${PANGU_TEST_BUILD_JOBS}"
-        TIMEOUT 900
-    )
+    foreach(linkFixture IN ITEMS Triangle IndexedMesh)
+        pangu_register_test(
+            NAME Renderer.${linkFixture}Link
+            COMMAND
+                "${CMAKE_COMMAND}"
+                "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}"
+                "-DPANGU_TEST_ROOT:PATH=${CMAKE_BINARY_DIR}/Tests/Work/Renderer.${linkFixture}Link"
+                "-DlinkFixture:STRING=${linkFixture}"
+                "-DPANGU_TEST_BUILD_JOBS:STRING=${PANGU_TEST_BUILD_JOBS}"
+                "-DPANGU_RENDERER_TEST_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}"
+                "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
+                "-DPANGU_LINK_MODE:STRING=${PANGU_LINK_MODE}"
+                "-DCMAKE_TOOLCHAIN_FILE:FILEPATH=${CMAKE_TOOLCHAIN_FILE}"
+                "-DCMAKE_C_COMPILER:FILEPATH=${CMAKE_C_COMPILER}"
+                "-DCMAKE_CXX_COMPILER:FILEPATH=${CMAKE_CXX_COMPILER}"
+                "-DllvmNm:FILEPATH=${CMAKE_NM}"
+                -P
+                "${CMAKE_CURRENT_SOURCE_DIR}/Acceptance/CheckTriangleLink.cmake"
+            BOUNDARY integration
+            AREA renderer
+            TIER full
+            TYPES
+                contract
+                regression
+            REQUIRES
+                subprocess
+                nested-build
+            PROCESSORS "${PANGU_TEST_BUILD_JOBS}"
+            TIMEOUT 900
+        )
+    endforeach()
 endif()
 
 if(WIN32 OR LINUX OR (APPLE AND NOT IOS))
@@ -206,9 +209,17 @@ if(WIN32 OR LINUX OR (APPLE AND NOT IOS))
     endif()
     set(desktopFixtures Frame)
     if((WIN32 OR LINUX) AND PANGU_BUILD_TRIANGLE_SHADER_CHECK)
-        list(APPEND desktopFixtures Triangle)
+        list(
+            APPEND desktopFixtures
+            Triangle
+            IndexedMesh
+        )
     endif()
     foreach(fixture IN LISTS desktopFixtures)
+        set(projectTarget "First${fixture}")
+        if(fixture STREQUAL "IndexedMesh")
+            set(projectTarget IndexedMesh)
+        endif()
         pangu_register_test(
             NAME "Renderer.Desktop${fixture}"
             COMMAND
@@ -216,7 +227,7 @@ if(WIN32 OR LINUX OR (APPLE AND NOT IOS))
                 "-DPANGU_ENGINE_SOURCE_DIR:PATH=${PROJECT_SOURCE_DIR}"
                 "-DPANGU_TEST_ROOT:PATH=${CMAKE_BINARY_DIR}/Tests/Work/Renderer.Desktop${fixture}"
                 "-DPANGU_TEST_BUILD_JOBS:STRING=${PANGU_TEST_BUILD_JOBS}"
-                "-DPANGU_RENDERER_TEST_TARGET:STRING=First${fixture}"
+                "-DPANGU_RENDERER_TEST_TARGET:STRING=${projectTarget}"
                 "-DPANGU_RENDERER_TEST_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE}"
                 "-DPANGU_ENGINE_ALLOW_LOCAL_OVERRIDE:BOOL=${PANGU_ENGINE_ALLOW_LOCAL_OVERRIDE}"
                 "-DPANGU_LINK_MODE:STRING=${PANGU_LINK_MODE}"

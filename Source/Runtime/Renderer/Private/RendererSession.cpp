@@ -68,6 +68,14 @@ Status RendererSession::Open(RendererOpenDesc desc) noexcept
     }
     SetOwner(std::this_thread::get_id());
     State = SessionState::kOpen;
+    HasIndexedMesh = desc.Quad != nullptr;
+    if (desc.Quad != nullptr &&
+        (!std::ranges::all_of(desc.Quad->Vertices, IsFinite) ||
+         !std::ranges::all_of(desc.Quad->Indices, [&](auto index) { return index < desc.Quad->Vertices.size(); })))
+    {
+        FirstCloseError = MakeRendererError(RendererStage::kOpen, RendererError::kInvalidVertex);
+        return Close();
+    }
     const auto opened = Backend->Open(desc);
     if (!opened)
     {
@@ -162,16 +170,20 @@ Status RendererSession::SetPaused(bool paused) noexcept
     return {};
 }
 
-Result<FrameResult> RendererSession::Present(LinearColor color) noexcept { return PresentFrame(color, nullptr); }
+Result<FrameResult> RendererSession::Present(LinearColor color) noexcept { return PresentFrame(color, {}); }
+
+Result<FrameResult> RendererSession::PresentIndexedMesh(LinearColor clearColor) noexcept
+{
+    return PresentFrame(clearColor, {.Indexed = true});
+}
 
 Result<FrameResult> RendererSession::PresentTriangle(LinearColor clearColor,
                                                      const std::array<TriangleVertex, 3>& vertices) noexcept
 {
-    return PresentFrame(clearColor, &vertices);
+    return PresentFrame(clearColor, {.Triangle = &vertices});
 }
 
-Result<FrameResult> RendererSession::PresentFrame(LinearColor color,
-                                                  const std::array<TriangleVertex, 3>* triangle) noexcept
+Result<FrameResult> RendererSession::PresentFrame(LinearColor color, detail::FrameDraw draw) noexcept
 {
     if (const auto ready = CanRender(RendererStage::kAcquire); !ready)
     {
@@ -185,13 +197,17 @@ Result<FrameResult> RendererSession::PresentFrame(LinearColor color,
     {
         return FrameResult::kSkipped;
     }
-    if (triangle != nullptr)
+    if (draw.Indexed && !HasIndexedMesh)
     {
-        if (!std::ranges::all_of(*triangle, IsFinite))
+        return Reject(RendererStage::kSubmit, RendererError::kInvalidState);
+    }
+    if (draw.Triangle != nullptr || draw.Indexed)
+    {
+        if (draw.Triangle != nullptr && !std::ranges::all_of(*draw.Triangle, IsFinite))
         {
             return Reject(RendererStage::kSubmit, RendererError::kInvalidVertex);
         }
-        if (const auto prepared = Backend->PrepareTriangle(); !prepared)
+        if (const auto prepared = Backend->PrepareTriangle(draw.Indexed); !prepared)
         {
             return FailFrame(prepared.error());
         }
@@ -211,7 +227,7 @@ Result<FrameResult> RendererSession::PresentFrame(LinearColor color,
         return RetireForReattach();
     }
 
-    const auto submitted = Backend->Submit(color, triangle);
+    const auto submitted = Backend->Submit(color, draw);
     FinishSubmission();
     if (!submitted)
     {

@@ -16,6 +16,7 @@ namespace pg::renderer
 namespace detail
 {
 class FrameBackend;
+struct FrameDraw;
 class RendererSessionFactory;
 class RendererSessionTestAccess;
 } // namespace detail
@@ -41,6 +42,7 @@ public:
     void RequestDetach(SurfaceId id) noexcept;
     [[nodiscard]] Status SetPaused(bool paused) noexcept;
     [[nodiscard]] Result<FrameResult> Present(LinearColor color) noexcept;
+    [[nodiscard]] Result<FrameResult> PresentIndexedMesh(LinearColor clearColor) noexcept;
     [[nodiscard]] Result<FrameResult> PresentTriangle(LinearColor clearColor,
                                                       const std::array<TriangleVertex, 3>& vertices) noexcept;
     // 会话线程同步清理并释放进程占用，返回已记录的首个错误。
@@ -80,8 +82,7 @@ private:
     [[nodiscard]] bool TryAdmitSubmission() noexcept;
     void FinishSubmission() noexcept;
     [[nodiscard]] Status CanRender(RendererStage stage) const noexcept;
-    [[nodiscard]] Result<FrameResult> PresentFrame(LinearColor color,
-                                                   const std::array<TriangleVertex, 3>* triangle) noexcept;
+    [[nodiscard]] Result<FrameResult> PresentFrame(LinearColor color, detail::FrameDraw draw) noexcept;
     void RetireAttachment() noexcept;
     [[nodiscard]] FrameResult RetireForReattach() noexcept;
     [[nodiscard]] Result<FrameResult> FailFrame(Error error) noexcept;
@@ -92,6 +93,7 @@ private:
     SessionState State = SessionState::kClosed;
     AttachmentState Attachment = AttachmentState::kNone;
     bool Paused{};
+    bool HasIndexedMesh{};
 
     mutable std::mutex PublicationMutex;
     std::thread::id Owner;

@@ -68,6 +68,8 @@ struct BackendControls
 
 struct BackendObservations
 {
+    std::uint64_t IndexedSubmissions{};
+    std::uint64_t QuadOpens{};
     std::uint64_t SuccessfulSubmissions{};
     LinearColor LastColor;
     std::optional<std::array<TriangleVertex, 3>> LastTriangle;
@@ -86,8 +88,12 @@ public:
         Failures.at(static_cast<std::size_t>(stage)) = MakeRendererError(stage, cause, native);
     }
 
-    [[nodiscard]] Status Open(RendererOpenDesc /*desc*/) noexcept override
+    [[nodiscard]] Status Open(RendererOpenDesc desc) noexcept override
     {
+        if (desc.Quad != nullptr)
+        {
+            ++History.QuadOpens;
+        }
         ++DeviceSerial;
         Record(BackendCall::kOpen);
         if (Script.OpenGate != nullptr)
@@ -107,7 +113,7 @@ public:
         return TakeFailure(RendererStage::kAttach);
     }
 
-    [[nodiscard]] Status PrepareTriangle() noexcept override
+    [[nodiscard]] Status PrepareTriangle(bool /*indexed*/) noexcept override
     {
         Record(BackendCall::kPrepareTriangle);
         const auto error = std::exchange(Script.NextTrianglePreparationError, std::nullopt);
@@ -129,7 +135,7 @@ public:
         return Script.NextAcquire;
     }
 
-    [[nodiscard]] Status Submit(LinearColor color, const std::array<TriangleVertex, 3>* triangle) noexcept override
+    [[nodiscard]] Status Submit(LinearColor color, FrameDraw draw) noexcept override
     {
         if (Script.SubmitGate != nullptr)
         {
@@ -137,7 +143,11 @@ public:
         }
         Record(BackendCall::kSubmit);
         History.LastColor = color;
-        History.LastTriangle = triangle != nullptr ? std::optional{*triangle} : std::nullopt;
+        History.LastTriangle = draw.Triangle != nullptr ? std::optional{*draw.Triangle} : std::nullopt;
+        if (draw.Indexed)
+        {
+            ++History.IndexedSubmissions;
+        }
         if (const auto status = TakeFailure(RendererStage::kSubmit); !status)
         {
             return status;

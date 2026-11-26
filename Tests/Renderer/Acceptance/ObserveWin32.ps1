@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$Executable,
     [Parameter(Mandatory = $true)][ValidateSet('Modular', 'Monolithic')][string]$LinkMode,
-    [ValidateSet('FirstFrame', 'FirstTriangle')][string]$Target = 'FirstFrame'
+    [ValidateSet('FirstFrame', 'FirstTriangle', 'IndexedMesh')][string]$Target = 'FirstFrame'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -66,7 +66,12 @@ public static class RendererDesktop
         return Capture(window, new int[] { 25, 40, 25, 60, 75, 40, 75, 60 });
     }
 
-    private static string Capture(IntPtr window, int[] positions)
+    public static string CaptureIndexedMesh(IntPtr window)
+    {
+        return Capture(window, new int[] { 125, 125, 275, 275, 20, 20 }, 400);
+    }
+
+    private static string Capture(IntPtr window, int[] positions, int denominator = 100)
     {
         Rect bounds;
         if (!GetClientRect(window, out bounds) || bounds.Right <= 0 || bounds.Bottom <= 0)
@@ -83,8 +88,8 @@ public static class RendererDesktop
             var colors = new string[positions.Length / 2];
             for (int index = 0; index < colors.Length; ++index)
             {
-                int x = bounds.Right * positions[2 * index] / 100;
-                int y = bounds.Bottom * positions[2 * index + 1] / 100;
+                int x = bounds.Right * positions[2 * index] / denominator;
+                int y = bounds.Bottom * positions[2 * index + 1] / denominator;
                 uint bgr = GetPixel(memory, x, y);
                 if (bgr == UInt32.MaxValue)
                     return "";
@@ -171,7 +176,8 @@ function Wait-For([scriptblock]$Observation, [string]$Condition) {
         Start-Sleep -Milliseconds 40
     } while ([DateTime]::UtcNow -lt $deadline)
     $handle = $run.App.MainWindowHandle
-    $sample = if ($Target -eq 'FirstTriangle') { [RendererDesktop]::CaptureTriangle($handle) }
+    $sample = if ($isIndexed) { [RendererDesktop]::CaptureIndexedMesh($handle) }
+              elseif ($Target -eq 'FirstTriangle') { [RendererDesktop]::CaptureTriangle($handle) }
               else { [RendererDesktop]::CaptureCenter($handle) }
     throw "Timed out waiting for $Condition (client=$([RendererDesktop]::ClientSize($handle)), pixels=$sample, present-requests=$($run.Frames))"
 }
@@ -179,7 +185,8 @@ function Wait-For([scriptblock]$Observation, [string]$Condition) {
 function Read-TrianglePixels([string]$Phase, [string[]]$Expected) {
     $captureState = @{ Pixels = '' }
     Wait-For {
-        $captureState.Pixels = [RendererDesktop]::CaptureTriangle($window)
+        $captureState.Pixels = if ($isIndexed) { [RendererDesktop]::CaptureIndexedMesh($window) }
+                               else { [RendererDesktop]::CaptureTriangle($window) }
         $actual = $captureState.Pixels.Split(',')
         if ($actual.Length -ne $Expected.Length) { return $false }
         for ($pixel = 0; $pixel -lt $Expected.Length; ++$pixel) {
@@ -221,7 +228,8 @@ function Test-ShaderRejection([string]$Case, [string]$Shader, [scriptblock]$Chan
 
 $Executable = (Resolve-Path -LiteralPath $Executable).Path
 $isTriangle = $Target -eq 'FirstTriangle'
-$frameLabel = if ($isTriangle) { 'first-triangle' } else { 'first-frame' }
+$isIndexed = $Target -eq 'IndexedMesh'
+$frameLabel = if ($isTriangle) { 'first-triangle' } elseif ($isIndexed) { 'indexed-mesh' } else { 'first-frame' }
 [RendererDesktop]::UsePhysicalPixels()
 if ($isTriangle) {
     Test-ShaderRejection 'MissingFragment' 'Graph.frag' { param($path) Remove-Item -LiteralPath $path }
@@ -243,7 +251,11 @@ try {
     Wait-For { $run.App.Refresh(); $run.App.MainWindowHandle -ne [IntPtr]::Zero } 'the Win32 window'
     $window = $run.App.MainWindowHandle
     $sizeA = [RendererDesktop]::ClientSize($window)
-    if ($isTriangle) {
+    if ($isIndexed) {
+        $quadColors = '#00BC00', '#BC0000', '#000000'
+        Write-Output (Read-TrianglePixels 'initial quad' $quadColors)
+    }
+    elseif ($isTriangle) {
         $initialColors = '#6C6CDA', '#A0A095', '#000000', '#000000'
         $updatedColors = '#000000', '#000000', '#6CDA6C', '#A095A0'
         $initial = Read-TrianglePixels 'initial' $initialColors
@@ -267,7 +279,15 @@ try {
     }
     Wait-For { [RendererDesktop]::ClientSize($window) -ne $sizeA } 'the resized client area'
     $sizeB = [RendererDesktop]::ClientSize($window)
-    if ($isTriangle) {
+    if ($isIndexed) {
+        $beforeResizePresent = $run.Frames
+        Wait-For { $run.Frames -ge ($beforeResizePresent + 2) } 'indexed presents after resize'
+        Write-Output (Read-TrianglePixels 'resized quad' $quadColors)
+        [IO.File]::WriteAllText((Join-Path $run.App.StartInfo.WorkingDirectory 'reopen'), '')
+        Wait-For { $run.Output.Contains('indexed-mesh reopened') } 'indexed present on the reopened device'
+        Write-Output (Read-TrianglePixels 'reopened quad' $quadColors)
+    }
+    elseif ($isTriangle) {
         $beforeResizePresent = $run.Frames
         Wait-For { $run.Frames -ge ($beforeResizePresent + 2) } 'present requests after resize'
         $resized = Read-TrianglePixels 'resized' $updatedColors

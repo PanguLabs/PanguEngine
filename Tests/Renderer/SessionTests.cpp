@@ -93,6 +93,32 @@ TEST(Session, BusyAndRollback)
     EXPECT_EQ(Calls(second.Backend(), BackendCall::kClose), 1);
 }
 
+TEST(Session, IndexedMeshSurvivesSurfaceChanges)
+{
+    constexpr IndexedQuad kQuad{.Indices = {0, 1, 2, 0, 2, 3}};
+    SessionRig rig;
+    auto& session = rig.Session();
+    const auto& observations = rig.Backend().Observations();
+    ASSERT_TRUE(session.Open({.Quad = &kQuad}));
+    ASSERT_TRUE(session.Attach(kIdA, kWindow, kSize));
+    EXPECT_EQ(session.PresentIndexedMesh(kColor), FrameResult::kPresentRequested);
+    EXPECT_EQ(session.PresentIndexedMesh(kColor), FrameResult::kPresentRequested);
+    ASSERT_TRUE(session.Detach(kIdA));
+    ASSERT_TRUE(session.Attach(kIdB, kWindow, kSize));
+    EXPECT_EQ(session.PresentIndexedMesh(kColor), FrameResult::kPresentRequested);
+    EXPECT_EQ(observations.IndexedSubmissions, 3U);
+    EXPECT_EQ(observations.QuadOpens, 1U);
+    ASSERT_TRUE(session.Close());
+    ASSERT_TRUE(session.Open({.Quad = &kQuad}));
+    EXPECT_EQ(observations.QuadOpens, 2U);
+    ASSERT_TRUE(session.Close());
+    ASSERT_TRUE(session.Open());
+    ASSERT_TRUE(session.Attach(kIdA, kWindow, kSize));
+    ExpectError(session.PresentIndexedMesh(kColor), RendererStage::kSubmit, RendererError::kInvalidState);
+    EXPECT_EQ(Calls(rig.Backend(), BackendCall::kAcquire), 3);
+    EXPECT_TRUE(session.Close());
+}
+
 TEST(Session, StaleDetach)
 {
     SessionRig rig;

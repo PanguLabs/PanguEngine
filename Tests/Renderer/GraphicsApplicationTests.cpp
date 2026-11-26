@@ -23,6 +23,7 @@ namespace
 const renderer::detail::FakeFrameBackend*
     gTriangleBackend{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 constexpr LinearColor kBackground{};
+bool gDrawIndexed{}; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 constexpr auto kVertices = std::to_array<TriangleVertex>({
     {.X = -0.75F, .Y = -0.25F, .Color = {.R = 1.0F}},
     {.X = 0.25F, .Y = -0.25F, .Color = {.G = 1.0F}},
@@ -32,6 +33,16 @@ constexpr auto kVertices = std::to_array<TriangleVertex>({
 
 Result<LoopControl> OnFrame(GraphicsContext& graphics) noexcept
 {
+    if (gDrawIndexed)
+    {
+        const auto reopened = graphics.ReopenGraphics();
+        if (!reopened)
+        {
+            return std::unexpected(reopened.error());
+        }
+        const auto frame = graphics.PresentIndexedMesh(kBackground);
+        return frame ? Result<LoopControl>{LoopControl::kStop} : std::unexpected(frame.error());
+    }
     if (gTriangleBackend != nullptr)
     {
         auto invalidPosition = kVertices;
@@ -104,6 +115,20 @@ TEST(Application, FrameFailureRetiresSurfaceBeforeReturning)
     EXPECT_EQ(events.at(4).Call, BackendCall::kRetireSurface);
     EXPECT_EQ(events.at(5).Call, BackendCall::kClose);
     EXPECT_TRUE(session.Close());
+}
+
+TEST(Application, ReopenUsesProjectQuad)
+{
+    FakeFrameBackend* backend{};
+    auto session = RendererSessionTestAccess::Make(backend);
+    TestWindow window;
+    constexpr IndexedQuad kQuad{.Indices = {0, 1, 2, 0, 2, 3}};
+    app::gDrawIndexed = true;
+    const auto completed = app::detail::RunGraphicsSession(session, window, {.Quad = &kQuad});
+    app::gDrawIndexed = false;
+    ASSERT_TRUE(completed);
+    EXPECT_EQ(backend->Observations().QuadOpens, 2U);
+    EXPECT_EQ(backend->Observations().IndexedSubmissions, 1U);
 }
 
 TEST(Application, InvalidTriangleCanBeCorrectedInSameFrame)

@@ -81,7 +81,8 @@ def verify_window(executable, target, tools, loader_debug):
     if loader_debug:
         app_env["LD_DEBUG"] = loader_debug
     triangle = target == "FirstTriangle"
-    label = "first-triangle" if triangle else "first-frame"
+    indexed = target == "IndexedMesh"
+    label = "indexed-mesh" if indexed else "first-triangle" if triangle else "first-frame"
     initial = (720, 480)
     resized = (560, 360)
     # stderr 由外层部署验收读取，用于核对应用实际加载的 Pangu 模块。
@@ -109,7 +110,7 @@ def verify_window(executable, target, tools, loader_debug):
                     return False
                 colors = []
                 for x, y in positions:
-                    offset = len(header) + (width * (height * y // 100) + width * x // 100) * 3
+                    offset = len(header) + (width * int(height * y / 100) + int(width * x / 100)) * 3
                     colors.append(ppm[offset:offset + 3])
                 if all(abs(a - b) <= tolerance for color, wanted in zip(colors, expected, strict=True)
                        for a, b in zip(color, bytes.fromhex(wanted), strict=True)):
@@ -123,7 +124,21 @@ def verify_window(executable, target, tools, loader_debug):
             def resize():
                 control(f"resize set width {resized[0]} px height {resized[1]} px")
 
-            if triangle:
+            if indexed:
+                positions = ((31.25, 31.25), (68.75, 68.75), (5, 5))
+                colors = ("00BC00", "BC0000", "000000")
+                first, pixels = wait_for("indexed quad", lambda: sample(initial, positions, colors, 4))
+                print(f"Initial indexed quad: {pixels}")
+                resize()
+                second, pixels = wait_for("resized quad", lambda: sample(resized, positions, colors, 4))
+                print(f"Resized indexed quad: {pixels}")
+                Path("reopen").touch()
+                wait_for("reopened device", lambda: "indexed-mesh reopened" in progress.read_text())
+                third, pixels = wait_for("reopened quad", lambda: sample(resized, positions, colors, 4))
+                print(f"Reopened indexed quad: {pixels}")
+                if first != second or second != third:
+                    raise RuntimeError("The indexed mesh run replaced the Wayland view")
+            elif triangle:
                 positions = ((25, 40), (25, 60), (75, 40), (75, 60))
                 initial_colors = ("6C6CDA", "A0A095", "000000", "000000")
                 updated_colors = ("000000", "000000", "6CDA6C", "A095A0")

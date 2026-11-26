@@ -99,7 +99,7 @@ elseif(target STREQUAL "FirstFrame")
     message(STATUS "Office preset rejected during Open")
 endif()
 if(CMAKE_HOST_WIN32)
-    if(target STREQUAL "FirstTriangle" AND PANGU_LINK_MODE STREQUAL "Monolithic")
+    if(NOT target STREQUAL "FirstFrame" AND PANGU_LINK_MODE STREQUAL "Monolithic")
         execute_process(
             COMMAND
                 "$ENV{LLVM_ROOT}/bin/llvm-readobj.exe" --coff-imports "${deploy}/${executableName}"

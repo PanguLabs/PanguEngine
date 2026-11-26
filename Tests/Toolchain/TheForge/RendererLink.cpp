@@ -34,7 +34,13 @@ namespace
     constexpr auto kExpectedError = pg::renderer::MakeRendererError(pg::renderer::RendererStage::kAcquire,
                                                                     pg::renderer::RendererError::kInvalidState);
     const auto frame = (*session)->PresentTriangle(kClearColor, kVertices);
-    return !frame && frame.error() == kExpectedError;
+    const auto indexed = (*session)->PresentIndexedMesh(kClearColor);
+    // 越界索引在访问设备前被拒绝，使探针同时覆盖带几何的打开路径。
+    constexpr pg::renderer::IndexedQuad kInvalidQuad{.Indices = {0, 1, 2, 0, 2, 4}};
+    const auto open = (*session)->Open({.Quad = &kInvalidQuad});
+    return !frame && frame.error() == kExpectedError && !indexed && indexed.error() == kExpectedError && !open &&
+           open.error() == pg::renderer::MakeRendererError(pg::renderer::RendererStage::kOpen,
+                                                           pg::renderer::RendererError::kInvalidVertex);
 }
 } // namespace
 #endif

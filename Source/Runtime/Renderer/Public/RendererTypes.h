@@ -2,6 +2,7 @@
 
 #include <Error.h>
 
+#include <array>
 #include <compare>
 #include <cstdint>
 #include <optional>
@@ -11,6 +12,7 @@ struct ANativeActivity;
 namespace pg::renderer
 {
 class NativeSurface;
+struct IndexedQuad;
 
 struct RendererOpenDesc
 {
@@ -20,6 +22,8 @@ struct RendererOpenDesc
     // 已有窗口时据此选取能呈现的 GPU。仅在本次 Open 调用期间借用。
     const NativeSurface* PresentationSurface{};
 #endif
+    // 仅在 Open 期间借用，完成上传后由设备持有缓冲。
+    const IndexedQuad* Quad{};
 };
 
 struct LinearColor
@@ -35,6 +39,12 @@ struct TriangleVertex
     float X{};
     float Y{};
     LinearColor Color{};
+};
+
+struct IndexedQuad
+{
+    std::array<TriangleVertex, 4> Vertices{};
+    std::array<std::uint16_t, 6> Indices{};
 };
 
 struct PixelSize
